@@ -1,0 +1,72 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <title>Naver 지도 시작하기</title>
+    <style>
+      /* 높이 100%가 실제로 적용되도록 */
+      html, body { height: 100%; margin: 0; padding: 0; }
+      #map { width: 100%; height: 100%; }
+    </style>
+    <!-- initMap 콜백을 실제로 정의할 것이므로 그대로 둠 -->
+    <script
+      type="text/javascript"
+      src="https://openapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=jiuoev9r8i&callback=initMap"
+    ></script>
+    <script>
+      function initMap() {
+        // 위도(lat), 경도(lng) 순서입니다!
+        const lat = 37.5665;   // 예: 서울시청 위도
+        const lng = 126.9780;  // 예: 서울시청 경도
+
+        const map = new naver.maps.Map("map", {
+          center: new naver.maps.LatLng(lat, lng),
+          useStyleMap: true,
+          zoom: 14,
+          minZoom: 1,
+          mapTypeControl: true,
+          mapTypeControlOptions: {
+            style: naver.maps.MapTypeControlStyle.BUTTON,
+            position: naver.maps.Position.TOP_LEFT
+          },
+          zoomControl: true,
+          zoomControlOptions: {
+            position: naver.maps.Position.TOP_RIGHT
+          }
+        });
+
+        const marker = new naver.maps.Marker({
+          position: new naver.maps.LatLng(lat, lng),
+          map
+        });
+
+        const contentString = `
+          <div style="padding:8px;max-width:200px;">
+            <strong>여기입니다</strong><br/>
+            위도: ${lat}, 경도: ${lng}
+          </div>
+        `;
+
+        const infowindow = new naver.maps.InfoWindow({
+          content: contentString,
+          anchorSize: new naver.maps.Size(15, 5),
+          pixelOffset: new naver.maps.Point(0, -10)
+        });
+
+        naver.maps.Event.addListener(marker, "click", function () {
+          if (infowindow.getMap()) infowindow.close();
+          else infowindow.open(map, marker);
+        });
+
+        // 최초 한 번 열기
+        infowindow.open(map, marker);
+
+        // setOptions 예시
+        map.setOptions("mapTypeControl", true);
+      }
+    </script>
+  </head>
+  <body>
+    <div id="map"></div>
+  </body>
+</html>
