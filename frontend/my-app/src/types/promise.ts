@@ -5,7 +5,7 @@ export type CourseSummary = { text: string };
 export type PromiseDetail = {
   id: string;
   title: string;
-  ddayLabel: string; // e.g. "D-1"
+  dday: number;
   participants: Participant[];
   schedule: Schedule;
   course: CourseSummary;
