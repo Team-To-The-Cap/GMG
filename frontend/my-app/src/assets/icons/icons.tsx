@@ -83,3 +83,15 @@ export const PlusIcon = withA11y<SvgProps>((props) => (
     <path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5z" fill="currentColor" />
   </svg>
 ));
+
+export const BackIcon = withA11y<SvgProps>((props) => (
+  <svg viewBox="0 0 24 24" width={24} height={24} {...props}>
+    <path
+      d="M15 6l-6 6 6 6"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+    />
+  </svg>
+));

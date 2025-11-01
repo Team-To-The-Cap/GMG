@@ -8,6 +8,7 @@
   align-items: center;
   gap: 8px;
   padding: 8px 4px;
+  width: 100%;
 }
 .iconBtn {
   width: 36px;
@@ -20,6 +21,10 @@
   cursor: pointer;
   color: #333;
 }
+.spacer {
+  width: 36px;
+  height: 36px;
+}
 .title {
   margin: 0;
   font-size: 18px;
@@ -31,4 +36,8 @@
   height: 36px;
   display: grid;
   place-items: center;
+}
+.spacer {
+  width: 36px;
+  height: 36px;
 }

@@ -1,35 +1,48 @@
+// TopBar.tsx
+import { useCallback } from "react";
 import styles from "./style.module.css";
+import { BackIcon } from "@/assets/icons/icons";
+
+type Props = {
+  title: string;
+  showBack?: boolean; // ← 기본 false
+  onBack?: () => void;
+  right?: React.ReactNode;
+};
 
 export default function TopBar({
   title,
+  showBack = false, // ← 기본값 변경
   onBack,
   right,
-}: {
-  title: string;
-  onBack?: () => void;
-  right?: React.ReactNode;
-}) {
+}: Props) {
+  const handleBack = useCallback(() => {
+    if (onBack) return onBack();
+    if (window.history.length > 1) window.history.back();
+  }, [onBack]);
+
   return (
     <header className={styles.topbar}>
-      <button className={styles.iconBtn} aria-label="뒤로가기" onClick={onBack}>
-        <BackIcon />
-      </button>
-      <h1 className={styles.title}>{title}</h1>
-      <div className={styles.right}>{right}</div>
-    </header>
-  );
-}
+      {showBack ? (
+        <button
+          className={styles.iconBtn}
+          aria-label="뒤로가기"
+          onClick={handleBack}
+          type="button"
+        >
+          <BackIcon />
+        </button>
+      ) : (
+        <div className={styles.spacer} aria-hidden />
+      )}
 
-function BackIcon() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden>
-      <path
-        d="M15 6l-6 6 6 6"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
+      <h1 className={styles.title}>{title}</h1>
+
+      {right ? (
+        <div className={styles.right}>{right}</div>
+      ) : (
+        <div className={styles.spacer} aria-hidden />
+      )}
+    </header>
   );
 }
