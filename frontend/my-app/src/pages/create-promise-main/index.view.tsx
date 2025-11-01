@@ -2,7 +2,7 @@ import React from "react";
 import TopBar from "@/components/ui/top-bar";
 import SectionHeader from "@/components/ui/section-header";
 import Button from "@/components/ui/button";
-import Card from "@/components/ui/card";
+import PromiseCard from "@/components/ui/promise-card";
 import Avatar from "@/components/ui/avatar";
 import Badge from "@/components/ui/badge";
 import { UserIcon, CalendarIcon, MapIcon } from "@/assets/icons/icons";
@@ -23,7 +23,7 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
     return (
       <div className={styles.container}>
         <TopBar title="약속 상세" />
-        <Card className={styles.heroCard}>로딩 중…</Card>
+        <PromiseCard className={styles.heroCard}>로딩 중…</PromiseCard>
       </div>
     );
   }
@@ -32,19 +32,16 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
     return (
       <div className={styles.container}>
         <TopBar title="약속 상세" />
-        <Card className={styles.heroCard}>에러: {msg}</Card>
+        <PromiseCard className={styles.heroCard}>에러: {msg}</PromiseCard>
       </div>
     );
   }
 
-  private renderHeroCard(title: string, ddayLabel: string) {
+  private renderHeroCard(title: string, dday: number) {
     return (
-      <Card className={styles.heroCard}>
-        <div className={styles.badgeWrap}>
-          <Badge color="danger">{ddayLabel}</Badge>
-        </div>
-        <h2 className={styles.heroTitle}>{title}</h2>
-      </Card>
+      <PromiseCard title={title} dday={dday} className={styles.heroCard}>
+        {/* 카드 본문 */}
+      </PromiseCard>
     );
   }
 
@@ -104,7 +101,7 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
             </Button>
           }
         />
-        <Card className={styles.courseCard}>{summary}</Card>
+        <PromiseCard className={styles.courseCard}>{summary}</PromiseCard>
       </section>
     );
   }
@@ -128,7 +125,7 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
     return (
       <div className={styles.container}>
         <TopBar title={`${data.title} 상세`} />
-        {this.renderHeroCard(data.title, data.ddayLabel)}
+        {this.renderHeroCard(data.title, data.dday)}
         {this.renderParticipantsSection(data.participants)}
         {this.renderScheduleSection(dateLabel)}
         {this.renderCourseSection(data.course.text)}
