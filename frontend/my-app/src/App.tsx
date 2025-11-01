@@ -13,7 +13,7 @@ export default function App() {
     <div>
       <Routes>
         <Route path="/" element={<Home />} />
-        <Route path="/create" element={<CreatePromiseMain />} />
+        <Route path="/create/:promiseId" element={<CreatePromiseMain />} />
         <Route path="/me" element={<MyPage />} />
       </Routes>
 

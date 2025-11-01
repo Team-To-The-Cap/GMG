@@ -1,7 +1,7 @@
 import { useParams } from "react-router-dom";
 import { useEffect, useState, useCallback } from "react";
 import CreatePromiseMainView from "./index.view";
-import { getPromiseDetail } from "@/services/promise.service";
+import { getPromiseDetail } from "@/services/promise.service.mock";
 import type { PromiseDetail } from "@/types/promise";
 
 export default function CreatePromiseMain() {
