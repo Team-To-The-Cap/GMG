@@ -1,10 +1,11 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import {Button} from '@/components/ui/Button';
+import Button from '@/components/ui/button';
 import {TipBar} from '@/components/ui/TipBar';
-import {Card} from '@/components/ui/Card';
+import {Panel} from '@/components/ui/Panel';
 import {Calendar} from '@/components/ui/Calendar'; // selected/drag 등 내부구현은 자유
 
 import { useState } from 'react';
+import IconButton from "@/components/ui/IconButton/IconButton";
 
 export default function Time1() {
   const [selectedDates, setSelectedDates] = useState<Date[]>([]);
@@ -46,16 +47,12 @@ const nextMonth = () =>
         <TipBar message = "">
         </TipBar>
 
-         <Card className="mb-3">
+         <Panel className="mb-3">
     <header className="mb-2 flex items-center justify-between">
       <h2 className="text-lg font-semibold">{monthLabel}</h2>
       <div className="flex gap-2">
-        <Button variant="ghost" size="icon" onClick={prevMonth} aria-label="이전 달">
-          <ChevronLeft className="w-4 h-4" />
-        </Button>
-        <Button variant="ghost" size="icon" onClick={nextMonth} aria-label="다음 달">
-          <ChevronRight className="w-4 h-4" />
-        </Button>
+        <IconButton aria-label="이전 달" variant="ghost" size="md" icon={<ChevronLeft className="w-4 h-4" />} onClick={prevMonth}/>
+      <IconButton aria-label="다음 달" variant="ghost" size="md" icon={<ChevronRight className="w-4 h-4" />} onClick={nextMonth}/>
       </div>
     </header>
 
@@ -65,7 +62,7 @@ const nextMonth = () =>
       onSelect={setSelectedDates}     // Date[] 반환
       // apiDays={{ 7:{disabled:true} }}  // 필요 시 비활성 등 주입
     />
-  </Card>
+  </Panel>
 
         <div className="mb-2 flex items-center gap-2 text-sm">
           <span className="text-neutral-700">선택된 날짜</span>
@@ -76,11 +73,8 @@ const nextMonth = () =>
 
         {/* 액션 버튼들 */}
         <div className="flex gap-3">
-          <Button variant="default" size="lg" onClick={handleShare}>
-            공유하기
-          </Button>
-          <Button variant="secondary" size="lg" onClick={handleViewResult}>
-            결과 보기
+          <Button variant="primary" size="lg" fullWidth>
+            선택 완료
           </Button>
         </div>
       </main>

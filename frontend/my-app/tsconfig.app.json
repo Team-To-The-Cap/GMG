@@ -8,10 +8,6 @@
     "module": "ESNext",
     "types": ["vite/client"],
     "skipLibCheck": true,
-    "baseUrl": "src", 
-    "paths":{
-      "@/*": ["*"]
-    },
 
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
