@@ -37,7 +37,7 @@ export default function CreatePromiseMain() {
   }, [promiseId, navigate]);
 
   const onEditParticipants = useCallback(() => {}, [promiseId]);
-  const onEditSchedule = useCallback(() => {}, [promiseId]);
+  const onEditSchedule = useCallback(() => {navigate("/time/time1")}, [promiseId]);
   const onEditCourse = useCallback(() => {}, [promiseId]);
 
   return (
