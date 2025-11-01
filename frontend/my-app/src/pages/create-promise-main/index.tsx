@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useState, useCallback } from "react";
 import CreatePromiseMainView from "./index.view";
-import { getPromiseDetail } from "@/services/promise.service"; // ← 여기! (mock/http 선택은 내부에서)
+import { getPromiseDetail } from "@/services/promise.service";
 import type { PromiseDetail } from "@/types/promise";
 import { DEFAULT_PROMISE_ID } from "@/config/runtime";
 
@@ -36,9 +36,23 @@ export default function CreatePromiseMain() {
     };
   }, [promiseId, navigate]);
 
-  const onEditParticipants = useCallback(() => {}, [promiseId]);
+  const onEditParticipants = useCallback(() => {
+    alert("참여자 수정 기능 준비 중!");
+  }, [promiseId]);
   const onEditSchedule = useCallback(() => {}, [promiseId]);
-  const onEditCourse = useCallback(() => {}, [promiseId]);
+  const onEditPlace = useCallback(() => {
+    alert("장소 수정 기능 준비 중!");
+  }, [promiseId]);
+  const onEditCourse = useCallback(() => {
+    alert("코스 수정 기능 준비 중!");
+  }, [promiseId]);
+
+  // ✅ 새 인원 추가 버튼 핸들러
+  const onAddParticipant = useCallback(() => {
+    // 지금은 알림. 나중에 라우팅 붙일 때:
+    // if (promiseId) navigate(`/create/${promiseId}/participants/add`);
+    alert("새 참여자 추가 기능 준비 중!");
+  }, [promiseId, navigate]);
 
   return (
     <CreatePromiseMainView
@@ -47,7 +61,9 @@ export default function CreatePromiseMain() {
       data={data}
       onEditParticipants={onEditParticipants}
       onEditSchedule={onEditSchedule}
+      onEditPlace={onEditPlace}
       onEditCourse={onEditCourse}
+      onAddParticipant={onAddParticipant}
     />
   );
 }

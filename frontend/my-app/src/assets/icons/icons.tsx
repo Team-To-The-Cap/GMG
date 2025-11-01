@@ -95,3 +95,17 @@ export const BackIcon = withA11y<SvgProps>((props) => (
     />
   </svg>
 ));
+
+// ───────────── 장소 핀 아이콘 (20px) ─────────────
+export const PinIcon = withA11y<SvgProps>((props) => (
+  <svg viewBox="0 0 24 24" width={20} height={20} {...props}>
+    <path
+      d="M12 22s8-7.16 8-13A8 8 0 0 0 4 9c0 5.84 8 13 8 13Z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinejoin="round"
+    />
+    <circle cx="12" cy="9" r="3" fill="currentColor" />
+  </svg>
+));

@@ -2,7 +2,7 @@ import styles from "./style.module.css";
 
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "default" | "ghost" | "primary";
-  size?:"sm"|"md"|"lg";
+  size?: "xs" | "sm" | "md" | "lg";
   fullWidth?: boolean;
   iconLeft?: React.ReactNode;
   iconRight?: React.ReactNode;
@@ -20,7 +20,13 @@ export default function Button({
 }: ButtonProps) {
   return (
     <button
-      className={[styles.btn, styles[variant], styles[size], fullWidth? styles.fullwidth : "", className]
+      className={[
+        styles.btn,
+        styles[variant],
+        styles[size],
+        fullWidth ? styles.fullwidth : "",
+        className,
+      ]
         .filter(Boolean)
         .join(" ")}
       {...rest}

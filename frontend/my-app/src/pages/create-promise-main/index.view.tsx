@@ -2,10 +2,11 @@ import React from "react";
 import TopBar from "@/components/ui/top-bar";
 import SectionHeader from "@/components/ui/section-header";
 import Button from "@/components/ui/button";
+import IconButton from "@/components/ui/IconButton/IconButton";
 import PromiseCard from "@/components/ui/promise-card";
 import Avatar from "@/components/ui/avatar";
 import Badge from "@/components/ui/badge";
-import { UserIcon, CalendarIcon, MapIcon } from "@/assets/icons/icons";
+import { UserIcon, CalendarIcon, MapIcon, PinIcon } from "@/assets/icons/icons";
 import styles from "./style.module.css";
 import type { Participant, PromiseDetail } from "@/types/promise";
 
@@ -15,7 +16,9 @@ type Props = {
   data?: PromiseDetail;
   onEditParticipants?: () => void;
   onEditSchedule?: () => void;
+  onEditPlace?: () => void;
   onEditCourse?: () => void;
+  onAddParticipant?: () => void;
 };
 
 export default class CreatePromiseMainView extends React.PureComponent<Props> {
@@ -46,14 +49,14 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
   }
 
   private renderParticipantsSection(participants: Participant[]) {
-    const { onEditParticipants } = this.props;
+    const { onEditParticipants, onAddParticipant } = this.props; // ✅ 추가
     return (
       <section className={styles.section}>
         <SectionHeader
           icon={<UserIcon />}
           title="참석자 명단"
           action={
-            <Button variant="ghost" onClick={onEditParticipants}>
+            <Button variant="ghost" size="xs" onClick={onEditParticipants}>
               수정하러 가기
             </Button>
           }
@@ -66,6 +69,15 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
             </li>
           ))}
         </ul>
+
+        <Button
+          variant="primary"
+          size="sm"
+          style={{ width: "97%", display: "block", margin: "0 auto" }}
+          onClick={onAddParticipant}
+        >
+          새로운 인원 추가하기
+        </Button>
       </section>
     );
   }
@@ -78,12 +90,30 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
           icon={<CalendarIcon />}
           title="일정"
           action={
-            <Button variant="ghost" onClick={onEditSchedule}>
+            <Button variant="ghost" size="xs" onClick={onEditSchedule}>
               수정하러 가기
             </Button>
           }
         />
         <div className={styles.scheduleText}>{dateLabel}</div>
+      </section>
+    );
+  }
+
+  private renderPlaceSection(placeLabel: string) {
+    const { onEditPlace } = this.props; // ✅ props에서 받음
+    return (
+      <section className={styles.section}>
+        <SectionHeader
+          icon={<PinIcon />}
+          title="장소"
+          action={
+            <Button variant="ghost" size="xs" onClick={onEditPlace}>
+              수정하러 가기
+            </Button>
+          }
+        />
+        <div className={styles.placeText}>{placeLabel}</div>
       </section>
     );
   }
@@ -96,7 +126,7 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
           icon={<MapIcon />}
           title="코스"
           action={
-            <Button variant="ghost" onClick={onEditCourse}>
+            <Button variant="ghost" size="xs" onClick={onEditCourse}>
               수정하러 가기
             </Button>
           }
@@ -115,12 +145,11 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
 
     const dateLabel = new Date(data.schedule.dateISO).toLocaleDateString(
       "ko-KR",
-      {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      }
+      { year: "numeric", month: "long", day: "numeric" }
     );
+
+    // 🔹 장소 정보가 없을 수도 있으니 안전하게 처리
+    const placeLabel = data.place?.name ?? "장소 미정";
 
     return (
       <div className={styles.container}>
@@ -128,6 +157,10 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
         {this.renderHeroCard(data.title, data.dday)}
         {this.renderParticipantsSection(data.participants)}
         {this.renderScheduleSection(dateLabel)}
+
+        {/* 🔽 여기에 장소 섹션 추가 */}
+        {this.renderPlaceSection(placeLabel)}
+
         {this.renderCourseSection(data.course.text)}
         <div className={styles.bottomSpacer} />
       </div>
