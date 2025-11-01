@@ -16,21 +16,33 @@ Panel.displayName = "Panel";
 
 export const PanelHeader = React.forwardRef<HTMLDivElement, DivProps>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={clsx("flex flex-col gap-1.5 p-4", className)} {...props} />
+    <div
+      ref={ref}
+      className={clsx("flex flex-col gap-1.5 p-4", className)}
+      {...props}
+    />
   )
 );
 PanelHeader.displayName = "PanelHeader";
 
 export const PanelTitle = React.forwardRef<HTMLDivElement, DivProps>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={clsx("font-semibold leading-none", className)} {...props} />
+    <div
+      ref={ref}
+      className={clsx("font-semibold leading-none", className)}
+      {...props}
+    />
   )
 );
 PanelTitle.displayName = "PanelTitle";
 
 export const PanelDescription = React.forwardRef<HTMLDivElement, DivProps>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={clsx("text-sm text-neutral-500", className)} {...props} />
+    <div
+      ref={ref}
+      className={clsx("text-sm text-neutral-500", className)}
+      {...props}
+    />
   )
 );
 PanelDescription.displayName = "PanelDescription";
@@ -44,7 +56,11 @@ PanelContent.displayName = "PanelContent";
 
 export const PanelFooter = React.forwardRef<HTMLDivElement, DivProps>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={clsx("flex items-center p-4 pt-0", className)} {...props} />
+    <div
+      ref={ref}
+      className={clsx("flex items-center p-4 pt-0", className)}
+      {...props}
+    />
   )
 );
 PanelFooter.displayName = "PanelFooter";
