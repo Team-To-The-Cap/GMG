@@ -1,1 +1,1 @@
-hello, world.
+홈 화면 UI 코드
