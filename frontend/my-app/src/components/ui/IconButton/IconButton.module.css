@@ -1,0 +1,57 @@
+:root {
+  --primary: #3e93fa;
+  --primary-hover: #2f84ec;
+  --ring: rgba(62,147,250,.4);
+}
+
+/* 베이스: 원형 + 중앙정렬 */
+.iconButton {
+  display: inline-grid;
+  place-items: center;
+  border: none;
+  border-radius: 9999px;
+  background: transparent;
+  color: #111;
+  cursor: pointer;
+  transition: background-color .15s ease, color .15s ease, box-shadow .15s ease;
+}
+
+/* 크기 */
+.sm { width: 32px; height: 32px; }
+.md { width: 36px; height: 36px; }
+.lg { width: 40px; height: 40px; }
+
+/* 아이콘 컨테이너 */
+.icon { display: inline-grid; place-items: center; }
+
+/* 변형 */
+.default {
+  background: #f3f4f6;
+  color: #111;
+}
+.default:hover { background: #e5e7eb; }
+
+.ghost {
+  background: transparent;
+  color: #111;
+}
+.ghost:hover { background: rgba(0,0,0,.05); }
+
+.primary {
+  background: var(--primary);
+  color: #fff;
+}
+.primary:hover { background: var(--primary-hover); }
+
+.iconButton:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+/* 포커스 접근성 */
+.iconButton:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 4px var(--ring);
+}

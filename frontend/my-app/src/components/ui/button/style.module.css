@@ -1,28 +1,50 @@
+:root {
+  --primary: #3e93fa;          /* 스샷과 통일 */
+  --primary-hover: #2f84ec;
+  --ring: rgba(62,147,250,.4);
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;      /* 중앙 정렬 */
   gap: 6px;
   border: none;
-  border-radius: 10px;
-  padding: 8px 10px;
+  border-radius: 12px;          /* 둥글게 */
+  padding: 8px 10px;            /* size에서 덮어씀 */
   background: #fff;
   color: #111;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.06);
-  cursor: pointer;
   font: inherit;
+  font-weight: 600;             /* 버튼 느낌 */
+  cursor: pointer;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.06);
+  transition: background-color .15s ease, color .15s ease, box-shadow .15s ease;
 }
-.default {
-  background: #fff;
-  color: #111;
-}
-.ghost {
-  background: #fff;
-}
-.primary {
-  background: var(--primary, #007aff);
-  color: #fff;
-}
-.icon {
-  display: inline-grid;
-  place-items: center;
+
+/* variants */
+.default { background: #fff; color: #111; }
+.ghost   { background: #fff; color: #111; }
+
+.primary { background: var(--primary); color: #fff; }
+.primary:hover { background: var(--primary-hover); }
+.primary:disabled { background: #aecdff; cursor: not-allowed; opacity: .9; }
+
+/* sizes (선택 완료 버튼은 lg 추천) */
+.sm { height: 40px; padding: 0 12px; font-size: 14px; border-radius: 10px; }
+.md { height: 48px; padding: 0 16px; font-size: 15px; border-radius: 12px; }
+.lg { height: 52px; padding: 0 20px; font-size: 16px; border-radius: 12px; }
+
+/* full width */
+.fullWidth { width: 100%; }
+
+/* 아이콘/라벨 */
+.icon { display: inline-grid; place-items: center; }
+.label { line-height: 1; }
+
+/* 접근성 포커스 링 */
+.btn:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 4px var(--ring);
 }
