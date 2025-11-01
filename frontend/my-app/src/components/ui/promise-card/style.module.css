@@ -104,3 +104,40 @@
   border: 2px solid #fff; /* 카드와 분리감 */
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
 }
+
+/* 참가자 리스트: 카드 우측 하단 고정 */
+.participantList {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  right: 16px;
+  bottom: 16px;
+}
+
+.participantList--hero {
+  right: 20px;
+  bottom: 16px;
+}
+
+/* 각 아바타: 살짝 겹치게 배치 */
+.participantAvatar {
+  margin-left: -8px; /* 겹침 효과 */
+}
+.participantAvatar:first-child {
+  margin-left: 0;
+}
+
+/* "+N" 표시 */
+.moreBadge {
+  margin-left: -6px;
+  background: #f2f2f2;
+  color: #555;
+  font-weight: 600;
+  border-radius: 9999px;
+  font-size: 14px;
+  min-width: 28px;
+  padding: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

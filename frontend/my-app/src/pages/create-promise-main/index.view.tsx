@@ -40,9 +40,18 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
     );
   }
 
-  private renderHeroCard(title: string, dday: number) {
+  private renderHeroCard(
+    title: string,
+    dday: number,
+    participants: Participant[]
+  ) {
     return (
-      <PromiseCard title={title} dday={dday} className={styles.heroCard}>
+      <PromiseCard
+        title={title}
+        dday={dday}
+        participants={participants}
+        className={styles.heroCard}
+      >
         {/* 카드 본문 */}
       </PromiseCard>
     );
@@ -154,13 +163,10 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
     return (
       <div className={styles.container}>
         <TopBar title={`${data.title} 상세`} />
-        {this.renderHeroCard(data.title, data.dday)}
+        {this.renderHeroCard(data.title, data.dday, data.participants ?? [])}
         {this.renderParticipantsSection(data.participants)}
         {this.renderScheduleSection(dateLabel)}
-
-        {/* 🔽 여기에 장소 섹션 추가 */}
         {this.renderPlaceSection(placeLabel)}
-
         {this.renderCourseSection(data.course.text)}
         <div className={styles.bottomSpacer} />
       </div>

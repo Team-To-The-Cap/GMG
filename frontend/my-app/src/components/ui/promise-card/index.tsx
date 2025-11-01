@@ -1,7 +1,8 @@
-// src/components/ui/card/index.tsx
+// src/components/ui/promise-card/index.tsx
 import type { ReactNode } from "react";
 import styles from "./style.module.css";
-import Avatar from "../avatar";
+import Avatar from "../avatar"; // 경로는 실제 구조에 맞게
+import type { Participant as PromiseParticipant } from "@/types/promise"; // ✅ 기존 타입 사용
 
 type CardProps = {
   className?: string;
@@ -9,7 +10,7 @@ type CardProps = {
   title?: string;
   dday?: number;
   footer?: ReactNode;
-  /** 디자인 용도 확장 */
+  participants?: PromiseParticipant[]; // ✅ avatarUrl이 있는 타입
   variant?: "default" | "hero";
 };
 
@@ -33,9 +34,12 @@ export default function PromiseCard({
   title,
   dday,
   footer,
+  participants = [], // ✅ 기본값
   variant = "default",
 }: CardProps) {
   const hasHeader = title || dday !== undefined;
+  const visibleAvatars = participants.slice(0, 3);
+  const hiddenCount = participants.length - visibleAvatars.length;
 
   return (
     <section className={cx(styles.card, styles[variant], className)}>
@@ -63,9 +67,22 @@ export default function PromiseCard({
       <div className={styles.body}>{children}</div>
       {footer && <footer className={styles.footer}>{footer}</footer>}
 
-      {/* ✅ 카드 우측 하단의 아바타 */}
-      <div className={cx(styles.cardAvatar, styles[`cardAvatar--${variant}`])}>
-        <Avatar alt="owner avatar" src={undefined} size={28} />
+      {/* 참가자 아바타 */}
+      <div
+        className={cx(
+          styles.participantList,
+          styles[`participantList--${variant}`]
+        )}
+      >
+        {visibleAvatars.map((p) => (
+          <div key={p.id} className={styles.participantAvatar}>
+            {/* ✅ avatarUrl을 그대로 전달 */}
+            <Avatar alt={p.name} src={p.avatarUrl} size={28} />
+          </div>
+        ))}
+        {hiddenCount > 0 && (
+          <div className={styles.moreBadge}>+{hiddenCount}</div>
+        )}
       </div>
     </section>
   );
