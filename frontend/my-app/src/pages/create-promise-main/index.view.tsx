@@ -6,7 +6,13 @@ import IconButton from "@/components/ui/IconButton/IconButton";
 import PromiseCard from "@/components/ui/promise-card";
 import Avatar from "@/components/ui/avatar";
 import Badge from "@/components/ui/badge";
-import { UserIcon, CalendarIcon, MapIcon, PinIcon } from "@/assets/icons/icons";
+import {
+  UserIcon,
+  CalendarIcon,
+  MapIcon,
+  PinIcon,
+  ResultIcon,
+} from "@/assets/icons/icons";
 import styles from "./style.module.css";
 import type { Participant, PromiseDetail } from "@/types/promise";
 
@@ -64,6 +70,7 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
         <SectionHeader
           icon={<UserIcon />}
           title="참석자 명단"
+          size="md"
           action={
             <Button variant="ghost" size="xs" onClick={onEditParticipants}>
               수정하러 가기
@@ -145,6 +152,14 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
     );
   }
 
+  private renderCalculateButton() {
+    return (
+      <Button variant="primary" size="lg" style={{ width: "97%" }}>
+        일정, 장소, 코스 계산하기
+      </Button>
+    );
+  }
+
   render() {
     const { loading, error, data } = this.props;
 
@@ -165,9 +180,17 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
         <TopBar title={`${data.title} 상세`} />
         {this.renderHeroCard(data.title, data.dday, data.participants ?? [])}
         {this.renderParticipantsSection(data.participants)}
-        {this.renderScheduleSection(dateLabel)}
-        {this.renderPlaceSection(placeLabel)}
-        {this.renderCourseSection(data.course.text)}
+
+        <section className={styles.section}>
+          <SectionHeader icon={<ResultIcon />} title="결과" size="md" />
+
+          <div className={styles.container} style={{ padding: "0px 10px" }}>
+            {this.renderScheduleSection(dateLabel)}
+            {this.renderPlaceSection(placeLabel)}
+            {this.renderCourseSection(data.course.text)}
+            {this.renderCalculateButton()}
+          </div>
+        </section>
         <div className={styles.bottomSpacer} />
       </div>
     );

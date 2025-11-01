@@ -1,3 +1,6 @@
+/* src/components/ui/section-header/style.module.css */
+
+/* 공통 베이스 */
 .header {
   display: flex;
   align-items: center;
@@ -5,18 +8,97 @@
   gap: 8px;
   margin-bottom: 10px;
 }
+
 .left {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0; /* 긴 제목 줄바꿈 안전 */
 }
+
 .icon {
-  width: 24px;
-  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: #111827;
+  color: #111827;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
 }
+
 .title {
   margin: 0;
-  font-size: 16px;
   font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.action {
+  flex: 0 0 auto;
+}
+
+/* ───────── Size Variants ───────── */
+/* ✅ sm: 기존 값(현재 컴포넌트 기본 스타일) */
+.header--sm {
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.left--sm {
+  gap: 8px;
+}
+.icon--sm {
+  width: 24px;
+  height: 24px;
+}
+.title--sm {
+  font-size: 16px;
+}
+.action--sm {
+}
+
+/* ✅ md: 주신 .sectionTitle 참고 */
+.header--md {
+  /* .sectionTitle: margin: 16px 0 8px; 을 반영 */
+  margin: 16px 0 8px;
+  gap: 10px;
+}
+.left--md {
+  gap: 10px;
+}
+.icon--md {
+  width: 28px;
+  height: 28px;
+}
+.title--md {
+  font-size: 22px; /* ← 제공 스펙 */
+  font-weight: 700; /* ← 제공 스펙 */
+  text-align: left; /* ← 제공 스펙 */
+  width: 100%; /* ← 제공 스펙 */
+}
+.action--md {
+}
+
+/* ✅ lg: md보다 한 단계 크게 */
+.header--lg {
+  margin: 20px 0 12px;
+  gap: 12px;
+}
+.left--lg {
+  gap: 12px;
+}
+.icon--lg {
+  width: 32px;
+  height: 32px;
+}
+.title--lg {
+  font-size: 28px;
+  font-weight: 800;
+  text-align: left;
+  width: 100%;
+}
+.action--lg {
 }

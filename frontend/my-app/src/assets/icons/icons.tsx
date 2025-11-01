@@ -109,3 +109,23 @@ export const PinIcon = withA11y<SvgProps>((props) => (
     <circle cx="12" cy="9" r="3" fill="currentColor" />
   </svg>
 ));
+
+// ───────────── 결과(Result) 아이콘 (20px) ─────────────
+export const ResultIcon = withA11y<SvgProps>((props) => (
+  <svg viewBox="0 0 24 24" width={20} height={20} {...props}>
+    <path
+      d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+    />
+    <path
+      d="M8 12l2.5 2.5L16 9"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+));
