@@ -1,6 +1,7 @@
 // src/components/ui/card/index.tsx
 import type { ReactNode } from "react";
 import styles from "./style.module.css";
+import Avatar from "../avatar";
 
 type CardProps = {
   className?: string;
@@ -61,6 +62,11 @@ export default function PromiseCard({
 
       <div className={styles.body}>{children}</div>
       {footer && <footer className={styles.footer}>{footer}</footer>}
+
+      {/* ✅ 카드 우측 하단의 아바타 */}
+      <div className={cx(styles.cardAvatar, styles[`cardAvatar--${variant}`])}>
+        <Avatar alt="owner avatar" src={undefined} size={28} />
+      </div>
     </section>
   );
 }

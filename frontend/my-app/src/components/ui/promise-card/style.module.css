@@ -1,11 +1,11 @@
 /* src/components/ui/card/style.module.css */
 .card {
-  position: relative; /* ✅ 배지를 카드 기준으로 절대 배치 */
+  position: relative; /* ✅ 카드 기준으로 아바타를 절대 배치 */
   background: var(--card, #fff);
   border-radius: 16px;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
   padding: 16px;
-  min-height: 120px;
+  min-height: 150px;
   /* max-width: 400px; */
 }
 
@@ -16,15 +16,18 @@
   background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
 }
 
-/* 헤더 레이아웃: 제목만 세로 흐름으로 배치 */
+/* 헤더 레이아웃: 제목 위에 D-day가 오도록 세로 정렬 */
 .header {
-  display: block; /* ⬅ grid 제거 */
+  display: flex;
+  flex-direction: column;
+  gap: 8px; /* 배지와 제목 사이 간격 */
   margin-bottom: 12px;
 }
 .header--hero {
-  margin-bottom: 8px; /* 스샷처럼 상단 여백 타이트 */
+  margin-bottom: 8px;
 }
 
+/* 제목 스타일 */
 .title {
   margin: 0;
   font-size: 22px;
@@ -32,7 +35,7 @@
   color: #111;
 }
 .title--hero {
-  font-size: 20px; /* 크게 */
+  font-size: 20px;
   line-height: 1.25;
 }
 
@@ -43,12 +46,12 @@
   margin-top: 12px;
 }
 
-/* D-day 배지 (pill) — 카드 우상단에 고정 */
+/* D-day 배지 (pill) — 제목 위로 */
 .badge {
-  position: absolute; /* ⬅ 절대 배치 */
-  top: 12px; /* 카드 기본 padding 고려 */
-  right: 16px;
-  z-index: 1;
+  position: static; /* 흐름에 참여 */
+  order: -1; /* 제목보다 위 */
+  align-self: flex-start; /* 왼쪽 정렬 (필요시 flex-end/center) */
+  z-index: auto;
 
   display: inline-flex;
   align-items: center;
@@ -61,10 +64,10 @@
   padding: 8px 20px; /* 기본 pill */
   font-size: 16px;
 }
+
+/* hero 변형 */
 .badge--hero {
-  top: 16px; /* hero 패딩에 맞춤 */
-  right: 20px;
-  padding: 8px 12px; /* hero는 조금 더 큼 */
+  padding: 8px 12px;
   font-size: 13px;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 }
@@ -81,4 +84,23 @@
 .muted {
   background: #8e8e93;
   color: #fff;
+}
+
+/* ✅ 카드 우측 하단 아바타 고정 포지션 */
+.cardAvatar {
+  position: absolute;
+  right: 16px; /* .card padding과 맞춤 */
+  bottom: 16px;
+}
+
+.cardAvatar--hero {
+  right: 20px; /* .hero padding과 맞춤 */
+  bottom: 16px;
+}
+
+/* 아바타 공통 스타일 (Avatar 컴포넌트의 className과 매칭) */
+.avatar {
+  border-radius: 50%;
+  border: 2px solid #fff; /* 카드와 분리감 */
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
 }
