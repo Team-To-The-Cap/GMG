@@ -1,9 +1,13 @@
-import { http } from "@/lib/http";
+// src/services/promise.service.ts
 import type { PromiseDetail } from "@/types/promise";
+import * as httpImpl from "./promise.service.http.ts";
+import * as mockImpl from "./promise.service.mock.ts";
 
 export async function getPromiseDetail(
   promiseId: string
 ): Promise<PromiseDetail> {
-  // 백엔드 응답 스키마와 프론트 도메인 타입이 다르면 여기서 매핑해 일원화
-  return http.request<PromiseDetail>(`/promises/${promiseId}/detail`);
+  const useMock = import.meta.env.VITE_TEST_MODE === "true";
+  return useMock
+    ? mockImpl.getPromiseDetail(promiseId)
+    : httpImpl.getPromiseDetail(promiseId);
 }

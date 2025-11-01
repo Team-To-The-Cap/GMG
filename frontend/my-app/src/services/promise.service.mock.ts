@@ -21,8 +21,7 @@ const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export async function getPromiseDetail(
   promiseId: string
 ): Promise<PromiseDetail> {
-  // 네트워크 지연 흉내 (로딩 UI 테스트용)
-  await delay(500);
+  await delay(400); // 로딩 UX 확인용
   const item = MOCK_DB[promiseId];
   if (!item) throw new Error("Mock 데이터에 해당 약속이 없습니다.");
   return item;

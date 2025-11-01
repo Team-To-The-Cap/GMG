@@ -1,22 +1,28 @@
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useState, useCallback } from "react";
 import CreatePromiseMainView from "./index.view";
-import { getPromiseDetail } from "@/services/promise.service.mock";
+import { getPromiseDetail } from "@/services/promise.service"; // ← 여기! (mock/http 선택은 내부에서)
 import type { PromiseDetail } from "@/types/promise";
+import { DEFAULT_PROMISE_ID } from "@/config/runtime";
 
 export default function CreatePromiseMain() {
-  const { promiseId } = useParams(); // 라우트가 /create/:promiseId 라고 가정
+  const { promiseId } = useParams();
+  const navigate = useNavigate();
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
   const [data, setData] = useState<PromiseDetail>();
 
   useEffect(() => {
+    if (!promiseId) {
+      navigate(`/create/${DEFAULT_PROMISE_ID}`, { replace: true });
+      return;
+    }
     let alive = true;
-    async function run() {
+    (async () => {
       try {
         setLoading(true);
         setError(undefined);
-        if (!promiseId) throw new Error("약속 ID가 없습니다.");
         const res = await getPromiseDetail(promiseId);
         if (alive) setData(res);
       } catch (e: any) {
@@ -24,25 +30,15 @@ export default function CreatePromiseMain() {
       } finally {
         if (alive) setLoading(false);
       }
-    }
-    run();
+    })();
     return () => {
       alive = false;
     };
-  }, [promiseId]);
+  }, [promiseId, navigate]);
 
-  const onEditParticipants = useCallback(() => {
-    // 예: 네비게이션 or 바텀시트 오픈
-    // navigate(`/create/${promiseId}/participants/edit`);
-  }, [promiseId]);
-
-  const onEditSchedule = useCallback(() => {
-    // navigate(`/create/${promiseId}/schedule/edit`);
-  }, [promiseId]);
-
-  const onEditCourse = useCallback(() => {
-    // navigate(`/create/${promiseId}/course/edit`);
-  }, [promiseId]);
+  const onEditParticipants = useCallback(() => {}, [promiseId]);
+  const onEditSchedule = useCallback(() => {}, [promiseId]);
+  const onEditCourse = useCallback(() => {}, [promiseId]);
 
   return (
     <CreatePromiseMainView
