@@ -1,105 +1,57 @@
-import React from "react";
+import { useParams } from "react-router-dom";
+import { useEffect, useState, useCallback } from "react";
+import CreatePromiseMainView from "./index.view";
+import { getPromiseDetail } from "@/services/promise.service";
+import type { PromiseDetail } from "@/types/promise";
 
-import TopBar from "@/components/ui/top-bar";
-import SectionHeader from "@/components/ui/section-header";
-import Button from "@/components/ui/button";
-import Card from "@/components/ui/card";
-import Avatar from "@/components/ui/avatar";
-import Badge from "@/components/ui/badge";
-import { UserIcon, CalendarIcon, MapIcon } from "@/assets/icons/icons";
-import styles from "./style.module.css";
+export default function CreatePromiseMain() {
+  const { promiseId } = useParams(); // 라우트가 /create/:promiseId 라고 가정
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>();
+  const [data, setData] = useState<PromiseDetail>();
 
-type Participant = { name: string; img: number };
+  useEffect(() => {
+    let alive = true;
+    async function run() {
+      try {
+        setLoading(true);
+        setError(undefined);
+        if (!promiseId) throw new Error("약속 ID가 없습니다.");
+        const res = await getPromiseDetail(promiseId);
+        if (alive) setData(res);
+      } catch (e: any) {
+        if (alive) setError(e?.message ?? "알 수 없는 오류");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    }
+    run();
+    return () => {
+      alive = false;
+    };
+  }, [promiseId]);
 
-export default class CreatePromiseMain extends React.PureComponent {
-  // ───────────── 데이터(상수) ─────────────
-  private participants: Participant[] = [
-    { name: "라이언", img: 1 },
-    { name: "어피치", img: 2 },
-    { name: "무지", img: 4 },
-    { name: "네오", img: 3 },
-  ];
+  const onEditParticipants = useCallback(() => {
+    // 예: 네비게이션 or 바텀시트 오픈
+    // navigate(`/create/${promiseId}/participants/edit`);
+  }, [promiseId]);
 
-  // ───────────── 섹션 렌더러들 ─────────────
-  private renderHeroCard() {
-    return (
-      <Card className={styles.heroCard}>
-        <div className={styles.badgeWrap}>
-          <Badge color="danger">D-1</Badge>
-        </div>
+  const onEditSchedule = useCallback(() => {
+    // navigate(`/create/${promiseId}/schedule/edit`);
+  }, [promiseId]);
 
-        <h2 className={styles.heroTitle}>신촌에서 약속</h2>
+  const onEditCourse = useCallback(() => {
+    // navigate(`/create/${promiseId}/course/edit`);
+  }, [promiseId]);
 
-        <div className={styles.avatars}>
-          <Avatar src="https://i.pravatar.cc/40?img=1" alt="라이언" />
-          <Avatar src="https://i.pravatar.cc/40?img=2" alt="어피치" />
-          <Avatar src="https://i.pravatar.cc/40?img=3" alt="네오" />
-          <div className={styles.more}>+1</div>
-        </div>
-      </Card>
-    );
-  }
-
-  private renderParticipantsSection() {
-    return (
-      <section className={styles.section}>
-        <SectionHeader
-          icon={<UserIcon />}
-          title="참석자 명단"
-          action={<Button variant="ghost">수정하러 가기</Button>}
-        />
-        <ul className={styles.participantGrid}>
-          {this.participants.map((p) => (
-            <li key={p.name} className={styles.participantItem}>
-              <Avatar
-                src={`https://i.pravatar.cc/40?img=${p.img}`}
-                alt={p.name}
-              />
-              <span>{p.name}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
-    );
-  }
-
-  private renderScheduleSection() {
-    return (
-      <section className={styles.section}>
-        <SectionHeader
-          icon={<CalendarIcon />}
-          title="일정"
-          action={<Button variant="ghost">수정하러 가기</Button>}
-        />
-        <div className={styles.scheduleText}>2025년 10월 27일</div>
-      </section>
-    );
-  }
-
-  private renderCourseSection() {
-    return (
-      <section className={styles.section}>
-        <SectionHeader
-          icon={<MapIcon />}
-          title="코스"
-          action={<Button variant="ghost">수정하러 가기</Button>}
-        />
-        <Card className={styles.courseCard}>코스 요약 영역</Card>
-      </section>
-    );
-  }
-
-  // ───────────── 최상위 렌더 ─────────────
-  render() {
-    return (
-      <div className={styles.container}>
-        <TopBar title="신촌에서의 약속 상세" />
-        {this.renderHeroCard()}
-        {this.renderParticipantsSection()}
-        {this.renderScheduleSection()}
-        {this.renderCourseSection()}
-        <div className={styles.bottomSpacer} />
-      </div>
-    );
-  }
+  return (
+    <CreatePromiseMainView
+      loading={loading}
+      error={error}
+      data={data}
+      onEditParticipants={onEditParticipants}
+      onEditSchedule={onEditSchedule}
+      onEditCourse={onEditCourse}
+    />
+  );
 }
