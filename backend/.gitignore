@@ -1,0 +1,45 @@
+# 1. Python 가상 환경 (Virtual Environments)
+# venv 폴더는 절대 Git에 포함하면 안 됩니다.
+venv/
+.venv/
+
+# 2. 파이썬 컴파일 및 캐시 파일
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 3. Pip 및 캐시 파일 (이전 오류의 주범)
+# pip가 패키지를 다운로드하며 생성하는 임시 캐시 폴더입니다.
+# **/.cache/ 를 추가해야 모든 하위 폴더의 캐시를 제외합니다.
+**/.cache/
+.mypy_cache/
+htmlcov/grou
+.coverage
+pip-wheel-metadata/
+
+# 4. IDE 및 OS 관련 파일 (VS Code, Mac OS 등)
+# VS Code가 서버 접속 시 생성하는 파일 포함
+.vscode/
+vscode-server/
+.idea/
+.DS_Store
+
+# 5. 설정 및 보안 파일 (민감 정보)
+# DB 비밀번호, API 키 등 중요한 정보를 담는 파일은 제외해야 합니다.
+.env
+*.key
+*.pem
+secrets.yaml
+
+# 6. 데이터베이스 및 로그
+# SQLite DB 파일이나 로그 파일
+*.sqlite
+*.db
+*.log
+/logs/
+
+# 7. Node.js (프론트엔드가 있다면)
+# 만약 frontend 폴더를 완전히 무시하고 싶다면 이 줄을 추가합니다.
+frontend/
+node_modules/
