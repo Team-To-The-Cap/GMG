@@ -1,6 +1,6 @@
 // src/services/promise.service.http.ts
 import { http } from "@/lib/http";
-import type { PromiseDetail } from "@/types/promise";
+import type { PromiseDetail} from "@/types/promise";
 import type { Participant } from "@/types/participant";
 
 /**
@@ -33,4 +33,29 @@ export async function getPromiseDetail(
   };
 
   return detail;
+}
+
+
+export async function getPromiseList(): Promise<PromiseDetail[]> {
+  try {
+    return await http.request<PromiseDetail[]>("/promises");
+  } catch {
+    // 임시 폴백: participants만 있을 때 한 개짜리 Detail 구성
+    const participants = await http.request<Array<{ id: string; name: string; avatarUrl?: string }>>("/participants/");
+    const normalized = participants.map((p) => ({
+      id: String(p.id),
+      name: p.name,
+      avatarUrl: p.avatarUrl || `https://i.pravatar.cc/40?u=${p.id}`,
+    }));
+    return [
+      {
+        id: "participants-aggregate",
+        title: "서버 데이터 기반 약속(임시)",
+        dday: 0,
+        participants: normalized,
+        schedule: { dateISO: new Date().toISOString() },
+        course: { text: "participants를 이용해 구성한 임시 상세" },
+      },
+    ];
+  }
 }

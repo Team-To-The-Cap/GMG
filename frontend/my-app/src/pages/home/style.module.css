@@ -1,0 +1,74 @@
+/* src/pages/home/style.module.css */
+
+/* 컨테이너: 약속추가 화면과 스페이싱 톤 맞춤 */
+.wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 16px calc(var(--bottom-nav-h) + 20px);
+  gap: 20px;
+}
+
+/* 타이틀: 좌측 정렬, 페이지 헤더 느낌 */
+.title {
+  width: 100%;
+  font-size: 24px;
+  font-weight: 700;
+  text-align: left;
+  margin: 4px 0 8px;
+}
+
+/* 리스트: 카드 간격 */
+.list {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+}
+
+/* 공통 카드 폭 */
+.card {
+  width: 100%;
+}
+
+/* 첫 번째 카드를 히어로 카드처럼 강조하고 싶을 때 */
+.heroCard {
+  width: 100%;
+  text-align: left;
+  background: linear-gradient(135deg, #f9fafb, #fff);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+/* 배지/우측 상단 액션 정렬용(필요 시) */
+.badgeWrap {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* 상태/재시도 버튼 */
+.state {
+  padding: 40px 16px;
+  text-align: center;
+  color: #666;
+}
+
+.retryBtn {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
+/* 섹션 타이틀 톤 (약속추가 화면과 동일 계열) */
+.sectionTitle {
+  margin: 16px 0 8px;
+  font-size: 20px;
+  font-weight: 700;
+  text-align: left;
+  width: 100%;
+}
+
+/* 하단 네비 여백 보정용 */
+.bottomSpacer {
+  height: var(--bottom-nav-h);
+}
