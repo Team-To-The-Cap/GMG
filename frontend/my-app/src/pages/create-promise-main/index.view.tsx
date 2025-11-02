@@ -220,7 +220,7 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
 
     return (
       <div className={styles.container}>
-        <TopBar title={`${data.title} 상세`} />
+        <TopBar title={`새로운 약속 추가`} />
 
         {this.renderHeroCard(data.title, data.dday, data.participants ?? [])}
         {this.renderParticipantsSection(data.participants)}
