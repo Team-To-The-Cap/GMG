@@ -129,3 +129,162 @@ export const ResultIcon = withA11y<SvgProps>((props) => (
     />
   </svg>
 ));
+
+// ───────────── 식당(레스토랑) 아이콘 (20px) ─────────────
+export const RestaurantIcon = withA11y<SvgProps>((props) => (
+  <svg viewBox="0 0 24 24" width={20} height={20} {...props}>
+    {/* 접시 */}
+    <circle
+      cx="12"
+      cy="12"
+      r="5.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+    />
+    <circle
+      cx="12"
+      cy="12"
+      r="2.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+    />
+    {/* 포크(좌) */}
+    <path
+      d="M5.5 5v6"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+    />
+    <path
+      d="M4.2 5v3M6.8 5v3"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+    />
+    {/* 나이프(우) */}
+    <path
+      d="M18 5v10"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+    />
+  </svg>
+));
+
+// ───────────── 카페(커피) 아이콘 (20px) ─────────────
+export const CafeIcon = withA11y<SvgProps>((props) => (
+  <svg viewBox="0 0 24 24" width={20} height={20} {...props}>
+    {/* 머그컵 */}
+    <path
+      d="M5 9h9a0 0 0 0 1 0 0v5a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V9a0 0 0 0 1 0 0Z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinejoin="round"
+    />
+    {/* 손잡이 */}
+    <path
+      d="M14 10h2.2a2.3 2.3 0 0 1 0 4.6H14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    {/* 소서 */}
+    <path
+      d="M6 18h10"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+    />
+    {/* 김(스팀) */}
+    <path
+      d="M8.5 6c0-1 .8-1.2.8-2.2"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+    />
+    <path
+      d="M11 6c0-1 .8-1.2.8-2.2"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+    />
+  </svg>
+));
+
+// ───────────── 샵(쇼핑) 아이콘 (20px) ─────────────
+export const ShopIcon = withA11y<SvgProps>((props) => (
+  <svg viewBox="0 0 24 24" width={20} height={20} {...props}>
+    {/* 쇼핑백 본체 */}
+    <rect
+      x="6"
+      y="8"
+      width="12"
+      height="11"
+      rx="2"
+      ry="2"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+    />
+    {/* 손잡이 */}
+    <path
+      d="M8.5 8V7a3.5 3.5 0 0 1 7 0v1"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+    />
+    {/* 손잡이 연결점 */}
+    <circle cx="9" cy="10" r="1" fill="currentColor" />
+    <circle cx="15" cy="10" r="1" fill="currentColor" />
+  </svg>
+));
+
+// ───────────── 시계(체류시간) 아이콘 (18px) ─────────────
+export const ClockIcon = withA11y<SvgProps>((props) => (
+  <svg viewBox="0 0 24 24" width={18} height={18} {...props}>
+    <circle
+      cx="12"
+      cy="12"
+      r="9"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+    />
+    <path
+      d="M12 7v5l3 2"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+    />
+  </svg>
+));
+
+// ───────────── 아래 화살표(이동 표시) 아이콘 (18px) ─────────────
+export const ArrowDownIcon = withA11y<SvgProps>((props) => (
+  <svg viewBox="0 0 24 24" width={18} height={18} {...props}>
+    <path
+      d="M12 5v14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+    />
+    <path
+      d="M6 13l6 6 6-6"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+    />
+  </svg>
+));

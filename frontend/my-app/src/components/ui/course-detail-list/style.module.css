@@ -1,0 +1,161 @@
+/* src/components/ui/course-detail-list/style.module.css */
+
+.wrapper {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 12px 14px;
+}
+
+/* 한 줄: 좌측 64px 레일영역 + 우측 컨텐츠 */
+.row {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  align-items: start;
+  column-gap: 12px;
+  margin: 10px 0;
+}
+
+/* 좌측 레일 */
+.rail {
+  position: relative;
+  min-height: 40px;
+}
+
+/* 위/아래 수직선 */
+.railLine {
+  position: absolute;
+  left: 31px; /* pivot 중앙 기준 */
+  width: 2px;
+  background: #e5e7eb; /* gray-200 */
+}
+.railLineTop {
+  top: 0;
+  height: 22px;
+}
+.railLineBottom {
+  bottom: 0;
+  height: calc(100% - 54px);
+} /* pivot 아래부터 바닥까지 */
+.hidden {
+  display: none;
+}
+
+/* pivot(원형 아이콘) */
+.pivot {
+  position: absolute;
+  top: 18px;
+  left: 16px;
+  width: 50px;
+  height: 50px;
+  border-radius: 9999px;
+  border: 3px solid #3b82f6; /* blue-500 링 */
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+.pivotImg {
+  width: 102px;
+  height: 102px;
+  object-fit: cover;
+  border-radius: 50%;
+}
+.pivotFallback {
+  font-size: 58px;
+  line-height: 1;
+}
+
+/* 방문 카드 */
+.card {
+  background: #fff;
+  border-radius: 18px;
+  padding: 16px 16px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(17, 24, 39, 0.06);
+}
+
+.cardHeader {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: 10px;
+}
+
+.place {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: #111827;
+}
+
+.timeBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #4b5563; /* gray-600 */
+  font-weight: 700;
+}
+
+/* 부가 텍스트 */
+.category {
+  margin-top: 6px;
+  color: #6b7280; /* gray-500 */
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.note {
+  margin: 6px 0 0;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+/* 이동 행 */
+.transferRow {
+  margin: 2px 0; /* 간격 타이트 */
+}
+.transferIcon {
+  position: absolute;
+  top: 4px;
+  left: 22px;
+  color: #9ca3af; /* gray-400 */
+}
+.transferText {
+  color: #6b7280; /* gray-500 */
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 모바일 좁은 폭 대응 */
+@media (max-width: 360px) {
+  .row {
+    grid-template-columns: 56px 1fr;
+  }
+  .place {
+    font-size: 16px;
+  }
+  .card {
+    border-radius: 16px;
+    padding: 14px;
+  }
+}
+
+.pivotIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  color: #111;
+}
+
+.pivotIcon svg {
+  width: 16px;
+  height: 16px;
+}

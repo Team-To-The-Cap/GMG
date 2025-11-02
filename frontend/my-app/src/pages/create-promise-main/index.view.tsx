@@ -2,10 +2,8 @@ import React from "react";
 import TopBar from "@/components/ui/top-bar";
 import SectionHeader from "@/components/ui/section-header";
 import Button from "@/components/ui/button";
-import IconButton from "@/components/ui/IconButton/IconButton";
 import PromiseCard from "@/components/ui/promise-card";
 import Avatar from "@/components/ui/avatar";
-import Badge from "@/components/ui/badge";
 import {
   UserIcon,
   CalendarIcon,
@@ -15,6 +13,8 @@ import {
 } from "@/assets/icons/icons";
 import styles from "./style.module.css";
 import type { Participant, PromiseDetail } from "@/types/promise";
+import CourseSummaryCard from "@/components/ui/course-summary-card";
+import CourseDetailList from "@/components/ui/course-detail-list"; // ✅ 타임라인
 
 type Props = {
   loading: boolean;
@@ -26,6 +26,34 @@ type Props = {
   onEditCourse?: () => void;
   onAddParticipant?: () => void;
 };
+
+/* ================================
+   Helpers: summary 계산 / 타입가드
+   ================================ */
+type VisitItem = { type: "visit"; stayMinutes: number };
+type TransferItem = { type: "transfer"; minutes: number };
+
+function summarizeFromItems(items: Array<VisitItem | TransferItem> = []) {
+  let activity = 0,
+    travel = 0;
+  for (const it of items) {
+    if (it.type === "visit") activity += it.stayMinutes;
+    else if (it.type === "transfer") travel += it.minutes;
+  }
+  return {
+    totalMinutes: activity + travel,
+    activityMinutes: activity,
+    travelMinutes: travel,
+  };
+}
+
+function isCourseWithItems(
+  course: PromiseDetail["course"] | { text: string }
+): course is PromiseDetail["course"] & {
+  items: Array<VisitItem | TransferItem>;
+} {
+  return Array.isArray((course as any)?.items);
+}
 
 export default class CreatePromiseMainView extends React.PureComponent<Props> {
   private renderSkeleton() {
@@ -64,7 +92,7 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
   }
 
   private renderParticipantsSection(participants: Participant[]) {
-    const { onEditParticipants, onAddParticipant } = this.props; // ✅ 추가
+    const { onEditParticipants, onAddParticipant } = this.props;
     return (
       <section className={styles.section}>
         <SectionHeader
@@ -117,7 +145,7 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
   }
 
   private renderPlaceSection(placeLabel: string) {
-    const { onEditPlace } = this.props; // ✅ props에서 받음
+    const { onEditPlace } = this.props;
     return (
       <section className={styles.section}>
         <SectionHeader
@@ -134,8 +162,15 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
     );
   }
 
-  private renderCourseSection(summary: string) {
+  // ✅ 코스: data.course를 그대로 사용. summary 없으면 items로 계산
+  private renderCourseSection(course: PromiseDetail["course"]) {
     const { onEditCourse } = this.props;
+
+    const items = isCourseWithItems(course) ? course.items : [];
+    const summary = isCourseWithItems(course)
+      ? course.summary ?? summarizeFromItems(items)
+      : { totalMinutes: 0, activityMinutes: 0, travelMinutes: 0 };
+
     return (
       <section className={styles.section}>
         <SectionHeader
@@ -147,7 +182,16 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
             </Button>
           }
         />
-        <PromiseCard className={styles.courseCard}>{summary}</PromiseCard>
+
+        <CourseSummaryCard
+          totalMinutes={summary.totalMinutes}
+          activityMinutes={summary.activityMinutes}
+          travelMinutes={summary.travelMinutes}
+          className={styles.courseCard}
+        />
+
+        {/* 타임라인: 실제 course.items를 그대로 전달 */}
+        <CourseDetailList items={items} />
       </section>
     );
   }
@@ -172,25 +216,26 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
       { year: "numeric", month: "long", day: "numeric" }
     );
 
-    // 🔹 장소 정보가 없을 수도 있으니 안전하게 처리
     const placeLabel = data.place?.name ?? "장소 미정";
 
     return (
       <div className={styles.container}>
         <TopBar title={`${data.title} 상세`} />
+
         {this.renderHeroCard(data.title, data.dday, data.participants ?? [])}
         {this.renderParticipantsSection(data.participants)}
 
+        {/* 결과 블록 */}
         <section className={styles.section}>
           <SectionHeader icon={<ResultIcon />} title="결과" size="md" />
-
-          <div className={styles.container} style={{ padding: "0px 10px" }}>
+          <div className={styles.sectionInner}>
             {this.renderScheduleSection(dateLabel)}
             {this.renderPlaceSection(placeLabel)}
-            {this.renderCourseSection(data.course.text)}
+            {this.renderCourseSection(data.course)} {/* ✅ course 객체 전달 */}
             {this.renderCalculateButton()}
           </div>
         </section>
+
         <div className={styles.bottomSpacer} />
       </div>
     );
