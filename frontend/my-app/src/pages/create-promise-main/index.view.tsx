@@ -10,7 +10,7 @@ import {
   MapIcon,
   PinIcon,
   ResultIcon,
-  EditIcon,
+  EditIcon, // ← 아이콘 사용
 } from "@/assets/icons/icons";
 import styles from "./style.module.css";
 import type { Participant, PromiseDetail } from "@/types/promise";
@@ -26,7 +26,15 @@ type Props = {
   onEditPlace?: () => void;
   onEditCourse?: () => void;
   onAddParticipant?: () => void;
-  onEditTitle?: () => void; // ✅ 약속 이름 편집 콜백 추가
+
+  /** 제목 변경을 외부로 전달하고 싶다면 선택적으로 제공 */
+  onChangeTitle?: (value: string) => void;
+  /** 기존 버튼 유지하려면 그대로 둠(선택) */
+  onEditTitle?: () => void;
+};
+
+type State = {
+  titleDraft: string; // 로컬 입력값
 };
 
 /* ================================
@@ -57,7 +65,48 @@ function isCourseWithItems(
   return Array.isArray((course as any)?.items);
 }
 
-export default class CreatePromiseMainView extends React.PureComponent<Props> {
+export default class CreatePromiseMainView extends React.PureComponent<
+  Props,
+  State
+> {
+  state: State = {
+    titleDraft: this.props.data?.title ?? "",
+  };
+
+  // props.data가 바뀌면 초깃값 동기화(직접 타이핑 중일 때는 유지)
+  componentDidUpdate(prevProps: Props) {
+    if (prevProps.data?.title !== this.props.data?.title) {
+      // 사용자가 직접 수정 중(포커스/입력)이라면 굳이 덮어쓰지 않음.
+      // 여기서는 단순화: 외부 데이터가 바뀌면 드래프트 갱신
+      this.setState({ titleDraft: this.props.data?.title ?? "" });
+    }
+  }
+
+  private commitTitle = () => {
+    const { onChangeTitle } = this.props;
+    const value = this.state.titleDraft.trim();
+    onChangeTitle?.(value);
+  };
+
+  private handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    this.setState({ titleDraft: e.target.value });
+  };
+
+  private handleTitleBlur = () => {
+    this.commitTitle();
+  };
+
+  private handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      (e.target as HTMLInputElement).blur();
+    } else if (e.key === "Escape") {
+      // ESC 누르면 원복
+      this.setState({ titleDraft: this.props.data?.title ?? "" }, () => {
+        (e.target as HTMLInputElement).blur();
+      });
+    }
+  };
+
   private renderSkeleton() {
     return (
       <div className={styles.container}>
@@ -93,13 +142,15 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
     );
   }
 
-  // ✅ 약속 이름 섹션
-  private renderTitleSection(name: string) {
+  // ✅ 약속 이름 섹션 (입력 가능)
+  private renderTitleSection(nameFromData: string) {
     const { onEditTitle } = this.props;
+    const { titleDraft } = this.state;
+
     return (
       <section className={styles.section}>
         <SectionHeader
-          icon={<ResultIcon />} // 필요하면 전용 아이콘으로 교체 가능
+          icon={<ResultIcon />}
           title="약속 이름"
           size="sm"
           action={
@@ -107,23 +158,23 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
               variant="ghost"
               size="xs"
               iconLeft={<EditIcon width={16} height={16} />}
+              onClick={onEditTitle}
             >
-              수정
+              저장
             </Button>
           }
         />
-        <div
-          className={styles.inputLike}
-          tabIndex={0}
-          role="textbox"
-          aria-readonly="true"
-        >
-          {name ? (
-            <span>{name}</span>
-          ) : (
-            <span className={styles.placeholder}>이름 미정</span>
-          )}
-        </div>
+        {/* input 처럼 보이는 텍스트 입력 */}
+        <input
+          type="text"
+          className={`${styles.inputLike} ${styles.inputReset}`}
+          placeholder="이름을 입력하세요"
+          value={titleDraft}
+          onChange={this.handleTitleChange}
+          onBlur={this.handleTitleBlur}
+          onKeyDown={this.handleTitleKeyDown}
+          aria-label="약속 이름"
+        />
       </section>
     );
   }
@@ -137,12 +188,8 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
           title="참석자 명단"
           size="sm"
           action={
-            <Button
-              variant="ghost"
-              size="xs"
-              iconLeft={<EditIcon width={16} height={16} />}
-            >
-              수정
+            <Button variant="ghost" size="xs" onClick={onEditParticipants}>
+              수정하러 가기
             </Button>
           }
         />
@@ -154,6 +201,7 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
             </li>
           ))}
         </ul>
+
         <Button
           variant="primary"
           size="sm"
@@ -174,12 +222,8 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
           icon={<CalendarIcon />}
           title="일정"
           action={
-            <Button
-              variant="ghost"
-              size="xs"
-              iconLeft={<EditIcon width={16} height={16} />}
-            >
-              수정
+            <Button variant="ghost" size="xs" onClick={onEditSchedule}>
+              수정하러 가기
             </Button>
           }
         />
@@ -196,12 +240,8 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
           icon={<PinIcon />}
           title="장소"
           action={
-            <Button
-              variant="ghost"
-              size="xs"
-              iconLeft={<EditIcon width={16} height={16} />}
-            >
-              수정
+            <Button variant="ghost" size="xs" onClick={onEditPlace}>
+              수정하러 가기
             </Button>
           }
         />
@@ -225,12 +265,8 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
           icon={<MapIcon />}
           title="코스"
           action={
-            <Button
-              variant="ghost"
-              size="xs"
-              iconLeft={<EditIcon width={16} height={16} />}
-            >
-              수정
+            <Button variant="ghost" size="xs" onClick={onEditCourse}>
+              수정하러 가기
             </Button>
           }
         />
@@ -273,16 +309,10 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
     return (
       <div className={styles.container}>
         <TopBar title={`새로운 약속 추가`} />
-
         {/* {this.renderHeroCard(data.title, data.dday, data.participants ?? [])} */}
-        <section className={styles.section}>
-          <SectionHeader title="새로운 약속을 만들어 보세요" size="md" />
-          <div className={styles.sectionInner}>
-            {this.renderTitleSection(data.title)} {/* ✅ 추가된 섹션 */}
-            {this.renderParticipantsSection(data.participants)}{" "}
-          </div>
-        </section>
-
+        {this.renderTitleSection(data.title)} {/* ✅ 입력 가능 */}
+        {this.renderParticipantsSection(data.participants)}{" "}
+        {/* 기존 참석자 섹션 */}
         {/* 결과 블록 */}
         <section className={styles.section}>
           <SectionHeader icon={<ResultIcon />} title="결과" size="md" />

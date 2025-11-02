@@ -137,6 +137,34 @@
   box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--ring, rgba(62, 147, 250, 0.4));
 }
 
+/* 기존 .inputLike 정의는 그대로 두고, 아래만 추가 */
+.inputReset {
+  border: 1px solid #e5e7eb;
+  background-color: #fff;
+  color: #111;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.2;
+
+  width: 100%;
+  min-height: 44px; /* 기존 시각 높이 유지 */
+  padding: 10px 12px;
+  border-radius: 12px;
+
+  /* 브라우저 기본 스타일 제거 */
+  outline: none;
+  box-shadow: none;
+  appearance: none;
+}
+
+/* 포커스 링은 .inputLike에 있으면 그대로 작동.
+   필요 시 여기도 추가 가능 */
+.inputReset:focus-visible {
+  border-color: var(--primary, #3e93fa);
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--ring, rgba(62, 147, 250, 0.4));
+}
+
 /* placeholder 톤 */
 .placeholder {
   color: #9ca3af; /* gray-400 */
