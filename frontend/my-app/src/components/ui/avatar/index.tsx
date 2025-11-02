@@ -5,7 +5,7 @@ const DEFAULT_AVATAR = "https://i.pravatar.cc/40?u=default"; // 혹은 /assets/d
 export default function Avatar({
   src,
   alt,
-  size = 28,
+  size = 32,
 }: {
   src?: string | null;
   alt: string;

@@ -64,12 +64,83 @@
   /* box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05); */
 }
 
+/* 아바타/이름 하나의 아이템 */
 .participantItem {
+  /* 아바타 사이즈를 이 변수 하나로 통제 */
+  --avatar: 48px;
+
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
   font-size: 13px;
+}
+
+/* 아바타를 감싸는 래퍼: 삭제 버튼의 기준점 */
+.avatarWrap {
+  position: relative;
+  width: var(--avatar);
+  height: var(--avatar);
+  display: grid;
+  place-items: center;
+}
+
+/* Avatar 내부 이미지 둥글게 보장 (컴포넌트 구조에 따라 선택) */
+.avatarWrap :global(img),
+.avatarWrap img {
+  width: 100%;
+  height: 100%;
+  border-radius: 9999px;
+  display: block;
+  object-fit: cover;
+}
+
+/* 좌상단 겹치는 삭제 버튼 */
+.removeBtn {
+  position: absolute;
+  top: -6px; /* 살짝 겹치도록 음수 오프셋 */
+  left: -6px;
+  z-index: 1;
+
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 9999px;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  color: #111;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  transition: transform 0.12s ease, box-shadow 0.12s ease,
+    background-color 0.12s ease, opacity 0.12s ease;
+
+  opacity: 0.92;
+}
+
+.participantItem:hover .removeBtn,
+.removeBtn:focus-visible {
+  opacity: 1;
+}
+
+.removeBtn:hover {
+  transform: scale(1.06);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.16);
+  background: #f8fafc;
+}
+
+.removeBtn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--ring, rgba(62, 147, 250, 0.4));
+}
+
+/* 이름 줄바꿈 및 가운데 정렬 */
+.participantItemName {
+  text-align: center;
+  word-break: break-word;
+  line-height: 1.2;
 }
 
 .scheduleText {

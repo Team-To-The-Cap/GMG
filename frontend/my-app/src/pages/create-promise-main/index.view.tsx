@@ -31,6 +31,7 @@ type Props = {
   onChangeTitle?: (value: string) => void;
   /** 기존 버튼 유지하려면 그대로 둠(선택) */
   onEditTitle?: () => void;
+  onRemoveParticipant?: (id: string) => void;
 };
 
 type State = {
@@ -180,7 +181,8 @@ export default class CreatePromiseMainView extends React.PureComponent<
   }
 
   private renderParticipantsSection(participants: Participant[]) {
-    const { onEditParticipants, onAddParticipant } = this.props;
+    const { onEditParticipants, onAddParticipant, onRemoveParticipant } =
+      this.props;
     return (
       <section className={styles.section}>
         <SectionHeader
@@ -196,8 +198,21 @@ export default class CreatePromiseMainView extends React.PureComponent<
         <ul className={styles.participantGrid}>
           {participants.map((p) => (
             <li key={p.id} className={styles.participantItem}>
-              <Avatar src={p.avatarUrl} alt={p.name} />
-              <span>{p.name}</span>
+              <div className={styles.avatarWrap}>
+                <Avatar src={p.avatarUrl} alt={p.name} />
+                <button
+                  type="button"
+                  className={styles.removeBtn}
+                  aria-label={`${p.name} 삭제`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemoveParticipant?.(p.id);
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+              <span className={styles.participantItemName}>{p.name}</span>
             </li>
           ))}
         </ul>
