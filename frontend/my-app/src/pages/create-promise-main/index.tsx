@@ -39,7 +39,9 @@ export default function CreatePromiseMain() {
   const onEditParticipants = useCallback(() => {
     alert("참여자 수정 기능 준비 중!");
   }, [promiseId]);
-  const onEditSchedule = useCallback(() => {}, [promiseId]);
+  const onEditSchedule = useCallback(() => {
+    navigate("/time/time1");
+  }, [promiseId]);
   const onEditPlace = useCallback(() => {
     alert("장소 수정 기능 준비 중!");
   }, [promiseId]);

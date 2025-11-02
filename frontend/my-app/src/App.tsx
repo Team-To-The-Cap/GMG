@@ -4,6 +4,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import Home from "@/pages/home";
 import CreatePromiseMain from "@/pages/create-promise-main";
 import MyPage from "@/pages/my-page";
+import Time1 from "@/pages/promise-time/time1";
 
 // components
 import BottomNav from "@/components/layout/bottom-nav";
@@ -29,6 +30,7 @@ export default function App() {
         <Route path="/create/:promiseId" element={<CreatePromiseMain />} />
 
         <Route path="/me" element={<MyPage />} />
+        <Route path="/time/time1" element={<Time1 />} />
 
         {/* (옵션) 404 처리 */}
         <Route path="*" element={<Navigate to="/" replace />} />

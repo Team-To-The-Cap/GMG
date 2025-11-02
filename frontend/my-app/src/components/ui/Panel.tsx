@@ -1,6 +1,6 @@
 import * as React from "react";
 import clsx from "clsx";
-import CardSurface from "./card"; // ★ 팀원 Card (CSS module 기반 그 표면)
+import CardSurface from "./promise-card"; // ★ 팀원 Card (CSS module 기반 그 표면)
 
 type DivProps = React.HTMLAttributes<HTMLDivElement>;
 
