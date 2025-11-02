@@ -18,6 +18,96 @@ class Meeting(Base):
     # 2. [수정] Meeting -> ParticipantTime (1:N)
     #    이 약속에 등록된 모든 참가 시간 목록
     participant_times = relationship("ParticipantTime", back_populates="meeting")
+    
+    
+    # Meeting -> MeetingPlan (1:N)
+    # 이 약속에 확정된 세부 계획(들)
+    plans = relationship("MeetingPlan", back_populates="meeting")
+
+    # Meeting -> MeetingPlace (1:N)
+    # 이 약속에 포함된 장소(경유지) 목록
+    places = relationship("MeetingPlace", back_populates="meeting")
+
+
+
+class MeetingPlan(Base):
+    """
+    Meeting_Plan 테이블 모델
+    - 확정된 약속의 최종 계획(시간, 장소)을 저장합니다.
+    """
+    
+    # 이미지에 명시된 테이블 이름 사용
+    __tablename__ = "Meeting_Plan"
+
+    # plan 고유 id (Primary Key)
+    id = Column(Integer, primary_key=True, index=True)
+
+    # meeting id (Foreign Key)
+    # 'meetings' 테이블의 'id'를 참조
+    meeting_id = Column(Integer, ForeignKey("meetings.id"), nullable=False, index=True)
+
+    # 약속 날짜&시간 (확정된 시간)
+    meeting_time = Column(DateTime(timezone=True), nullable=False)
+
+    # 장소 정보 address
+    address = Column(VARCHAR(255), nullable=False)
+
+    # 총 시간(분)
+    # (필수가 아닐 수 있으므로 nullable=True로 설정, 필요시 False로 변경)
+    total_time = Column(Integer, nullable=True)
+
+    # --- 관계 설정 ---
+    
+    # 이 Plan이 어떤 Meeting에 속했는지 역참조
+    meeting = relationship("Meeting", back_populates="plans")
+
+
+# -------------------------------------------------
+class MeetingPlace(Base):
+    """
+    Meeting_Place 테이블 모델
+    - 약속 장소(들)의 상세 정보를 저장합니다.
+    - (e.g., 코스의 각 경유지)
+    """
+    
+    # 이미지의 '테이블명' 컬럼 기준
+    __tablename__ = "Meeting_Place"
+
+    # id (Primary Key)
+    # (이미지의 'plan 고유 id' 설명은 'place 고유 id'의 오타로 보입니다)
+    id = Column(Integer, primary_key=True, index=True)
+
+    # ❗ [수정] meeting_id (Foreign Key)
+    # 이미지의 VARCHAR(255) 대신, meetings.id를 참조하는 Integer로 설정
+    meeting_id = Column(Integer, ForeignKey("meetings.id"), nullable=False, index=True)
+
+    # 장소 이름
+    name = Column(VARCHAR(255), nullable=False)
+
+    # 주소 위도
+    latitude = Column(Float, nullable=False)
+
+    # 주소 경도
+    longitude = Column(Float, nullable=False)
+
+    # 주소 (컬럼명 'address', 설명 '시작 주소 이름')
+    address = Column(VARCHAR(255), nullable=False)
+
+    # 장소 종류 (카페, 식당 등)
+    # (필수 값이 아닐 수 있으므로 nullable=True 권장)
+    category = Column(VARCHAR(255), nullable=True)
+
+    # 머무르는 시간(분)
+    # (필수 값이 아닐 수 있으므로 nullable=True 권장)
+    duration = Column(Integer, nullable=True)
+
+    # --- 관계 설정 ---
+    
+    # MeetingPlace -> Meeting (N:1)
+    # 이 장소가 어떤 약속(Meeting)에 속하는지
+    meeting = relationship("Meeting", back_populates="places")
+
+
 
 class Participant(Base):
     # PostgreSQL에 생성될 테이블 이름
