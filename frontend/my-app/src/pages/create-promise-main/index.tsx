@@ -52,9 +52,11 @@ export default function CreatePromiseMain() {
     alert("코스 수정 기능 준비 중!");
   }, [promiseId]);
 
-  // 새 인원 추가
+  // ✅ 새 인원 추가 버튼 핸들러
+  // ✅ 1) onAddParticipant 만 교체
   const onAddParticipant = useCallback(() => {
-    alert("새 참여자 추가 기능 준비 중!");
+    if (!promiseId) return; // 혹시 모를 가드
+    navigate(`/create/${promiseId}/participants/new`);
   }, [promiseId, navigate]);
 
   // 약속 이름 편집(또는 이동)

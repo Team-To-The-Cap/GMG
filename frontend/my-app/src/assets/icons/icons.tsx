@@ -133,7 +133,6 @@ export const ResultIcon = withA11y<SvgProps>((props) => (
 // ───────────── 식당(레스토랑) 아이콘 (20px) ─────────────
 export const RestaurantIcon = withA11y<SvgProps>((props) => (
   <svg viewBox="0 0 24 24" width={20} height={20} {...props}>
-    {/* 접시 */}
     <circle
       cx="12"
       cy="12"
@@ -150,7 +149,6 @@ export const RestaurantIcon = withA11y<SvgProps>((props) => (
       stroke="currentColor"
       strokeWidth={2}
     />
-    {/* 포크(좌) */}
     <path
       d="M5.5 5v6"
       stroke="currentColor"
@@ -163,7 +161,6 @@ export const RestaurantIcon = withA11y<SvgProps>((props) => (
       strokeWidth={2}
       strokeLinecap="round"
     />
-    {/* 나이프(우) */}
     <path
       d="M18 5v10"
       stroke="currentColor"
@@ -176,15 +173,13 @@ export const RestaurantIcon = withA11y<SvgProps>((props) => (
 // ───────────── 카페(커피) 아이콘 (20px) ─────────────
 export const CafeIcon = withA11y<SvgProps>((props) => (
   <svg viewBox="0 0 24 24" width={20} height={20} {...props}>
-    {/* 머그컵 */}
     <path
-      d="M5 9h9a0 0 0 0 1 0 0v5a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V9a0 0 0 0 1 0 0Z"
+      d="M5 9h9v5a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V9Z"
       fill="none"
       stroke="currentColor"
       strokeWidth={2}
       strokeLinejoin="round"
     />
-    {/* 손잡이 */}
     <path
       d="M14 10h2.2a2.3 2.3 0 0 1 0 4.6H14"
       fill="none"
@@ -193,7 +188,6 @@ export const CafeIcon = withA11y<SvgProps>((props) => (
       strokeLinecap="round"
       strokeLinejoin="round"
     />
-    {/* 소서 */}
     <path
       d="M6 18h10"
       fill="none"
@@ -201,7 +195,6 @@ export const CafeIcon = withA11y<SvgProps>((props) => (
       strokeWidth={2}
       strokeLinecap="round"
     />
-    {/* 김(스팀) */}
     <path
       d="M8.5 6c0-1 .8-1.2.8-2.2"
       fill="none"
@@ -222,7 +215,6 @@ export const CafeIcon = withA11y<SvgProps>((props) => (
 // ───────────── 샵(쇼핑) 아이콘 (20px) ─────────────
 export const ShopIcon = withA11y<SvgProps>((props) => (
   <svg viewBox="0 0 24 24" width={20} height={20} {...props}>
-    {/* 쇼핑백 본체 */}
     <rect
       x="6"
       y="8"
@@ -234,7 +226,6 @@ export const ShopIcon = withA11y<SvgProps>((props) => (
       stroke="currentColor"
       strokeWidth={2}
     />
-    {/* 손잡이 */}
     <path
       d="M8.5 8V7a3.5 3.5 0 0 1 7 0v1"
       fill="none"
@@ -242,7 +233,6 @@ export const ShopIcon = withA11y<SvgProps>((props) => (
       strokeWidth={2}
       strokeLinecap="round"
     />
-    {/* 손잡이 연결점 */}
     <circle cx="9" cy="10" r="1" fill="currentColor" />
     <circle cx="15" cy="10" r="1" fill="currentColor" />
   </svg>
@@ -289,11 +279,9 @@ export const ArrowDownIcon = withA11y<SvgProps>((props) => (
   </svg>
 ));
 
-/* ───────────── 이름(Name) 아이콘 (20px) ─────────────
-   명찰/ID 카드 형태: 테두리 + 아바타 + 텍스트 라인 2개 */
+// ───────────── 이름(Name) 아이콘 (20px) ─────────────
 export const NameIcon = withA11y<SvgProps>((props) => (
   <svg viewBox="0 0 24 24" width={20} height={20} {...props}>
-    {/* 카드 테두리 */}
     <rect
       x="3"
       y="6"
@@ -305,7 +293,6 @@ export const NameIcon = withA11y<SvgProps>((props) => (
       stroke="currentColor"
       strokeWidth={2}
     />
-    {/* 아바타 원 */}
     <circle
       cx="8.5"
       cy="12"
@@ -314,7 +301,6 @@ export const NameIcon = withA11y<SvgProps>((props) => (
       stroke="currentColor"
       strokeWidth={2}
     />
-    {/* 텍스트 라인 */}
     <path
       d="M13 10h5"
       fill="none"
@@ -332,25 +318,76 @@ export const NameIcon = withA11y<SvgProps>((props) => (
   </svg>
 ));
 
-/* ───────────── 수정(Edit) 아이콘 (20px) ─────────────
-   연필 모양: 심플한 라인 기반 */
+// ───────────── 수정(Edit) 아이콘 (20px) ─────────────
 export const EditIcon = withA11y<SvgProps>((props) => (
   <svg viewBox="0 0 24 24" width={20} height={20} {...props}>
-    {/* 연필 몸체 */}
     <path
-      d="M4 20l4-1 9.5-9.5a2 2 0 0 0 0-2.8l-1.2-1.2a2 2 0 0 0-2.8 0L4 15l0 5Z"
+      d="M4 20l4-1 9.5-9.5a2 2 0 0 0 0-2.8l-1.2-1.2a2 2 0 0 0-2.8 0L4 15v5Z"
       fill="none"
       stroke="currentColor"
       strokeWidth={2}
       strokeLinejoin="round"
     />
-    {/* 연필 끝(지우개/캡 구분선) */}
     <path
       d="M14 6l4 4"
       fill="none"
       stroke="currentColor"
       strokeWidth={2}
       strokeLinecap="round"
+    />
+  </svg>
+));
+
+// ───────────── 추가 아이콘 (다른 브랜치에서 온 것) ─────────────
+// PinIcon 변형
+export const PinIcon2 = withA11y<SvgProps>((props) => (
+  <svg viewBox="0 0 24 24" width={20} height={20} {...props}>
+    <path
+      d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+    />
+    <circle
+      cx="12"
+      cy="10"
+      r="2.8"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+    />
+  </svg>
+));
+
+// 휴지통(삭제)
+export const TrashIcon = withA11y<SvgProps>((props) => (
+  <svg viewBox="0 0 24 24" width={20} height={20} {...props}>
+    <path d="M3 6h18" stroke="currentColor" strokeWidth={2} fill="none" />
+    <path
+      d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"
+      stroke="currentColor"
+      strokeWidth={2}
+      fill="none"
+    />
+    <path d="M10 11v7M14 11v7" stroke="currentColor" strokeWidth={2} />
+    <path
+      d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"
+      stroke="currentColor"
+      strokeWidth={2}
+      fill="none"
+    />
+  </svg>
+));
+
+// 하트
+export const HeartIcon = withA11y<SvgProps>((props) => (
+  <svg viewBox="0 0 24 24" width={20} height={20} {...props}>
+    <path
+      d="M20.5 8.6c0 4.6-6.7 9.3-8.5 10.6-1.8-1.3-8.5-6-8.5-10.6A4.9 4.9 0 0 1 8 3.9c1.6 0 3.1.9 4 2.3.9-1.4 2.4-2.3 4-2.3a4.9 4.9 0 0 1 4.5 4.7Z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinejoin="round"
     />
   </svg>
 ));
