@@ -10,6 +10,7 @@ import {
   MapIcon,
   PinIcon,
   ResultIcon,
+  EditIcon,
 } from "@/assets/icons/icons";
 import styles from "./style.module.css";
 import type { Participant, PromiseDetail } from "@/types/promise";
@@ -25,6 +26,7 @@ type Props = {
   onEditPlace?: () => void;
   onEditCourse?: () => void;
   onAddParticipant?: () => void;
+  onEditTitle?: () => void; // ✅ 약속 이름 편집 콜백 추가
 };
 
 /* ================================
@@ -91,6 +93,41 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
     );
   }
 
+  // ✅ 약속 이름 섹션
+  private renderTitleSection(name: string) {
+    const { onEditTitle } = this.props;
+    return (
+      <section className={styles.section}>
+        <SectionHeader
+          icon={<ResultIcon />} // 필요하면 전용 아이콘으로 교체 가능
+          title="약속 이름"
+          size="sm"
+          action={
+            <Button
+              variant="ghost"
+              size="xs"
+              iconLeft={<EditIcon width={16} height={16} />}
+            >
+              수정
+            </Button>
+          }
+        />
+        <div
+          className={styles.inputLike}
+          tabIndex={0}
+          role="textbox"
+          aria-readonly="true"
+        >
+          {name ? (
+            <span>{name}</span>
+          ) : (
+            <span className={styles.placeholder}>이름 미정</span>
+          )}
+        </div>
+      </section>
+    );
+  }
+
   private renderParticipantsSection(participants: Participant[]) {
     const { onEditParticipants, onAddParticipant } = this.props;
     return (
@@ -98,10 +135,14 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
         <SectionHeader
           icon={<UserIcon />}
           title="참석자 명단"
-          size="md"
+          size="sm"
           action={
-            <Button variant="ghost" size="xs" onClick={onEditParticipants}>
-              수정하러 가기
+            <Button
+              variant="ghost"
+              size="xs"
+              iconLeft={<EditIcon width={16} height={16} />}
+            >
+              수정
             </Button>
           }
         />
@@ -113,7 +154,6 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
             </li>
           ))}
         </ul>
-
         <Button
           variant="primary"
           size="sm"
@@ -134,8 +174,12 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
           icon={<CalendarIcon />}
           title="일정"
           action={
-            <Button variant="ghost" size="xs" onClick={onEditSchedule}>
-              수정하러 가기
+            <Button
+              variant="ghost"
+              size="xs"
+              iconLeft={<EditIcon width={16} height={16} />}
+            >
+              수정
             </Button>
           }
         />
@@ -152,8 +196,12 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
           icon={<PinIcon />}
           title="장소"
           action={
-            <Button variant="ghost" size="xs" onClick={onEditPlace}>
-              수정하러 가기
+            <Button
+              variant="ghost"
+              size="xs"
+              iconLeft={<EditIcon width={16} height={16} />}
+            >
+              수정
             </Button>
           }
         />
@@ -177,8 +225,12 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
           icon={<MapIcon />}
           title="코스"
           action={
-            <Button variant="ghost" size="xs" onClick={onEditCourse}>
-              수정하러 가기
+            <Button
+              variant="ghost"
+              size="xs"
+              iconLeft={<EditIcon width={16} height={16} />}
+            >
+              수정
             </Button>
           }
         />
@@ -222,8 +274,14 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
       <div className={styles.container}>
         <TopBar title={`새로운 약속 추가`} />
 
-        {this.renderHeroCard(data.title, data.dday, data.participants ?? [])}
-        {this.renderParticipantsSection(data.participants)}
+        {/* {this.renderHeroCard(data.title, data.dday, data.participants ?? [])} */}
+        <section className={styles.section}>
+          <SectionHeader title="새로운 약속을 만들어 보세요" size="md" />
+          <div className={styles.sectionInner}>
+            {this.renderTitleSection(data.title)} {/* ✅ 추가된 섹션 */}
+            {this.renderParticipantsSection(data.participants)}{" "}
+          </div>
+        </section>
 
         {/* 결과 블록 */}
         <section className={styles.section}>
@@ -235,7 +293,6 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
             {this.renderCalculateButton()}
           </div>
         </section>
-
         <div className={styles.bottomSpacer} />
       </div>
     );

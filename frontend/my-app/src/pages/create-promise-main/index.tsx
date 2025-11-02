@@ -39,21 +39,29 @@ export default function CreatePromiseMain() {
   const onEditParticipants = useCallback(() => {
     alert("참여자 수정 기능 준비 중!");
   }, [promiseId]);
+
   const onEditSchedule = useCallback(() => {
     navigate("/time/time1");
-  }, [promiseId]);
+  }, [promiseId, navigate]);
+
   const onEditPlace = useCallback(() => {
     alert("장소 수정 기능 준비 중!");
   }, [promiseId]);
+
   const onEditCourse = useCallback(() => {
     alert("코스 수정 기능 준비 중!");
   }, [promiseId]);
 
   // ✅ 새 인원 추가 버튼 핸들러
   const onAddParticipant = useCallback(() => {
-    // 지금은 알림. 나중에 라우팅 붙일 때:
     // if (promiseId) navigate(`/create/${promiseId}/participants/add`);
     alert("새 참여자 추가 기능 준비 중!");
+  }, [promiseId, navigate]);
+
+  // ✅ 약속 이름 편집(또는 이동) 핸들러
+  const onEditTitle = useCallback(() => {
+    alert("약속 이름 수정 기능 준비 중!");
+    // 예: if (promiseId) navigate(`/create/${promiseId}/title/edit`);
   }, [promiseId, navigate]);
 
   return (
@@ -66,6 +74,7 @@ export default function CreatePromiseMain() {
       onEditPlace={onEditPlace}
       onEditCourse={onEditCourse}
       onAddParticipant={onAddParticipant}
+      onEditTitle={onEditTitle}
     />
   );
 }

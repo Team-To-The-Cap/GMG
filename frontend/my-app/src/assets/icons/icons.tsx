@@ -288,3 +288,69 @@ export const ArrowDownIcon = withA11y<SvgProps>((props) => (
     />
   </svg>
 ));
+
+/* ───────────── 이름(Name) 아이콘 (20px) ─────────────
+   명찰/ID 카드 형태: 테두리 + 아바타 + 텍스트 라인 2개 */
+export const NameIcon = withA11y<SvgProps>((props) => (
+  <svg viewBox="0 0 24 24" width={20} height={20} {...props}>
+    {/* 카드 테두리 */}
+    <rect
+      x="3"
+      y="6"
+      width="18"
+      height="12"
+      rx="2"
+      ry="2"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+    />
+    {/* 아바타 원 */}
+    <circle
+      cx="8.5"
+      cy="12"
+      r="2"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+    />
+    {/* 텍스트 라인 */}
+    <path
+      d="M13 10h5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+    />
+    <path
+      d="M13 14h4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+    />
+  </svg>
+));
+
+/* ───────────── 수정(Edit) 아이콘 (20px) ─────────────
+   연필 모양: 심플한 라인 기반 */
+export const EditIcon = withA11y<SvgProps>((props) => (
+  <svg viewBox="0 0 24 24" width={20} height={20} {...props}>
+    {/* 연필 몸체 */}
+    <path
+      d="M4 20l4-1 9.5-9.5a2 2 0 0 0 0-2.8l-1.2-1.2a2 2 0 0 0-2.8 0L4 15l0 5Z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinejoin="round"
+    />
+    {/* 연필 끝(지우개/캡 구분선) */}
+    <path
+      d="M14 6l4 4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+    />
+  </svg>
+));

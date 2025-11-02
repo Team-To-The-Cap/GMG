@@ -53,11 +53,15 @@
 
 .participantGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(80px, 2fr));
   gap: 12px;
   margin-top: 10px;
-  padding: 0;
+  padding: 12px 0px;
   list-style: none;
+
+  /* background-color: #fff; */
+  border-radius: 10px;
+  /* box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05); */
 }
 
 .participantItem {
@@ -108,4 +112,33 @@
   .sectionInner {
     gap: 16px;
   }
+}
+
+.inputLike {
+  display: flex;
+  align-items: center;
+  min-height: 44px; /* 입력 높이 느낌 */
+  padding: 10px 12px; /* 좌우 여백 */
+  border: 1px solid #e5e7eb; /* 연한 테두리 */
+  border-radius: 12px;
+  background: #fff;
+  color: #111;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.2;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+
+/* 키보드 포커스 접근성 */
+.inputLike:focus-visible {
+  outline: none;
+  border-color: var(--primary, #3e93fa);
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--ring, rgba(62, 147, 250, 0.4));
+}
+
+/* placeholder 톤 */
+.placeholder {
+  color: #9ca3af; /* gray-400 */
+  font-weight: 500;
 }
