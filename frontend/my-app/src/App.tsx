@@ -4,7 +4,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import Home from "@/pages/home";
 import CreatePromiseMain from "@/pages/create-promise-main";
 import MyPage from "@/pages/my-page";
-import Time1 from "@/pages/promise-time/time1";
+import { Time as Time1 } from "@/pages/promise-time/Time";
 
 // components
 import BottomNav from "@/components/layout/bottom-nav";

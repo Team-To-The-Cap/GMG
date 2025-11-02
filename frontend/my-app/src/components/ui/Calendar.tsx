@@ -1,88 +1,88 @@
-// src/components/ui/Calendar.tsx
 import React, { useMemo, useRef, useState } from "react";
-import { Panel, PanelHeader, PanelContent } from "@/components/ui/Panel";
-
-const weekDays = ["월", "화", "수", "목", "금", "토", "일"];
+import { cn } from "@/utils/utils"; // cn utility is necessary
 
 type DragMode = "idle" | "paint" | "erase";
 
 interface CalendarCell {
-  day: number | null;     // null = 빈칸
-  disabled?: boolean;     // API로 비활성 처리 가능
+  day: number | null;
+  disabled?: boolean;
 }
 
-interface CalendarProps {
-  year: number;           // 2025
-  month: number;          // 0~11 (JS Date 규칙) (예: 9 = October)
-  onSelect?: (days: Date[]) => void; // 선택된 '일(day)' 숫자들
-  apiDays?: Partial<Record<number, { disabled?: boolean }>>; // API로 날짜 속성 주입
+export interface CalendarProps {
+  year: number; // 예: 2025
+  month: number; // 0~11 (예: 9 = October)
+  onSelect?: (dates: Date[]) => void; // 선택된 날짜 목록
+  apiDays?: Partial<Record<number, { disabled?: boolean }>>;
   className?: string;
+  initialSelected?: number[];
 }
 
-/** month/year로 5×7 그리드 생성 (요구에 맞춰 '항상 5주') */
-function buildGrid(year: number, month: number, apiDays?: CalendarProps["apiDays"]): CalendarCell[][] {
+/** month/year로 5×7 그리드 생성 (항상 35칸) — 월요일 시작 기준 */
+function buildGrid(
+  year: number,
+  month: number,
+  apiDays?: CalendarProps["apiDays"]
+): CalendarCell[][] {
   const first = new Date(year, month, 1);
-  // 월요일 시작 기준으로 오프셋 계산 (JS: 0=일요일 → 월=1)
-  const dow = first.getDay(); // 0..6
-  const mondayIndex = (dow + 6) % 7; // 월=0, 화=1, ... 일=6
+  const dow = first.getDay(); // 0=일,1=월,...6=토
+  const mondayIndex = (dow + 6) % 7; // 월=0, ..., 일=6 로 보정
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
   const cells: CalendarCell[] = [];
-  // 앞쪽 비어있는 칸
   for (let i = 0; i < mondayIndex; i++) cells.push({ day: null });
-  // 1일부터 채우기
   for (let d = 1; d <= daysInMonth; d++) {
     cells.push({ day: d, disabled: apiDays?.[d]?.disabled });
   }
-  // 뒤쪽 빈칸으로 채워 총 35칸(5×7)
   while (cells.length < 35) cells.push({ day: null });
 
-  // 5행으로 자르기
   const grid: CalendarCell[][] = [];
   for (let r = 0; r < 5; r++) grid.push(cells.slice(r * 7, r * 7 + 7));
   return grid;
 }
+
+const WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"];
 
 export function Calendar({
   year,
   month,
   onSelect,
   apiDays,
-  className
+  className,
+  initialSelected = [],
 }: CalendarProps) {
-  // 선택 상태는 '일(day) 숫자'의 Set으로 관리
-  const [selected, setSelected] = useState<Set<number>>(new Set([8, 31])); // 초기 데모
+  /** 내부 선택 상태: 일(day) 숫자 Set */
+  const [selected, setSelected] = useState<Set<number>>(new Set(initialSelected));
   const [dragMode, setDragMode] = useState<DragMode>("idle");
   const isPointerDown = useRef(false);
 
+  React.useEffect(() => {
+    // initialSelected가 변경될 때마다 상태를 재설정
+    setSelected(new Set(initialSelected));
+  }, [year, month, initialSelected]);
+
   const grid = useMemo(() => buildGrid(year, month, apiDays), [year, month, apiDays]);
 
-  // 내부 헬퍼
   const applySelection = (days: number[], mode: DragMode) => {
     if (mode === "idle") return;
     const next = new Set(selected);
-    if (mode === "paint") {
-      days.forEach(d => next.add(d));
-    } else if (mode === "erase") {
-      days.forEach(d => next.delete(d));
-    }
+    if (mode === "paint") days.forEach((d) => next.add(d));
+    else if (mode === "erase") days.forEach((d) => next.delete(d));
     setSelected(next);
-     const sortedDays = Array.from(next).sort((a, b) => a - b);
-     const pickedDates = sortedDays.map((d) => new Date(year, month, d));
-     onSelect?.(pickedDates);
+
+    // 부모에 Date[]로 알림
+    const picked = Array.from(next).sort((a, b) => a - b).map((d) => new Date(year, month, d));
+    onSelect?.(picked);
   };
 
-  const handleCellPointerDown = (day: number, disabled?: boolean) => {
+  const handleDown = (day: number, disabled?: boolean) => {
     if (!day || disabled) return;
     isPointerDown.current = true;
-
-    // 시작 칸이 이미 선택되어 있으면 erase, 아니면 paint
     const mode: DragMode = selected.has(day) ? "erase" : "paint";
     setDragMode(mode);
     applySelection([day], mode);
   };
 
-  const handleCellPointerEnter = (day: number, disabled?: boolean) => {
+  const handleEnter = (day: number, disabled?: boolean) => {
     if (!isPointerDown.current || !day || disabled) return;
     applySelection([day], dragMode);
   };
@@ -92,8 +92,6 @@ export function Calendar({
     setDragMode("idle");
   };
 
-  // PC 마우스 + 터치 둘 다 지원
-  // 컨테이너에서 포인터 업 처리(밖에서 떼어도 종료되도록)
   React.useEffect(() => {
     const up = () => endDrag();
     window.addEventListener("mouseup", up);
@@ -104,15 +102,68 @@ export function Calendar({
     };
   }, []);
 
-  // 월 텍스트
-  const monthLabel = new Date(year, month, 1).toLocaleString("ko-KR", { month: "long", year: "numeric" });
-
   return (
-    <Panel className="w-full rounded-[18px] border border-[#eaeaea] shadow-[0px_4px_32px_#aaaaaa08]">
-    <PanelContent className="flex flex-col items-start gap-6 px-[25px] py-[30px] select-none">
-      {/* 요일 + 날짜 그리드 그대로 */}
-      {/* ... 나머지 Calendar 본문 동일 ... */}
-    </PanelContent>
-  </Panel>
+    // wrap: flex column, gap 12px, width 100%
+    <div className={cn("flex flex-col gap-3 w-full", className)}>
+      {/* 요일 라벨 (weekHeader) */}
+      <div className="grid grid-cols-7 gap-px mb-2">
+        {WEEKDAYS.map((d) => (
+          // weekHeaderCell: h-7, center, font-semibold, text-sm, text-gray-800
+          <div key={d} className="h-7 flex items-center justify-center font-semibold text-sm text-gray-700">
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* 5×7 날짜 그리드 (grid) */}
+      {/* grid: flex column, gap 11px, user-select: none */}
+      <div className="flex flex-col gap-[11px] select-none" onMouseLeave={endDrag}>
+        {grid.map((row, rIdx) => (
+          // row: grid 7 columns, gap 3px
+          <div key={rIdx} className="grid grid-cols-7 gap-px">
+            {row.map((cell, cIdx) => {
+              const day = cell.day ?? 0;
+              const isSelected = !!cell.day && selected.has(day);
+              const isDisabled = !!cell.disabled;
+              
+              // cell: center, height 43px
+              return (
+                <div key={`${rIdx}-${cIdx}`} className="h-[43px] flex items-center justify-center">
+                  {cell.day ? (
+                    <button
+                      type="button"
+                      data-day={day}
+                      aria-pressed={isSelected}
+                      disabled={isDisabled}
+                      onMouseDown={() => handleDown(day, isDisabled)}
+                      onMouseEnter={() => handleEnter(day, isDisabled)}
+                      onTouchStart={() => handleDown(day, isDisabled)}
+                      onTouchMove={(e) => {
+                        const t = e.touches[0];
+                        const el = document.elementFromPoint(t.clientX, t.clientY) as HTMLElement | null;
+                        const key = el?.getAttribute?.("data-day");
+                        if (key) handleEnter(Number(key), isDisabled);
+                      }}
+                      onTouchEnd={endDrag}
+                      // dayBtn: 40x40, rounded-full, transition
+                      className={cn(
+                      "h-10 w-10 rounded-full inline-flex items-center justify-center border-0 cursor-pointer transition-colors duration-150 ease-in-out",
+                      isDisabled ? "opacity-40 pointer-events-none" : "hover:bg-blue-100",
+                      isSelected ? "bg-blue-500 text-white shadow-md" : "text-gray-700"
+                      )}
+                    >
+                    <span className="font-semibold text-base leading-none">{day}</span>
+                    </button>
+                  ) : (
+                    // daySpacer: 40x40 (빈 칸 자리 채우기)
+                    <div className="h-10 w-10" />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
