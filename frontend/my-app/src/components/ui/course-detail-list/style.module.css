@@ -1,12 +1,35 @@
-/* src/components/ui/course-detail-list/style.module.css */
-
+/* wrapper 배경색을 변수로 노출 (마스크가 같은 색으로 가리도록) */
 .wrapper {
-  background: #ffffff;
+  --pad-x: 14px;
+  --pad-y: 2px;
+  --wrapper-bg: #fff;
+
+  /* 전역 값 */
+  --pivot-size: 50px; /* 파란 원 지름 */
+  --rail-gap: 10px; /* 원과 레일 사이 틈 */
+
+  position: relative;
+  background: var(--wrapper-bg);
   border-radius: 20px;
-  padding: 12px 14px;
+  padding: var(--pad-y) var(--pad-x);
+
+  isolation: isolate; /* 새 stacking context 생성 */
+  overflow: hidden;
 }
 
-/* 한 줄: 좌측 64px 레일영역 + 우측 컨텐츠 */
+/* 백그라운드 레일: 한 번만 그림 */
+.backRail {
+  position: absolute;
+  left: calc(var(--pad-x) + 16px + (var(--pivot-size, 50px) / 2));
+  width: 2px;
+  background: #e5e7eb;
+  top: calc(var(--pad-y) + 18px + (var(--pivot-size, 50px) / 2));
+  bottom: var(--pad-y);
+  pointer-events: none;
+  z-index: 0; /* 레일을 가장 뒤로 */
+}
+
+/* 한 줄: 좌측 64px 레일 영역 + 우측 컨텐츠 */
 .row {
   display: grid;
   grid-template-columns: 64px 1fr;
@@ -15,85 +38,128 @@
   margin: 10px 0;
 }
 
-/* 좌측 레일 */
 .rail {
   position: relative;
   min-height: 40px;
 }
 
-/* 위/아래 수직선 */
-.railLine {
+/* ✅ 레일 가림용 마스크: 원 중심에서 위/아래 동일 간격 */
+.rail::after {
+  content: "";
   position: absolute;
-  left: 31px; /* pivot 중앙 기준 */
-  width: 2px;
-  background: #e5e7eb; /* gray-200 */
+
+  /* pivot 중심선과 같은 x */
+  left: calc(16px + (var(--pivot-size) / 2) - 3px); /* 3px = width/2 */
+
+  /* 중심선 기준 위/아래 동일 간격으로 가림 */
+  top: calc(18px - var(--rail-gap));
+  height: calc(var(--pivot-size) + (var(--rail-gap) * 2));
+
+  width: 6px; /* 레일(2px)보다 넓게 */
+  background: var(--wrapper-bg);
+  z-index: 1; /* backRail(0) 위, pivot(2) 아래 */
+
+  pointer-events: none;
 }
-.railLineTop {
-  top: 0;
-  height: 22px;
+
+/* ✅ 마지막 방문 행: 원 중심선 이하를 전부 덮어 꼬리 제거 */
+.rail[data-last="true"]::before {
+  content: "";
+  position: absolute;
+
+  /* pivot 중심선 */
+  left: calc(16px + (var(--pivot-size) / 2) - 3px);
+  top: calc(18px + (var(--pivot-size) / 2));
+
+  /* 아래로 넉넉히 덮기 */
+  height: 200vh;
+  width: 6px;
+  background: var(--wrapper-bg);
+  z-index: 1;
+
+  pointer-events: none;
 }
-.railLineBottom {
-  bottom: 0;
-  height: calc(100% - 54px);
-} /* pivot 아래부터 바닥까지 */
-.hidden {
+
+/* 이동 행에서는 별도 마스크 필요 없음 */
+.transferRow .rail::after {
   display: none;
 }
 
-/* pivot(원형 아이콘) */
+/* pivot(파란 링) */
 .pivot {
+  --pivot-size: 50px;
+  --pivot-ring-width: 3px;
+  --pivot-ring-color: #3b82f6;
+  --pivot-bg: #fff;
+  --rail-gap: 6px;
+
   position: absolute;
   top: 18px;
   left: 16px;
-  width: 50px;
-  height: 50px;
+  width: var(--pivot-size);
+  height: var(--pivot-size);
   border-radius: 9999px;
-  border: 3px solid #3b82f6; /* blue-500 링 */
-  background: #fff;
+  border: var(--pivot-ring-width) solid var(--pivot-ring-color);
+  background: var(--pivot-bg);
   display: flex;
   align-items: center;
   justify-content: center;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  z-index: 2; /* 레일 위 */
 }
+
+/* 내부 아이콘 상자(정사각) */
+.pivotInner {
+  --pivot-inner: 32px;
+  width: var(--pivot-inner);
+  aspect-ratio: 1 / 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+.pivotInner > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* 이미지 아이콘 */
 .pivotImg {
-  width: 102px;
-  height: 102px;
+  width: calc(var(--pivot-size) - var(--pivot-ring-width) * 2 - 6px);
+  height: calc(var(--pivot-size) - var(--pivot-ring-width) * 2 - 6px);
   object-fit: cover;
   border-radius: 50%;
-}
-.pivotFallback {
-  font-size: 58px;
-  line-height: 1;
+  display: block;
 }
 
 /* 방문 카드 */
 .card {
+  margin-top: 10px;
   background: #fff;
   border-radius: 18px;
   padding: 16px 16px;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
   border: 1px solid rgba(17, 24, 39, 0.06);
 }
-
 .cardHeader {
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
   column-gap: 10px;
 }
-
 .place {
   margin: 0;
-  font-size: 18px;
-  font-weight: 800;
+  font-size: 16px;
+  font-weight: 700;
   color: #111827;
 }
-
 .timeBadge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   color: #4b5563; /* gray-600 */
+  font-size: 14px;
   font-weight: 700;
 }
 
@@ -104,7 +170,6 @@
   font-size: 14px;
   font-weight: 600;
 }
-
 .note {
   margin: 6px 0 0;
   color: #6b7280;
@@ -113,13 +178,7 @@
 
 /* 이동 행 */
 .transferRow {
-  margin: 2px 0; /* 간격 타이트 */
-}
-.transferIcon {
-  position: absolute;
-  top: 4px;
-  left: 22px;
-  color: #9ca3af; /* gray-400 */
+  margin: 2px 0;
 }
 .transferText {
   color: #6b7280; /* gray-500 */
@@ -129,7 +188,7 @@
   gap: 6px;
 }
 
-/* 모바일 좁은 폭 대응 */
+/* 모바일 */
 @media (max-width: 360px) {
   .row {
     grid-template-columns: 56px 1fr;
@@ -141,21 +200,4 @@
     border-radius: 16px;
     padding: 14px;
   }
-}
-
-.pivotIcon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #fff;
-  border-radius: 50%;
-  width: 28px;
-  height: 28px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
-  color: #111;
-}
-
-.pivotIcon svg {
-  width: 16px;
-  height: 16px;
 }

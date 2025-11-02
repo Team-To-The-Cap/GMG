@@ -6,7 +6,6 @@ import {
   ShopIcon,
   PinIcon,
   ClockIcon,
-  ArrowDownIcon,
 } from "@/assets/icons/icons";
 
 export type TravelMode = "walk" | "subway" | "bus" | "car" | "taxi" | "bike";
@@ -14,7 +13,7 @@ export type TravelMode = "walk" | "subway" | "bus" | "car" | "taxi" | "bike";
 export type CoursePlace = {
   name: string;
   category?: string;
-  iconUrl?: string; // 원형 썸네일(이모지/이미지 가능)
+  iconUrl?: string;
 };
 
 export type CourseVisit = {
@@ -97,9 +96,10 @@ function getCategoryIcon(category?: string, size: number = 20) {
   return <PinIcon width={size} height={size} />;
 }
 
+/** 파란 링 + 내부 아이콘/이미지 */
 function PivotIcon({
   place,
-  size = 20,
+  size = 32,
 }: {
   place: CoursePlace;
   size?: number;
@@ -117,7 +117,7 @@ function PivotIcon({
           onError={() => setBroken(true)}
         />
       ) : (
-        <span className={styles.pivotIcon}>
+        <span className={styles.pivotInner}>
           {getCategoryIcon(place.category, size)}
         </span>
       )}
@@ -126,42 +126,34 @@ function PivotIcon({
 }
 
 export default function CourseDetailList({ items, className }: Props) {
-  const lastVisitIndex = [...items]
-    .reverse()
-    .findIndex((i) => i.type === "visit");
-  const lastVisitAbsIndex =
-    lastVisitIndex === -1 ? -1 : items.length - 1 - lastVisitIndex;
+  // 마지막 방문(visit)의 인덱스
+  const lastVisitIdx = React.useMemo(() => {
+    for (let i = items.length - 1; i >= 0; i--) {
+      if (items[i].type === "visit") return i;
+    }
+    return -1;
+  }, [items]);
 
   return (
     <div className={cx(styles.wrapper, className)}>
+      {/* 백그라운드 레일: 한 번만 그림 */}
+      <span aria-hidden className={styles.backRail} />
+
       {items.map((it, idx) => {
         if (it.type === "visit") {
           const v = it as CourseVisit;
-          const isLastVisit = idx === lastVisitAbsIndex;
+          const isLastVisit = idx === lastVisitIdx;
 
           return (
             <div key={`visit-${v.id}`} className={styles.row}>
-              {/* 좌측 레일 */}
-              <div className={styles.rail}>
-                <span
-                  className={cx(
-                    styles.railLine,
-                    styles.railLineTop,
-                    idx === 0 && styles.hidden
-                  )}
-                />
-                {/* ✅ 아이콘 */}
-                <PivotIcon place={v.place} size={100} />
-                <span
-                  className={cx(
-                    styles.railLine,
-                    styles.railLineBottom,
-                    isLastVisit && styles.hidden
-                  )}
-                />
+              {/* 마지막 방문이면 data-last 부여 → 아래 꼬리 제거 */}
+              <div
+                className={styles.rail}
+                data-last={isLastVisit ? "true" : undefined}
+              >
+                <PivotIcon place={v.place} size={32} />
               </div>
 
-              {/* 우측 카드 */}
               <article className={styles.card}>
                 <header className={styles.cardHeader}>
                   <h4 className={styles.place}>{v.place.name}</h4>
@@ -179,18 +171,14 @@ export default function CourseDetailList({ items, className }: Props) {
           );
         }
 
-        // 이동 구간
+        // 이동 구간: 텍스트만, 레일은 backRail이 담당
         const t = it as CourseTransfer;
         return (
           <div
             key={`transfer-${idx}`}
             className={cx(styles.row, styles.transferRow)}
           >
-            <div className={styles.rail}>
-              <span className={styles.transferIcon}>
-                <ArrowDownIcon />
-              </span>
-            </div>
+            <div className={styles.rail} />
             <div className={styles.transferText}>
               {modeLabel(t.mode)} {formatMinutes(t.minutes)}
             </div>

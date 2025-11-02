@@ -183,15 +183,17 @@ export default class CreatePromiseMainView extends React.PureComponent<Props> {
           }
         />
 
-        <CourseSummaryCard
-          totalMinutes={summary.totalMinutes}
-          activityMinutes={summary.activityMinutes}
-          travelMinutes={summary.travelMinutes}
-          className={styles.courseCard}
-        />
+        <div style={{ gap: "100px" }}>
+          <CourseSummaryCard
+            totalMinutes={summary.totalMinutes}
+            activityMinutes={summary.activityMinutes}
+            travelMinutes={summary.travelMinutes}
+            className={styles.courseCard}
+          />
 
-        {/* 타임라인: 실제 course.items를 그대로 전달 */}
-        <CourseDetailList items={items} />
+          {/* 타임라인: 실제 course.items를 그대로 전달 */}
+          <CourseDetailList items={items} />
+        </div>
       </section>
     );
   }

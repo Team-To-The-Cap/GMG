@@ -28,7 +28,7 @@ const MOCK_DB: Record<string, PromiseDetail> = {
           id: "v1",
           place: {
             name: "소공동 파스타 하우스",
-            category: "restaurant",
+            category: "식당",
             iconUrl: "/icons/food.png",
           },
           stayMinutes: 90,
@@ -43,7 +43,7 @@ const MOCK_DB: Record<string, PromiseDetail> = {
           id: "v2",
           place: {
             name: "블루보틀 명동점",
-            category: "cafe",
+            category: "카페",
             iconUrl: "/icons/cafe.png",
           },
           stayMinutes: 60,
@@ -58,7 +58,7 @@ const MOCK_DB: Record<string, PromiseDetail> = {
           id: "v3",
           place: {
             name: "텐바이텐 명동점",
-            category: "shop",
+            category: "쇼핑",
             iconUrl: "/icons/shop.png",
           },
           stayMinutes: 45,
