@@ -63,7 +63,7 @@
 /* ✅ md: 주신 .sectionTitle 참고 */
 .header--md {
   /* .sectionTitle: margin: 16px 0 8px; 을 반영 */
-  margin: 16px 0 8px;
+  margin: 16px 0 20px;
   gap: 10px;
 }
 .left--md {
