@@ -310,3 +310,16 @@ export function TrashIcon(props: React.SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+export const HeartIcon = withA11y<SvgProps>((props) => (
+  <svg viewBox="0 0 24 24" width={20} height={20} {...props}>
+    <path
+      d="M20.5 8.6c0 4.6-6.7 9.3-8.5 10.6-1.8-1.3-8.5-6-8.5-10.6A4.9 4.9 0 0 1 8 3.9c1.6 0 3.1.9 4 2.3.9-1.4 2.4-2.3 4-2.3a4.9 4.9 0 0 1 4.5 4.7Z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+)); 

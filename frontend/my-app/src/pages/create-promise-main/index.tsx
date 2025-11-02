@@ -50,11 +50,12 @@ export default function CreatePromiseMain() {
   }, [promiseId]);
 
   // ✅ 새 인원 추가 버튼 핸들러
+  // ✅ 1) onAddParticipant 만 교체
   const onAddParticipant = useCallback(() => {
-    // 지금은 알림. 나중에 라우팅 붙일 때:
-    // if (promiseId) navigate(`/create/${promiseId}/participants/add`);
-    alert("새 참여자 추가 기능 준비 중!");
+    if (!promiseId) return; // 혹시 모를 가드
+    navigate(`/create/${promiseId}/participants/new`);
   }, [promiseId, navigate]);
+
 
   return (
     <CreatePromiseMainView
