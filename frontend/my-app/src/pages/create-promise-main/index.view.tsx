@@ -10,12 +10,12 @@ import {
   MapIcon,
   PinIcon,
   ResultIcon,
-  EditIcon, // ← 아이콘 사용
+  EditIcon,
 } from "@/assets/icons/icons";
 import styles from "./style.module.css";
 import type { Participant, PromiseDetail } from "@/types/promise";
 import CourseSummaryCard from "@/components/ui/course-summary-card";
-import CourseDetailList from "@/components/ui/course-detail-list"; // ✅ 타임라인
+import CourseDetailList from "@/components/ui/course-detail-list";
 
 type Props = {
   loading: boolean;
@@ -27,26 +27,25 @@ type Props = {
   onEditCourse?: () => void;
   onAddParticipant?: () => void;
 
-  /** 제목 변경을 외부로 전달(선택) */
   onChangeTitle?: (value: string) => void;
   onEditTitle?: () => void;
 
-  /** ✅ 추가: 날짜/장소 변경 외부 전달(선택) */
-  onChangeScheduleDate?: (valueISO: string) => void; // "YYYY-MM-DD" 형태 권장
+  onChangeScheduleDate?: (valueISO: string) => void;
   onChangePlaceName?: (value: string) => void;
 
   onRemoveParticipant?: (id: string) => void;
+
+  /** ✅ 추가: 하단 버튼 액션 */
+  onCalculate?: () => void;
+  onSave?: () => void;
 };
 
 type State = {
-  titleDraft: string; // 로컬 제목 입력값
-  scheduleDraft: string; // "YYYY-MM-DD" (input[type=date] 값)
-  placeDraft: string; // 장소 텍스트
+  titleDraft: string;
+  scheduleDraft: string;
+  placeDraft: string;
 };
 
-/* ================================
-   Helpers: summary 계산 / 타입가드
-   ================================ */
 type VisitItem = { type: "visit"; stayMinutes: number };
 type TransferItem = { type: "transfer"; minutes: number };
 
@@ -72,7 +71,6 @@ function isCourseWithItems(
   return Array.isArray((course as any)?.items);
 }
 
-/** ISO(또는 Date 호환 문자열) → "YYYY-MM-DD" */
 function toYMD(iso?: string): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -93,7 +91,6 @@ export default class CreatePromiseMainView extends React.PureComponent<
     placeDraft: this.props.data?.place?.name ?? "",
   };
 
-  // props.data가 바뀌면 드래프트 동기화
   componentDidUpdate(prevProps: Props) {
     if (prevProps.data?.title !== this.props.data?.title) {
       this.setState({ titleDraft: this.props.data?.title ?? "" });
@@ -110,7 +107,6 @@ export default class CreatePromiseMainView extends React.PureComponent<
     }
   }
 
-  // ----- Title -----
   private commitTitle = () => {
     const { onChangeTitle } = this.props;
     const value = this.state.titleDraft.trim();
@@ -123,19 +119,17 @@ export default class CreatePromiseMainView extends React.PureComponent<
     this.commitTitle();
   };
   private handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      (e.target as HTMLInputElement).blur();
-    } else if (e.key === "Escape") {
+    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+    else if (e.key === "Escape") {
       this.setState({ titleDraft: this.props.data?.title ?? "" }, () => {
         (e.target as HTMLInputElement).blur();
       });
     }
   };
 
-  // ----- Schedule (date) -----
   private commitSchedule = () => {
     const { onChangeScheduleDate } = this.props;
-    const value = this.state.scheduleDraft; // "YYYY-MM-DD"
+    const value = this.state.scheduleDraft;
     if (!value) return;
     onChangeScheduleDate?.(value);
   };
@@ -148,9 +142,8 @@ export default class CreatePromiseMainView extends React.PureComponent<
   private handleScheduleKeyDown = (
     e: React.KeyboardEvent<HTMLInputElement>
   ) => {
-    if (e.key === "Enter") {
-      (e.target as HTMLInputElement).blur();
-    } else if (e.key === "Escape") {
+    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+    else if (e.key === "Escape") {
       this.setState(
         { scheduleDraft: toYMD(this.props.data?.schedule?.dateISO) },
         () => (e.target as HTMLInputElement).blur()
@@ -158,7 +151,6 @@ export default class CreatePromiseMainView extends React.PureComponent<
     }
   };
 
-  // ----- Place (text) -----
   private commitPlace = () => {
     const { onChangePlaceName } = this.props;
     const value = this.state.placeDraft.trim();
@@ -171,9 +163,8 @@ export default class CreatePromiseMainView extends React.PureComponent<
     this.commitPlace();
   };
   private handlePlaceKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      (e.target as HTMLInputElement).blur();
-    } else if (e.key === "Escape") {
+    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+    else if (e.key === "Escape") {
       this.setState({ placeDraft: this.props.data?.place?.name ?? "" }, () => {
         (e.target as HTMLInputElement).blur();
       });
@@ -215,28 +206,12 @@ export default class CreatePromiseMainView extends React.PureComponent<
     );
   }
 
-  // ✅ 약속 이름 섹션 (입력 가능)
   private renderTitleSection(nameFromData: string) {
-    const { onEditTitle } = this.props;
     const { titleDraft } = this.state;
 
     return (
       <section className={styles.section}>
-        <SectionHeader
-          icon={<ResultIcon />}
-          title="약속 이름"
-          size="sm"
-          //   action={
-          //     <Button
-          //       variant="ghost"
-          //       size="xs"
-          //       iconLeft={<EditIcon width={16} height={16} />}
-          //       onClick={onEditTitle}
-          //     >
-          //       저장
-          //     </Button>
-          //   }
-        />
+        <SectionHeader icon={<ResultIcon />} title="약속 이름" size="sm" />
         <input
           type="text"
           className={`${styles.inputLike} ${styles.inputReset}`}
@@ -251,7 +226,6 @@ export default class CreatePromiseMainView extends React.PureComponent<
     );
   }
 
-  // ✅ 참석자 섹션 (삭제 버튼 유지)
   private renderParticipantsSection(participants: Participant[]) {
     const { onAddParticipant, onRemoveParticipant } = this.props;
     return (
@@ -282,7 +256,7 @@ export default class CreatePromiseMainView extends React.PureComponent<
         <Button
           variant="primary"
           size="sm"
-          style={{ width: "97%", display: "block", margin: "0 auto" }}
+          style={{ width: "95%", display: "block", margin: "0 auto" }}
           onClick={onAddParticipant}
         >
           새로운 인원 추가하기
@@ -291,12 +265,10 @@ export default class CreatePromiseMainView extends React.PureComponent<
     );
   }
 
-  // ✅ 일정 섹션: 완전 비-인터랙티브 div로 표시
   private renderScheduleSection(dateLabel: string) {
     const { onEditSchedule } = this.props;
     const { scheduleDraft } = this.state;
 
-    // 보기에 더 자연스럽게: YYYY-MM-DD를 한국어 표기로 변환
     const human = scheduleDraft
       ? new Date(scheduleDraft).toLocaleDateString("ko-KR", {
           year: "numeric",
@@ -321,8 +293,6 @@ export default class CreatePromiseMainView extends React.PureComponent<
             </Button>
           }
         />
-
-        {/* 인풋 대신 div 사용 + 비인터랙션 스타일 */}
         <div
           className={`${styles.inputLike} ${styles.staticField}`}
           aria-label="약속 날짜"
@@ -333,7 +303,6 @@ export default class CreatePromiseMainView extends React.PureComponent<
     );
   }
 
-  // ✅ 장소 섹션: 완전 비-인터랙티브 div로 표시
   private renderPlaceSection(placeLabel: string) {
     const { onEditPlace } = this.props;
     const { placeDraft } = this.state;
@@ -354,8 +323,6 @@ export default class CreatePromiseMainView extends React.PureComponent<
             </Button>
           }
         />
-
-        {/* 인풋 대신 div 사용 + 비인터랙션 스타일 */}
         <div
           className={`${styles.inputLike} ${styles.staticField}`}
           aria-label="약속 장소"
@@ -366,7 +333,6 @@ export default class CreatePromiseMainView extends React.PureComponent<
     );
   }
 
-  // ✅ 코스: data.course를 그대로 사용. summary 없으면 items로 계산
   private renderCourseSection(course: PromiseDetail["course"]) {
     const { onEditCourse } = this.props;
 
@@ -391,7 +357,6 @@ export default class CreatePromiseMainView extends React.PureComponent<
             </Button>
           }
         />
-
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <CourseSummaryCard
             totalMinutes={summary.totalMinutes}
@@ -406,9 +371,29 @@ export default class CreatePromiseMainView extends React.PureComponent<
   }
 
   private renderCalculateButton() {
+    const { onCalculate } = this.props;
     return (
-      <Button variant="primary" size="lg" style={{ width: "97%" }}>
+      <Button
+        variant="primary"
+        size="sm"
+        style={{ width: "95%", justifySelf: "center" }}
+        onClick={onCalculate}
+      >
         일정, 장소, 코스 계산하기
+      </Button>
+    );
+  }
+
+  private renderFinalSaveButton() {
+    const { onSave } = this.props;
+    return (
+      <Button
+        variant="primary"
+        size="lg"
+        style={{ width: "97%", justifySelf: "center" }}
+        onClick={onSave}
+      >
+        저장하기
       </Button>
     );
   }
@@ -420,7 +405,6 @@ export default class CreatePromiseMainView extends React.PureComponent<
     if (error) return this.renderError(error);
     if (!data) return this.renderError("데이터가 없습니다.");
 
-    // label은 더 이상 필요 없지만, 다른 곳에서 쓸 수 있으니 남겨둠
     const dateLabel = new Date(data.schedule.dateISO).toLocaleDateString(
       "ko-KR",
       { year: "numeric", month: "long", day: "numeric" }
@@ -430,17 +414,16 @@ export default class CreatePromiseMainView extends React.PureComponent<
     return (
       <div className={styles.container}>
         <TopBar title={`새로운 약속 추가`} />
-        {/* {this.renderHeroCard(data.title, data.dday, data.participants ?? [])} */}
-        {this.renderTitleSection(data.title)} {/* ✅ 제목 입력 */}
-        {this.renderParticipantsSection(data.participants)} {/* 참석자 섹션 */}
-        {/* 결과 블록 */}
+        {this.renderTitleSection(data.title)}
+        {this.renderParticipantsSection(data.participants)}
         <section className={styles.section}>
           <SectionHeader icon={<ResultIcon />} title="결과" size="md" />
           <div className={styles.sectionInner}>
-            {this.renderScheduleSection(dateLabel)} {/* ✅ 날짜 입력 */}
-            {this.renderPlaceSection(placeLabel)} {/* ✅ 장소 입력 */}
-            {this.renderCourseSection(data.course)} {/* 코스 */}
+            {this.renderScheduleSection(dateLabel)}
+            {this.renderPlaceSection(placeLabel)}
+            {this.renderCourseSection(data.course)}
             {this.renderCalculateButton()}
+            {this.renderFinalSaveButton()}
           </div>
         </section>
         <div className={styles.bottomSpacer} />
