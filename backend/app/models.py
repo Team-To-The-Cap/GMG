@@ -10,13 +10,8 @@ class Meeting(Base):
     __tablename__ = "meetings"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(VARCHAR(255), nullable=False)
-
-    # 2. [추가] Meeting이 participants 목록을 가질 수 있도록 관계 설정
-    #    "Participant"는 클래스 이름
-    #    back_populates="meeting"은 Participant 모델의 'meeting' 속성과 연결
+    
     participants = relationship("Participant", back_populates="meeting")
-    # 2. [수정] Meeting -> ParticipantTime (1:N)
-    #    이 약속에 등록된 모든 참가 시간 목록
     participant_times = relationship("ParticipantTime", back_populates="meeting")
     
     
@@ -37,7 +32,7 @@ class MeetingPlan(Base):
     """
     
     # 이미지에 명시된 테이블 이름 사용
-    __tablename__ = "Meeting_Plan"
+    __tablename__ = "Meeting_Plans"
 
     # plan 고유 id (Primary Key)
     id = Column(Integer, primary_key=True, index=True)
@@ -71,34 +66,16 @@ class MeetingPlace(Base):
     """
     
     # 이미지의 '테이블명' 컬럼 기준
-    __tablename__ = "Meeting_Place"
+    __tablename__ = "Meeting_Places"
 
     # id (Primary Key)
-    # (이미지의 'plan 고유 id' 설명은 'place 고유 id'의 오타로 보입니다)
     id = Column(Integer, primary_key=True, index=True)
-
-    # ❗ [수정] meeting_id (Foreign Key)
-    # 이미지의 VARCHAR(255) 대신, meetings.id를 참조하는 Integer로 설정
     meeting_id = Column(Integer, ForeignKey("meetings.id"), nullable=False, index=True)
-
-    # 장소 이름
     name = Column(VARCHAR(255), nullable=False)
-
-    # 주소 위도
     latitude = Column(Float, nullable=False)
-
-    # 주소 경도
     longitude = Column(Float, nullable=False)
-
-    # 주소 (컬럼명 'address', 설명 '시작 주소 이름')
     address = Column(VARCHAR(255), nullable=False)
-
-    # 장소 종류 (카페, 식당 등)
-    # (필수 값이 아닐 수 있으므로 nullable=True 권장)
     category = Column(VARCHAR(255), nullable=True)
-
-    # 머무르는 시간(분)
-    # (필수 값이 아닐 수 있으므로 nullable=True 권장)
     duration = Column(Integer, nullable=True)
 
     # --- 관계 설정 ---
@@ -110,21 +87,14 @@ class MeetingPlace(Base):
 
 
 class Participant(Base):
-    # PostgreSQL에 생성될 테이블 이름
     __tablename__ = "participants" 
     id = Column(Integer, primary_key=True, index=True)
     meeting_id = Column(Integer, ForeignKey("meetings.id"), nullable=False, index=True)
-    # 참가자 이름
     name = Column(String(255), nullable=False)
-    # 회원 고유 id (비회원인 경우 NULL 허용)
     member_id = Column(Integer, nullable=True)
-    # 시작 주소 위도
     start_latitude = Column(Float, nullable=False)
-    # 시작 주소 경도
     start_longitude = Column(Float, nullable=False)
-    # [추가] 시작 주소 이름
     start_address = Column(String(255), nullable=True)
-    # [추가] 이동수단
     transportation = Column(String(255), nullable=True)
   
   

@@ -43,4 +43,4 @@ secrets.yaml
 # 만약 frontend 폴더를 완전히 무시하고 싶다면 이 줄을 추가합니다.
 frontend/
 node_modules/
-backend/seoul_graph_out/
+seoul_graph_out/
