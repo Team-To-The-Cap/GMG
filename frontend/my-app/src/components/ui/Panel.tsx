@@ -1,66 +1,82 @@
 import * as React from "react";
-import clsx from "clsx";
-import CardSurface from "./promise-card"; // ★ 팀원 Card (CSS module 기반 그 표면)
+import { cn } from "@/utils/utils";
 
-type DivProps = React.HTMLAttributes<HTMLDivElement>;
+const Panel = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn(
+      "rounded-xl border bg-card text-card-foreground shadow",
+      className
+    )}
+    {...props}
+  />
+));
+Panel.displayName = "Panel"; // Renamed from Card.displayName
 
-export const Panel = React.forwardRef<HTMLDivElement, DivProps>(
-  ({ className, ...props }, ref) => (
-    // 표면은 팀원 Card를 재사용
-    <CardSurface className={className}>
-      <div ref={ref} {...props} />
-    </CardSurface>
-  )
-);
-Panel.displayName = "Panel";
+const PanelHeader = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn("flex flex-col space-y-1.5 p-6", className)}
+    {...props}
+  />
+));
+PanelHeader.displayName = "PanelHeader"; // Renamed from CardHeader.displayName
 
-export const PanelHeader = React.forwardRef<HTMLDivElement, DivProps>(
-  ({ className, ...props }, ref) => (
-    <div
-      ref={ref}
-      className={clsx("flex flex-col gap-1.5 p-4", className)}
-      {...props}
-    />
-  )
-);
-PanelHeader.displayName = "PanelHeader";
+const PanelTitle = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn("font-semibold leading-none tracking-tight", className)}
+    {...props}
+  />
+));
+PanelTitle.displayName = "PanelTitle"; // Renamed from CardTitle.displayName
 
-export const PanelTitle = React.forwardRef<HTMLDivElement, DivProps>(
-  ({ className, ...props }, ref) => (
-    <div
-      ref={ref}
-      className={clsx("font-semibold leading-none", className)}
-      {...props}
-    />
-  )
-);
-PanelTitle.displayName = "PanelTitle";
+const PanelDescription = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn("text-sm text-muted-foreground", className)}
+    {...props}
+  />
+));
+PanelDescription.displayName = "PanelDescription"; // Renamed from CardDescription.displayName
 
-export const PanelDescription = React.forwardRef<HTMLDivElement, DivProps>(
-  ({ className, ...props }, ref) => (
-    <div
-      ref={ref}
-      className={clsx("text-sm text-neutral-500", className)}
-      {...props}
-    />
-  )
-);
-PanelDescription.displayName = "PanelDescription";
+const PanelContent = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div ref={ref} className={cn("p-6 pt-0", className)} {...props} />
+));
+PanelContent.displayName = "PanelContent"; // Renamed from CardContent.displayName
 
-export const PanelContent = React.forwardRef<HTMLDivElement, DivProps>(
-  ({ className, ...props }, ref) => (
-    <div ref={ref} className={clsx("p-4 pt-0", className)} {...props} />
-  )
-);
-PanelContent.displayName = "PanelContent";
+const PanelFooter = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn("flex items-center p-6 pt-0", className)}
+    {...props}
+  />
+));
+PanelFooter.displayName = "PanelFooter"; // Renamed from CardFooter.displayName
 
-export const PanelFooter = React.forwardRef<HTMLDivElement, DivProps>(
-  ({ className, ...props }, ref) => (
-    <div
-      ref={ref}
-      className={clsx("flex items-center p-4 pt-0", className)}
-      {...props}
-    />
-  )
-);
-PanelFooter.displayName = "PanelFooter";
+export {
+  Panel, // Renamed export
+  PanelHeader, // Renamed export
+  PanelFooter, // Renamed export
+  PanelTitle, // Renamed export
+  PanelDescription, // Renamed export
+  PanelContent, // Renamed export
+};
