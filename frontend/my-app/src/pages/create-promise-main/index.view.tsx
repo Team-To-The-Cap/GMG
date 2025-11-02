@@ -291,10 +291,19 @@ export default class CreatePromiseMainView extends React.PureComponent<
     );
   }
 
-  // ✅ 일정 섹션: input[type="date"]로 수정 가능
+  // ✅ 일정 섹션: 완전 비-인터랙티브 div로 표시
   private renderScheduleSection(dateLabel: string) {
     const { onEditSchedule } = this.props;
     const { scheduleDraft } = this.state;
+
+    // 보기에 더 자연스럽게: YYYY-MM-DD를 한국어 표기로 변환
+    const human = scheduleDraft
+      ? new Date(scheduleDraft).toLocaleDateString("ko-KR", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        })
+      : "날짜 미정";
 
     return (
       <section className={styles.section}>
@@ -312,20 +321,19 @@ export default class CreatePromiseMainView extends React.PureComponent<
             </Button>
           }
         />
-        <input
-          type="date"
-          className={`${styles.inputLike} ${styles.inputReset}`}
-          value={scheduleDraft}
-          onChange={this.handleScheduleChange}
-          onBlur={this.handleScheduleBlur}
-          onKeyDown={this.handleScheduleKeyDown}
+
+        {/* 인풋 대신 div 사용 + 비인터랙션 스타일 */}
+        <div
+          className={`${styles.inputLike} ${styles.staticField}`}
           aria-label="약속 날짜"
-        />
+        >
+          {human}
+        </div>
       </section>
     );
   }
 
-  // ✅ 장소 섹션: 텍스트 입력으로 수정 가능
+  // ✅ 장소 섹션: 완전 비-인터랙티브 div로 표시
   private renderPlaceSection(placeLabel: string) {
     const { onEditPlace } = this.props;
     const { placeDraft } = this.state;
@@ -346,16 +354,14 @@ export default class CreatePromiseMainView extends React.PureComponent<
             </Button>
           }
         />
-        <input
-          type="text"
-          className={`${styles.inputLike} ${styles.inputReset}`}
-          placeholder="장소를 입력하세요"
-          value={placeDraft}
-          onChange={this.handlePlaceChange}
-          onBlur={this.handlePlaceBlur}
-          onKeyDown={this.handlePlaceKeyDown}
+
+        {/* 인풋 대신 div 사용 + 비인터랙션 스타일 */}
+        <div
+          className={`${styles.inputLike} ${styles.staticField}`}
           aria-label="약속 장소"
-        />
+        >
+          {placeDraft || "장소 미정"}
+        </div>
       </section>
     );
   }

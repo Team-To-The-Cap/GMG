@@ -271,3 +271,10 @@
   color: #9ca3af; /* gray-400 */
   font-weight: 500;
 }
+
+/* (선택) 클릭은 막되 텍스트 드래그 복사만 허용하고 싶다면: */
+.staticField {
+  cursor: default;
+  pointer-events: auto;
+  user-select: text;
+}
