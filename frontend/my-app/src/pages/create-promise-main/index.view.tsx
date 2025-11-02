@@ -185,16 +185,7 @@ export default class CreatePromiseMainView extends React.PureComponent<
       this.props;
     return (
       <section className={styles.section}>
-        <SectionHeader
-          icon={<UserIcon />}
-          title="참석자 명단"
-          size="sm"
-          action={
-            <Button variant="ghost" size="xs" onClick={onEditParticipants}>
-              수정하러 가기
-            </Button>
-          }
-        />
+        <SectionHeader icon={<UserIcon />} title="참석자 명단" size="sm" />
         <ul className={styles.participantGrid}>
           {participants.map((p) => (
             <li key={p.id} className={styles.participantItem}>

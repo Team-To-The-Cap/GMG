@@ -118,6 +118,12 @@
     background-color 0.12s ease, opacity 0.12s ease;
 
   opacity: 0.92;
+
+  /* 모바일 터치 UX 보강 */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  will-change: transform;
 }
 
 .participantItem:hover .removeBtn,
@@ -131,9 +137,33 @@
   background: #f8fafc;
 }
 
+/* ✅ 클릭(pressed) 느낌 강화 */
+.removeBtn:active {
+  transform: scale(0.92);
+  background-color: #eef2f7;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.12),
+    /* 안쪽 그림자 → 눌린 느낌 */ 0 1px 4px rgba(0, 0, 0, 0.08); /* 바깥 그림자 살짝 줄이기 */
+}
+
+/* 접근성 포커스 링 */
 .removeBtn:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--ring, rgba(62, 147, 250, 0.4));
+}
+
+/* 비활성화 상태 */
+.removeBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* 모션 최소화 환경 대응 */
+@media (prefers-reduced-motion: reduce) {
+  .removeBtn {
+    transition: none;
+  }
 }
 
 /* 이름 줄바꿈 및 가운데 정렬 */
