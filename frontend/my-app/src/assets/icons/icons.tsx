@@ -288,3 +288,25 @@ export const ArrowDownIcon = withA11y<SvgProps>((props) => (
     />
   </svg>
 ));
+
+
+// src/assets/icons/my.tsx
+export function PinIcon2(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" width={20} height={20} {...props}>
+      <path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Z" fill="none" stroke="currentColor" strokeWidth="1.8"/>
+      <circle cx="12" cy="10" r="2.8" fill="none" stroke="currentColor" strokeWidth="1.8"/>
+    </svg>
+  );
+}
+
+export function TrashIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" width={20} height={20} {...props}>
+      <path d="M3 6h18" stroke="currentColor" strokeWidth="1.8" fill="none" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" stroke="currentColor" strokeWidth="1.8" fill="none"/>
+      <path d="M10 11v7M14 11v7" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" stroke="currentColor" strokeWidth="1.8" fill="none"/>
+    </svg>
+  );
+}

@@ -1,0 +1,46 @@
+.page { padding:16px 16px 48px; }
+.title { font-size:24px; font-weight:700; margin:4px 0 4px; }
+.desc { color:#6b7280; margin:0 0 16px; }
+
+.section { background:#fff; border-radius:16px; padding:16px; box-shadow:0 1px 4px rgba(0,0,0,.06); margin-bottom:12px; }
+.h3 { font-size:16px; margin:0 0 12px; }
+.helper { font-style:normal; color:#9ca3af; margin-left:6px; }
+
+.inputLabel { display:block; font-size:13px; color:#6b7280; margin-top:8px; }
+.input { width:100%; border:1px solid #e5e7eb; border-radius:12px; padding:12px; margin-top:6px; }
+.primaryBtn { width:100%; background:#5b74ff; color:#fff; border:0; padding:12px 16px; border-radius:12px; font-weight:600; }
+
+.placeCard { display:flex; align-items:center; gap:12px; border:1px solid #e5e7eb; border-radius:14px; padding:12px; margin-bottom:10px; }
+.placeIcon { font-size:20px; }
+.placeTexts { flex:1; min-width:0; }
+.placeName { font-weight:600; }
+.placeAddr { color:#6b7280; font-size:12px; margin-top:2px; }
+.trashBtn { background:#fff; border:0; font-size:18px; }
+.empty { color:#9ca3af; font-size:13px; text-align:center; }
+
+.emojiGrid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+
+.saveBar { position:sticky; bottom:12px; margin-top:12px; }
+
+
+/* 아이콘 색/크기 */
+.placeIcon { display:flex; align-items:center; justify-content:center; }
+.pinSvg { color:#5B74FF; width:20px; height:20px; }    /* 파란 핀 */
+.trashBtn { background:#fff; border:0; padding:8px; border-radius:10px; }
+.trashBtn:hover { background:#fff1f1; }
+.trashSvg { color:#EF4444; width:20px; height:20px; }  /* 빨간 휴지통 */
+
+
+/* 프로필 */
+.profile { display:flex; align-items:center; gap:12px; }
+.avatarBtn { background:none; border:0; padding:0; cursor:pointer; }
+.avatar {
+  width:56px; height:56px; border-radius:50%; object-fit:cover;
+  border:1px solid #e5e7eb;
+}
+.profileTexts { display:flex; align-items:center; gap:8px; }
+.name { font-size:18px; font-weight:700; }
+.editBtn {
+  border:1px solid #e5e7eb; background:#fff; border-radius:10px;
+  padding:6px 10px; font-size:12px;
+}
