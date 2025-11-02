@@ -10,6 +10,9 @@ from .database import engine, SessionLocal
 from . import schemas
 from .routers import meeting_point  # ✅ 이걸로 충분
 from .routers import participants  # ✅ 이걸로 충분
+from .routers import meetings  # ✅ 이걸로 충분
+from .routers import participant_times  # ✅ 이걸로 충분
+
 
 
 app = FastAPI()
@@ -33,7 +36,8 @@ app.add_middleware(
 # ✅ 이미 위에서 임포트했으니 그대로 사용
 app.include_router(meeting_point.router, prefix="")
 app.include_router(participants.router, prefix="")
-
+app.include_router(meetings.router, prefix="")
+app.include_router(participant_times.router, prefix="")
 
 def get_db():
     db = SessionLocal()
