@@ -11,17 +11,10 @@ class Meeting(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(VARCHAR(255), nullable=False)
     
-    participants = relationship("Participant", back_populates="meeting")
-    participant_times = relationship("ParticipantTime", back_populates="meeting")
-    
-    
-    # Meeting -> MeetingPlan (1:N)
-    # 이 약속에 확정된 세부 계획(들)
-    plans = relationship("MeetingPlan", back_populates="meeting")
-
-    # Meeting -> MeetingPlace (1:N)
-    # 이 약속에 포함된 장소(경유지) 목록
-    places = relationship("MeetingPlace", back_populates="meeting")
+    participants = relationship("Participant", back_populates="meeting", cascade="all, delete-orphan")
+    participant_times = relationship("ParticipantTime", back_populates="meeting", cascade="all, delete-orphan")
+    plans = relationship("MeetingPlan", back_populates="meeting", cascade="all, delete-orphan")
+    places = relationship("MeetingPlace", back_populates="meeting", cascade="all, delete-orphan")
 
 
 
@@ -34,7 +27,7 @@ class MeetingPlan(Base):
     # 이미지에 명시된 테이블 이름 사용
     __tablename__ = "Meeting_Plans"
     id = Column(Integer, primary_key=True, index=True)
-    meeting_id = Column(Integer, ForeignKey("meetings.id"), nullable=False, index=True)
+    meeting_id = Column(Integer, ForeignKey("meetings.id", ondelete="CASCADE"), nullable=False, index=True)
     meeting_time = Column(DateTime(timezone=True), nullable=False)
     address = Column(VARCHAR(255), nullable=False)
     latitude = Column(Float, nullable=False)
@@ -60,7 +53,7 @@ class MeetingPlace(Base):
 
     # id (Primary Key)
     id = Column(Integer, primary_key=True, index=True)
-    meeting_id = Column(Integer, ForeignKey("meetings.id"), nullable=False, index=True)
+    meeting_id = Column(Integer, ForeignKey("meetings.id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(VARCHAR(255), nullable=False)
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
@@ -79,7 +72,7 @@ class MeetingPlace(Base):
 class Participant(Base):
     __tablename__ = "participants" 
     id = Column(Integer, primary_key=True, index=True)
-    meeting_id = Column(Integer, ForeignKey("meetings.id"), nullable=False, index=True)
+    meeting_id = Column(Integer, ForeignKey("meetings.id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String(255), nullable=False)
     member_id = Column(Integer, nullable=True)
     start_latitude = Column(Float, nullable=False)
@@ -92,7 +85,7 @@ class Participant(Base):
     meeting = relationship("Meeting", back_populates="participants")
     # 2. [수정] Participant -> ParticipantTime (1:N)
     #    이 참가자가 입력한 시간 목록
-    available_times = relationship("ParticipantTime", back_populates="participant")
+    available_times = relationship("ParticipantTime", back_populates="participant", cascade="all, delete-orphan")
 
 
 # 2. [신규] Participant_Time 테이블 모델
@@ -105,25 +98,10 @@ class ParticipantTime(Base):
     # DB 테이블 이름 (복수형 권장: participant_times)
     __tablename__ = "participant_times"
 
-    # 참가자 고유 id (Primary Key)
-    # 이미지에는 "참가자 고유 id"라고 되어 있지만, 
-    # 이 테이블의 고유 ID로 사용하는 것이 좋습니다.
     id = Column(Integer, primary_key=True, index=True)
-    
-    # 약속 고유 id (Foreign Key)
-    # 'meetings' 테이블의 'id'를 참조
-    meeting_id = Column(Integer, ForeignKey("meetings.id"), nullable=False, index=True)
-    
-    # [수정] 참가자 id (Foreign Key)
-    # 이미지에는 "참가자 고유 id"가 id로 되어 있지만,
-    # 'participants' 테이블의 'id'를 참조하는 'participant_id'가 더 명확합니다.
-    participant_id = Column(Integer, ForeignKey("participants.id"), nullable=False, index=True)
-    
-    # 가능한 시작 시간 (time stamp -> DateTime)
-    # timezone=True를 사용하여 시간대 정보까지 저장하는 것을 권장합니다.
-    start_time = Column(DateTime(timezone=True), nullable=False)
-    
-    # 가능한 끝 시간 (time stamp -> DateTime)
+    meeting_id = Column(Integer, ForeignKey("meetings.id", ondelete="CASCADE"), nullable=False, index=True)
+    participant_id = Column(Integer, ForeignKey("participants.id", ondelete="CASCADE"), nullable=False, index=True)
+    start_time = Column(DateTime(timezone=True), nullable=False)    
     end_time = Column(DateTime(timezone=True), nullable=False)
 
 
@@ -134,6 +112,4 @@ class ParticipantTime(Base):
     
     # 이 시간대가 어떤 약속에 속했는지 역참조
     meeting = relationship("Meeting", back_populates="participant_times")
-
-
 

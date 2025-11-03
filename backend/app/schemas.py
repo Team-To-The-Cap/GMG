@@ -14,9 +14,11 @@ from datetime import datetime
 # ParticipantTime (참가 가능 시간) 스키마
 # ================================
 
+
 class ParticipantTimeCreate(BaseModel):
     start_time: datetime
     end_time: datetime
+
 
 class ParticipantTimeResponse(ParticipantTimeCreate):
     id: int
@@ -28,7 +30,7 @@ class ParticipantTimeResponse(ParticipantTimeCreate):
 
 class ParticipantCreate(BaseModel):
     name: str
-    meeting_id: int # Pydantic이 "123"(문자열)을 123(숫자)으로 자동 변환합니다.
+    member_id: Optional[int] = None
     start_latitude: float
     start_longitude: float
     start_address: str
@@ -42,6 +44,15 @@ class ParticipantResponse(ParticipantCreate):
     
     class Config:
         from_attributes = True
+
+
+class ParticipantUpdate(BaseModel):
+    name: Optional[str] = None
+    member_id: Optional[int] = None
+    start_latitude: Optional[float] = None
+    start_longitude: Optional[float] = None
+    start_address: Optional[str] = None
+    transportation: Optional[str] = None
 
 
 # ==========================
@@ -64,6 +75,9 @@ class MeetingResponse(MeetingBase):
     class Config:
         # SQLAlchemy 모델 객체를 Pydantic 모델로 자동 변환
         from_attributes = True
+
+class MeetingUpdate(BaseModel):
+    name: Optional[str] = None
 
 # ==========================
 # Meeting_Plan 스키마
