@@ -22,7 +22,7 @@ class ParticipantTimeCreate(BaseModel):
 
 class ParticipantTimeResponse(ParticipantTimeCreate):
     id: int
-    participant_id: int # 이 시간이 어떤 참가자의 것인지
+    #participant_id: int # 이 시간이 어떤 참가자의 것인지
     
     class Config:
         from_attributes = True
@@ -53,6 +53,9 @@ class ParticipantUpdate(BaseModel):
     start_longitude: Optional[float] = None
     start_address: Optional[str] = None
     transportation: Optional[str] = None
+    
+    # [추가] 참가 가능 시간 목록도 (덮어쓰기용으로) 선택적 입력
+    available_times: Optional[List[ParticipantTimeCreate]] = None
 
 
 # ==========================
@@ -102,7 +105,15 @@ class MeetingPlanResponse(BaseModel):
     total_time: Optional[int] = None
     
     class Config:
-        from_attributes = True # Pydantic V2
+        from_attributes = True 
+
+
+class MeetingPlanUpdate(BaseModel):
+    meeting_time: Optional[datetime] = None
+    address: Optional[str] = None
+    latitude: float
+    longitude: float
+    total_time: Optional[int] = None
 
 
 
@@ -129,3 +140,11 @@ class MeetingPlaceResponse(MeetingPlaceCreate):
     
     class Config:
         from_attributes = True # Pydantic V2
+
+class MeetingPlaceUpdate(BaseModel):
+    name: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    address: Optional[str] = None
+    category: Optional[str] = None
+    duration: Optional[int] = None

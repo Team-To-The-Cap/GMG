@@ -90,18 +90,19 @@ def create_participant_for_meeting(
 
     return final_participant
 
-# 5. [수정] PATCH /participants/{participant_id} (기존 코드)
 @router.patch("/{participant_id}", response_model=schemas.ParticipantResponse)
 def update_participant(
-    meeting_id: int, # [수정] 부모 ID (검증용)
-    participant_id: int, # URL에서 수정할 참가자 ID
-    participant_in: schemas.ParticipantUpdate, 
+    meeting_id: int, 
+    participant_id: int, 
+    participant_in: schemas.ParticipantUpdate, # [수정] 확장된 스키마 사용
     db: Session = Depends(get_db)
 ):
     """
-    특정 meeting_id에 속한 participant_id의 참가자 정보를 수정합니다.
+    특정 participant_id의 참가자 정보 또는
+    참가 가능 시간 목록(available_times)을 수정(덮어쓰기)합니다.
     """
-    # [수정] 쿼리 시 meeting_id를 함께 검증
+    
+    # 1. DB에서 원본 Participant 조회 (meeting_id 검증 포함)
     db_participant = db.query(models.Participant).filter(
         models.Participant.id == participant_id,
         models.Participant.meeting_id == meeting_id 
@@ -110,13 +111,37 @@ def update_participant(
     if db_participant is None:
         raise HTTPException(status_code=404, detail="Participant not found for this meeting")
         
+    # 2. Pydantic 모델을 딕셔너리로 변환 (클라이언트가 보낸 필드만)
     update_data = participant_in.model_dump(exclude_unset=True)
     
+    # 3. [신규] 'available_times'가 요청에 포함되었는지 확인
+    if "available_times" in update_data:
+        # 3a. 'available_times' 목록을 딕셔너리에서 분리
+        times_data_list = update_data.pop("available_times")
+        
+        # 3b. [핵심] 기존의 모든 참가 시간(ParticipantTime) 삭제
+        # (models.py의 cascade="all, delete-orphan" 설정 덕분에
+        #  SQLAlchemy가 이 작업을 자동으로 처리합니다.)
+        db_participant.available_times = []
+        db.commit() # (삭제를 먼저 반영)
+
+        # 3c. 새 시간 목록으로 재생성
+        for time_data in times_data_list:
+            db_time = models.ParticipantTime(
+                **time_data,
+                meeting_id=db_participant.meeting_id,
+                participant_id=db_participant.id
+            )
+            db.add(db_time)
+
+    # 4. 'name' 등 Participant의 나머지 필드 업데이트
     for key, value in update_data.items():
         setattr(db_participant, key, value)
         
+    # 5. DB에 모든 변경 사항 커밋 (UPDATE 및 INSERT 실행)
     db.commit()
     
+    # 6. 수정된 최종 객체를 (관계 포함하여) 다시 조회 후 반환
     final_participant = db.query(models.Participant).options(
         joinedload(models.Participant.available_times)
     ).filter(models.Participant.id == db_participant.id).first()

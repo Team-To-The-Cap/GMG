@@ -13,7 +13,7 @@ class Meeting(Base):
     
     participants = relationship("Participant", back_populates="meeting", cascade="all, delete-orphan")
     participant_times = relationship("ParticipantTime", back_populates="meeting", cascade="all, delete-orphan")
-    plans = relationship("MeetingPlan", back_populates="meeting", cascade="all, delete-orphan")
+    plan = relationship("MeetingPlan", back_populates="meeting", cascade="all, delete-orphan")
     places = relationship("MeetingPlace", back_populates="meeting", cascade="all, delete-orphan")
 
 
@@ -37,7 +37,7 @@ class MeetingPlan(Base):
 
     # --- 관계 설정 ---    
     # 이 Plan이 어떤 Meeting에 속했는지 역참조
-    meeting = relationship("Meeting", back_populates="plans")
+    meeting = relationship("Meeting", back_populates="plan")
 
 
 # -------------------------------------------------

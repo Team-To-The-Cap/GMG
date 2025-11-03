@@ -46,8 +46,8 @@ def create_plan_for_meeting(
     # 4. 생성된 객체 반환 (ID 포함)
     return db_plan
 
-@router.get("/{meeting_id}/plans", response_model=List[schemas.MeetingPlanResponse]) # 1. [수정] List[] 추가
-def get_plans_for_meeting( # 2. [수정] 함수 이름 변경 (권장)
+@router.get("/{meeting_id}/plans", response_model=schemas.MeetingPlanResponse) 
+def get_plans_for_meeting(
     meeting_id: int, 
     db: Session = Depends(get_db)
 ):
@@ -55,13 +55,43 @@ def get_plans_for_meeting( # 2. [수정] 함수 이름 변경 (권장)
     특정 meeting_id에 연결된 모든 Meeting_Plans (상세 일정) 목록을 조회합니다.
     """
     
-    # 3. [수정] 쿼리 대상 변경 (Meeting -> MeetingPlan)
-    # (SQL: SELECT * FROM "Meeting_Plans" WHERE meeting_id = {meeting_id})
-    plans = db.query(models.MeetingPlan).filter(
+    plan = db.query(models.MeetingPlan).filter(
         models.MeetingPlan.meeting_id == meeting_id
-    ).all()
+    ).first()
     
-    # (Meeting이 존재하는지 확인하는 로직은 생략. 필요시 추가)
+    # 3. [추가] Plan이 없는 경우 404 에러 반환
+    if plan is None:
+        raise HTTPException(status_code=404, detail="Meeting plan not found for this meeting")
+        
+    # 4. [수정] 조회된 단일 plan 객체 반환
+    return plan
+
+
+@router.patch(
+    "/{meeting_id}/plans", # [수정] {plan_id} 제거
+    response_model=schemas.MeetingPlanResponse
+)
+def update_meeting_plan(
+    meeting_id: int, # [수정] {plan_id} 제거
+    plan_in: schemas.MeetingPlanUpdate,
+    db: Session = Depends(get_db)
+):
+    """
+    특정 meeting_id에 속한 "유일한" 상세 일정을 수정합니다.
+    """
+    # [수정] 쿼리 변경 (meeting_id로만 조회)
+    db_plan = db.query(models.MeetingPlan).filter(
+        models.MeetingPlan.meeting_id == meeting_id
+    ).first()
+
+    if db_plan is None:
+        raise HTTPException(status_code=404, detail="Meeting plan not found for this meeting")
     
-    # 4. [수정] 조회된 plans (목록) 반환
-    return plans
+    update_data = plan_in.model_dump(exclude_unset=True)
+    
+    for key, value in update_data.items():
+        setattr(db_plan, key, value)
+            
+    db.commit()
+    db.refresh(db_plan)
+    return db_plan

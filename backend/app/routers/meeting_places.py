@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload 
 from typing import List
 from ..database import get_db
 from .. import schemas, models
@@ -77,3 +77,55 @@ def get_places_for_meeting(
     ).all()
     
     return places
+
+
+
+@router.put(
+    "/{meeting_id}/places", 
+    response_model=List[schemas.MeetingPlaceResponse] # 반환: 생성된 장소 목록
+)
+def replace_places_for_meeting(
+    meeting_id: int,
+    # [핵심] 입력 데이터를 "List[MeetingPlaceCreate]" (목록)으로 받음
+    places_in: List[schemas.MeetingPlaceCreate], 
+    db: Session = Depends(get_db)
+):
+    """
+    특정 meeting_id에 연결된 "모든" 코스 장소(Places)를 
+    새로운 목록으로 "교체(덮어쓰기)"합니다.
+    (기존 장소는 모두 삭제됩니다.)
+    """
+    
+    # 1. 부모 Meeting 조회 (관계 로드를 위해 'places'도 함께 로드)
+    #    (joinedload는 필수는 아니지만, 삭제를 위해 객체 로드가 필요)
+    db_meeting = db.query(models.Meeting).options(
+        joinedload(models.Meeting.places)
+    ).filter(models.Meeting.id == meeting_id).first()
+    
+    if db_meeting is None:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+
+    # 2. [핵심] 기존 장소(Places) "전부 삭제"
+    #    models.py의 relationship에 cascade="all, delete-orphan"이
+    #    설정되어 있으므로, 리스트를 비우면 DB에서도 삭제됩니다.
+    db_meeting.places = []
+    db.commit() # (삭제를 먼저 DB에 반영)
+
+    # 3. 새 장소(Places) 목록 "전부 추가"
+    new_places_list = []
+    for place_data in places_in:
+        db_place = models.MeetingPlace(
+            **place_data.model_dump(),
+            meeting_id=meeting_id # URL에서 받은 ID 주입
+        )
+        db.add(db_place)
+        new_places_list.append(db_place)
+    
+    # 4. 새 장소 목록을 DB에 커밋 (INSERT 실행)
+    db.commit()
+
+    # 5. 생성된 객체 목록(ID 포함)을 반환하기 위해 새로고침
+    for place in new_places_list:
+        db.refresh(place)
+            
+    return new_places_list
