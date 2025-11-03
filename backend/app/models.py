@@ -37,6 +37,8 @@ class MeetingPlan(Base):
     meeting_id = Column(Integer, ForeignKey("meetings.id"), nullable=False, index=True)
     meeting_time = Column(DateTime(timezone=True), nullable=False)
     address = Column(VARCHAR(255), nullable=False)
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
     total_time = Column(Integer, nullable=True)
 
 

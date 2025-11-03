@@ -15,7 +15,7 @@ router = APIRouter(
 )
 
 
-@router.post("/{meeting_id}/plan", response_model=schemas.MeetingPlanResponse)
+@router.post("/{meeting_id}/plans", response_model=schemas.MeetingPlanResponse)
 def create_plan_for_meeting(
     meeting_id: int,  # 1. URL 경로에서 meeting_id를 받음
     plan_in: schemas.MeetingPlanCreate, # 2. Request Body에서 상세 일정 정보를 받음

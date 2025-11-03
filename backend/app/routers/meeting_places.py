@@ -10,15 +10,20 @@ router = APIRouter(
 )
 
 
-# 1. POST /meetings/{meeting_id}/places (코스 장소 1개 추가)
-@router.post("/{meeting_id}/places", response_model=schemas.MeetingPlaceResponse)
-def create_place_for_meeting(
-    meeting_id: int,  # URL 경로에서 meeting_id를 받음
-    place_in: schemas.MeetingPlaceCreate, # Request Body에서 장소 정보를 받음
+@router.post(
+    "/{meeting_id}/places", 
+    # [수정] 반환 모델을 "List[...]" (목록)으로 변경
+    response_model=List[schemas.MeetingPlaceResponse]
+)
+def create_places_for_meeting( # 함수 이름 변경 (선택 사항)
+    meeting_id: int,
+    # [수정] 입력 데이터를 "List[...]" (목록)으로 받음
+    places_in: List[schemas.MeetingPlaceCreate], 
     db: Session = Depends(get_db)
 ):
     """
-    특정 meeting_id에 연결된 새로운 Meeting_Place (코스 장소)를 생성합니다.
+    특정 meeting_id에 연결된 새로운 Meeting_Place (코스 장소)
+    "목록"을 한 번에 생성합니다.
     """
     
     # 1. 부모인 Meeting이 존재하는지 확인
@@ -26,19 +31,29 @@ def create_place_for_meeting(
     if meeting is None:
         raise HTTPException(status_code=404, detail="Meeting not found")
         
-    # 2. Pydantic 모델을 SQLAlchemy 모델로 변환 (meeting_id 주입)
-    db_place = models.MeetingPlace(
-        **place_in.model_dump(), 
-        meeting_id=meeting_id 
-    )
     
-    # 3. DB에 추가, 커밋, 새로고침 (INSERT 실행)
-    db.add(db_place)
+    # [수정] 2. 리스트를 순회하며 DB 객체 목록 생성
+    
+    created_places = [] # 새로 생성된 객체를 담을 리스트
+    
+    for place_data in places_in:
+        # Pydantic 모델을 SQLAlchemy 모델로 변환 (meeting_id 주입)
+        db_place = models.MeetingPlace(
+            **place_data.model_dump(), 
+            meeting_id=meeting_id 
+        )
+        db.add(db_place)
+        created_places.append(db_place)
+    
+    # [수정] 3. 모든 장소를 한 번에 DB에 커밋 (INSERT 실행)
     db.commit()
-    db.refresh(db_place)
     
-    # 4. 생성된 객체 반환 (ID 포함)
-    return db_place
+    # [수정] 4. 새로고침 (DB에서 생성된 ID를 가져옴)
+    for db_place in created_places:
+        db.refresh(db_place)
+    
+    # 5. 생성된 "목록" 반환
+    return created_places
 
 # 2. GET /meetings/{meeting_id}/places (코스 장소 목록 조회)
 @router.get("/{meeting_id}/places", response_model=List[schemas.MeetingPlaceResponse])

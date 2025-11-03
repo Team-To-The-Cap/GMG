@@ -73,6 +73,8 @@ class MeetingResponse(MeetingBase):
 class MeetingPlanCreate(BaseModel):
     meeting_time: datetime
     address: str
+    latitude: float
+    longitude: float
     total_time: Optional[int] = None # 선택 사항
 
 
@@ -81,6 +83,8 @@ class MeetingPlanResponse(BaseModel):
     meeting_id: int
     meeting_time: datetime
     address: str
+    latitude: float
+    longitude: float
     total_time: Optional[int] = None
     
     class Config:
