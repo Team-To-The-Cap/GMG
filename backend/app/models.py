@@ -33,26 +33,14 @@ class MeetingPlan(Base):
     
     # 이미지에 명시된 테이블 이름 사용
     __tablename__ = "Meeting_Plans"
-
-    # plan 고유 id (Primary Key)
     id = Column(Integer, primary_key=True, index=True)
-
-    # meeting id (Foreign Key)
-    # 'meetings' 테이블의 'id'를 참조
     meeting_id = Column(Integer, ForeignKey("meetings.id"), nullable=False, index=True)
-
-    # 약속 날짜&시간 (확정된 시간)
     meeting_time = Column(DateTime(timezone=True), nullable=False)
-
-    # 장소 정보 address
     address = Column(VARCHAR(255), nullable=False)
-
-    # 총 시간(분)
-    # (필수가 아닐 수 있으므로 nullable=True로 설정, 필요시 False로 변경)
     total_time = Column(Integer, nullable=True)
 
-    # --- 관계 설정 ---
-    
+
+    # --- 관계 설정 ---    
     # 이 Plan이 어떤 Meeting에 속했는지 역참조
     meeting = relationship("Meeting", back_populates="plans")
 
@@ -144,3 +132,6 @@ class ParticipantTime(Base):
     
     # 이 시간대가 어떤 약속에 속했는지 역참조
     meeting = relationship("Meeting", back_populates="participant_times")
+
+
+

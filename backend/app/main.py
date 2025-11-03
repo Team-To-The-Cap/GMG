@@ -12,6 +12,8 @@ from .routers import meeting_point  # ✅ 이걸로 충분
 from .routers import participants  # ✅ 이걸로 충분
 from .routers import meetings  # ✅ 이걸로 충분
 from .routers import participant_times  # ✅ 이걸로 충분
+from .routers import meeting_plans  # ✅ 이걸로 충분
+from .routers import meeting_places  # ✅ 이걸로 충분
 
 
 
@@ -38,6 +40,9 @@ app.include_router(meeting_point.router, prefix="")
 app.include_router(participants.router, prefix="")
 app.include_router(meetings.router, prefix="")
 app.include_router(participant_times.router, prefix="")
+app.include_router(meeting_plans.router, prefix="")
+app.include_router(meeting_places.router, prefix="")
+
 
 def get_db():
     db = SessionLocal()
