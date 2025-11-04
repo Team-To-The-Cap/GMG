@@ -1,3 +1,4 @@
+// src/App.tsx
 import { Routes, Route, Navigate } from "react-router-dom";
 
 // pages
@@ -6,6 +7,7 @@ import CreatePromiseMain from "@/pages/create-promise-main";
 import MyPage from "@/pages/my-page";
 import { Time as Time1 } from "@/pages/promise-time/Time";
 import {TimeResult} from "@/pages/promise-time/TimeResult";
+import AddParticipantStartPage from "@/pages/participants/add-start";
 
 // components
 import BottomNav from "@/components/layout/bottom-nav";
@@ -27,14 +29,21 @@ export default function App() {
           />
         )}
 
-        {/* 실제 상세 페이지 */}
+        {/* 약속 상세 */}
         <Route path="/create/:promiseId" element={<CreatePromiseMain />} />
+
+        {/* 참가자 추가 (컨텍스트 포함 / 단독 접근 둘 다 지원) */}
+        <Route
+          path="/create/:promiseId/participants/new"
+          element={<AddParticipantStartPage />}
+        />
+        <Route path="/participants/new" element={<AddParticipantStartPage />} />
 
         <Route path="/me" element={<MyPage />} />
         <Route path="/time/time1" element={<Time1 />} />
         <Route path="/time/timeresult" element={<TimeResult />} />
 
-        {/* (옵션) 404 처리 */}
+        {/* 404 */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 

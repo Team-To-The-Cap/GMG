@@ -1,20 +1,32 @@
-// TopBar.tsx
 import { useCallback } from "react";
 import styles from "./style.module.css";
 import { BackIcon } from "@/assets/icons/icons";
 
+type Size = "sm" | "md" | "lg";
+type Tone = "default" | "white";
+
 type Props = {
   title: string;
-  showBack?: boolean; // ← 기본 false
+  showBack?: boolean;
   onBack?: () => void;
   right?: React.ReactNode;
+  /** 사이즈 variant (default: sm) */
+  size?: Size;
+  /** 색상 variant (default: default) */
+  tone?: Tone;
 };
+
+function cx(...xs: Array<string | false | null | undefined>) {
+  return xs.filter(Boolean).join(" ");
+}
 
 export default function TopBar({
   title,
-  showBack = false, // ← 기본값 변경
+  showBack = false,
   onBack,
   right,
+  size = "md",
+  tone = "white",
 }: Props) {
   const handleBack = useCallback(() => {
     if (onBack) return onBack();
@@ -22,7 +34,13 @@ export default function TopBar({
   }, [onBack]);
 
   return (
-    <header className={styles.topbar}>
+    <header
+      className={cx(
+        styles.topbar,
+        styles[`size-${size}`],
+        styles[`tone-${tone}`]
+      )}
+    >
       {showBack ? (
         <button
           className={styles.iconBtn}

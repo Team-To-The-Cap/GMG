@@ -1,6 +1,6 @@
 /* wrapper 배경색을 변수로 노출 (마스크가 같은 색으로 가리도록) */
 .wrapper {
-  --pad-x: 14px;
+  --pad-x: 0px;
   --pad-y: 2px;
   --wrapper-bg: #fff;
 
@@ -136,6 +136,7 @@
 /* 방문 카드 */
 .card {
   margin-top: 10px;
+  margin-right: 14px;
   background: #fff;
   border-radius: 18px;
   padding: 16px 16px;
@@ -178,7 +179,7 @@
 
 /* 이동 행 */
 .transferRow {
-  margin: 2px 0;
+  margin: 28px 0px -12.5px 10px;
 }
 .transferText {
   color: #6b7280; /* gray-500 */

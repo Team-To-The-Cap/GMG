@@ -1,18 +1,63 @@
 .topbar {
+  /* 기본(sm) 변수값 */
+  --h: 48px;
+  --icon: 36px;
+  --pad-y: 8px;
+  --pad-x: 4px;
+  --gap: 8px;
+  --title-size: 18px;
+
   position: sticky;
   top: 0;
   z-index: 10;
+
+  /* tone에서 --bg를 바꿈 (기본 default) */
   background: var(--bg, #f7f7f9);
+
   display: grid;
-  grid-template-columns: 40px 1fr 40px;
+  grid-template-columns: var(--icon) 1fr var(--icon);
   align-items: center;
-  gap: 8px;
-  padding: 8px 4px;
+  gap: var(--gap);
+  padding: var(--pad-y) var(--pad-x);
   width: 100%;
+  height: var(--h);
 }
+
+/* ===== Size variants ===== */
+.size-sm {
+  /* 위의 기본값이 sm */
+}
+
+.size-md {
+  --h: 56px;
+  --icon: 40px;
+  --pad-y: 10px;
+  --pad-x: 8px;
+  --gap: 10px;
+  --title-size: 20px;
+}
+
+.size-lg {
+  --h: 64px;
+  --icon: 44px;
+  --pad-y: 12px;
+  --pad-x: 12px;
+  --gap: 12px;
+  --title-size: 22px;
+}
+
+/* ===== Tone variants ===== */
+.tone-default {
+  --bg: #f7f7f9;
+}
+
+.tone-white {
+  --bg: #ffffff;
+}
+
 .iconBtn {
-  width: 36px;
-  height: 36px;
+  width: var(--icon);
+  height: var(--icon);
   border: none;
   background: transparent;
   border-radius: 9999px;
@@ -21,23 +66,23 @@
   cursor: pointer;
   color: #333;
 }
+
 .spacer {
-  width: 36px;
-  height: 36px;
+  width: var(--icon);
+  height: var(--icon);
 }
+
 .title {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--title-size);
   font-weight: 700;
   text-align: center;
+  line-height: 1; /* 높이가 커져도 수직정렬 깔끔 */
 }
+
 .right {
-  width: 36px;
-  height: 36px;
+  width: var(--icon);
+  height: var(--icon);
   display: grid;
   place-items: center;
-}
-.spacer {
-  width: 36px;
-  height: 36px;
 }

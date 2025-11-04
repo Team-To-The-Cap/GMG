@@ -81,6 +81,7 @@
 .icon {
   display: inline-grid;
   place-items: center;
+  line-height: 0; /* 아이콘 수직정렬 안정화 */
 }
 .label {
   line-height: 1;
@@ -91,3 +92,31 @@
   outline: none;
   box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--ring);
 }
+
+/* ====== 아이콘 전용 버튼 ======
+   - 정사각형 크기
+   - 좌우 패딩 제거
+   - 내용 중앙 정렬
+*/
+.iconOnly {
+  padding: 0; /* 좌우 패딩 제거 */
+  aspect-ratio: 1 / 1; /* 정사각형 */
+}
+
+/* 크기별 정사각형 한 변 길이 */
+.iconOnly.xs {
+  width: 32px;
+}
+.iconOnly.sm {
+  width: 40px;
+}
+.iconOnly.md {
+  width: 48px;
+}
+.iconOnly.lg {
+  width: 52px;
+}
+
+/* 라운드 모양을 더 강조하고 싶으면 (선택)
+.iconOnly { border-radius: 9999px; }
+*/
