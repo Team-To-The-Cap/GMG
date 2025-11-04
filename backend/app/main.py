@@ -8,12 +8,14 @@ from sqlalchemy.orm import Session
 from . import models
 from .database import engine, SessionLocal
 from . import schemas
-from .routers import meeting_point  # ✅ 이걸로 충분
-from .routers import participants  # ✅ 이걸로 충분
-from .routers import meetings  # ✅ 이걸로 충분
-from .routers import participant_times  # ✅ 이걸로 충분
-from .routers import meeting_plans  # ✅ 이걸로 충분
-from .routers import meeting_places  # ✅ 이걸로 충분
+from .routers import meeting_point 
+from .routers import participants 
+from .routers import meetings  
+from .routers import participant_times 
+from .routers import meeting_plans 
+from .routers import meeting_places  
+from .routers import google_api  
+
 
 
 
@@ -42,6 +44,8 @@ app.include_router(meetings.router, prefix="")
 app.include_router(participant_times.router, prefix="")
 app.include_router(meeting_plans.router, prefix="")
 app.include_router(meeting_places.router, prefix="")
+app.include_router(google_api.router, prefix="")
+
 
 
 def get_db():
