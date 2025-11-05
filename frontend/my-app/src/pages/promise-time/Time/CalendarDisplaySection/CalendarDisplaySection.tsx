@@ -58,6 +58,14 @@ export const CalendarDisplaySection = (): JSX.Element =>  {
     setSelByMonth(prev => ({ ...prev, [ymKey]: days }));
   };
 
+  const totalSelectedDaysCount = useMemo(() => {
+  let total = 0;
+  for (const key in selByMonth) {
+    total += selByMonth[key].length;
+  }
+  return total;
+}, [selByMonth]);
+
   const handleSubmit = async () => {
   const datesToSend = compileSelectedDates(selByMonth);
   console.log("전송할 데이터:", datesToSend);
@@ -81,7 +89,7 @@ export const CalendarDisplaySection = (): JSX.Element =>  {
     if (response.ok) {
       const result = await response.json();
       alert("날짜 선택이 성공적으로 제출되었습니다!");
-      // 추가 처리 (예: 다음 페이지로 이동)
+      // 추가 처리 (예: 다음 페이지로 이동) navigate하면 될듯
     } else {
       console.error("제출 실패:", response.status, response.statusText);
       alert("날짜 제출에 실패했습니다. 다시 시도해 주세요.");
@@ -151,7 +159,7 @@ export const CalendarDisplaySection = (): JSX.Element =>  {
       {/* 하단 선택 개수/CTA */}
       <p className="flex items-center w-full text-base leading-normal">
         <span className="text-black">선택된 날짜</span>
-        <span className="text-[#31689f]">&nbsp;&nbsp;&nbsp;&nbsp;{currentSelectedDays.length}개의 날짜</span>
+        <span className="text-[#31689f]">&nbsp;&nbsp;&nbsp;&nbsp;{totalSelectedDaysCount}개의 날짜</span>
       </p>
 
       <Button variant="primary" size="lg" style={{width: "100%"}}onClick={handleSubmit}>

@@ -19,6 +19,7 @@ export interface CalendarProps {
   interactive?: boolean; // 기본 true. false면 클릭/드래그 완전 비활성
   availability?: Record<number, number>; // day(1~31) -> 가능한 인원 수
   maxAvailability?: number;              // 최대 인원(색 정규화 기준). 없으면 availability의 max 사용
+  onDayClick?: (day: number) => void; 
 }
 
 /** month/year로 5×7 그리드 생성 (항상 35칸) — 월요일 시작 기준 */
@@ -56,6 +57,7 @@ export function Calendar({
   interactive = true,
   availability,
   maxAvailability,
+  onDayClick,
 }: CalendarProps) {
   /** 내부 선택 상태: 일(day) 숫자 Set */
   const [selected, setSelected] = useState<Set<number>>(new Set(initialSelected));
@@ -65,7 +67,7 @@ export function Calendar({
   React.useEffect(() => {
     // initialSelected가 변경될 때마다 상태를 재설정
     setSelected(new Set(initialSelected));
-  }, [year, month, initialSelected]);
+  }, [year, month, JSON.stringify(initialSelected)]);
 
   const grid = useMemo(() => buildGrid(year, month, apiDays), [year, month, apiDays]);
 
@@ -103,14 +105,21 @@ export function Calendar({
   const canInteract = interactive === true;
 
   const handleDown = (day: number, disabled?: boolean) => {
-    if(!canInteract) return;
     if (!day || disabled) return;
-    isPointerDown.current = true;
-    const mode: DragMode = selected.has(day) ? "erase" : "paint";
-    setDragMode(mode);
-    applySelection([day], mode);
-  };
 
+    if (canInteract) {
+      // 1. INTERACTIVE MODE (Drag/Paint)
+      isPointerDown.current = true;
+      const mode: DragMode = selected.has(day) ? "erase" : "paint";
+      setDragMode(mode);
+      applySelection([day], mode);
+    } else if (onDayClick) {
+      // 2. NON-INTERACTIVE MODE (Single Click)
+      // interactive가 false일 때, onDayClick이 있으면 실행합니다.
+      onDayClick(day);
+    }
+  };
+  
   const handleEnter = (day: number, disabled?: boolean) => {
     if(!canInteract) return;
     if (!isPointerDown.current || !day || disabled) return;
@@ -166,7 +175,7 @@ export function Calendar({
                       type="button"
                       data-day={day}
                       aria-pressed={isSelected}
-                      disabled={isDisabled || !canInteract}
+                      disabled={isDisabled}
                       onMouseDown={() => handleDown(day, isDisabled)}
                       onMouseEnter={() => handleEnter(day, isDisabled)}
                       onTouchStart={() => handleDown(day, isDisabled)}
@@ -183,7 +192,7 @@ export function Calendar({
                         "p-0 m-0 box-border select-none align-middle",
                         "appearance-none border-0 outline-none ring-0 focus:outline-none focus:ring-0",
                         "transition-colors duration-150 ease-in-out shadow-none",
-                        isDisabled ? "opacity-40 pointer-events-none" : (canInteract ? "hover:bg-blue-100" : "pointer-events-none"),
+                        isDisabled ? "opacity-40 pointer-events-none" : (canInteract ? "hover:bg-blue-100": ""),
                         canInteract
                           ? (isSelected ? "bg-[#3e93fa] text-white" : "bg-transparent text-[#111]")
                           : "bg-transparent"

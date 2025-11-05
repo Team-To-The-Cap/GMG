@@ -1,7 +1,8 @@
 // src/pages/participants/add-start/index.tsx
-import React, { useState } from "react";
+import { useState } from "react";
 import TopBar from "@/components/ui/top-bar";
 import Button from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
 import styles from "./style.module.css";
 import {
   CalendarIcon,
@@ -11,12 +12,13 @@ import {
 
 export default function AddParticipantStartPage() {
   const [name, setName] = useState("");
+  const navigate = useNavigate();
 
-  const openSchedulePicker = () => { /* ... */ };
+  const openSchedulePicker = () => { navigate("/time/time1") };
   const openOriginPicker = () => { /* ... */ };
   const openPreferencePicker = () => { /* ... */ };
 
-  const submit = () => { /* ... */ };
+  const submit = () => { navigate("/participants/new") };
 
   return (
     <div className={styles.container}>
