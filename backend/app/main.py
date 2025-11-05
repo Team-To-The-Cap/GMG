@@ -15,7 +15,7 @@ from .routers import participant_times
 from .routers import meeting_plans 
 from .routers import meeting_places  
 from .routers import google_api  
-
+from .routers import naver_search 
 
 
 
@@ -45,7 +45,7 @@ app.include_router(participant_times.router, prefix="")
 app.include_router(meeting_plans.router, prefix="")
 app.include_router(meeting_places.router, prefix="")
 app.include_router(google_api.router, prefix="")
-
+app.include_router(naver_search.router, prefix="") 
 
 
 def get_db():
