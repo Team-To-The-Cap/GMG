@@ -33,8 +33,10 @@ export default function MyPageView({
   placeName, onChangePlaceName,
   placeQuery, onChangePlaceQuery,
   onAddPlace,
-  places, onRemovePlace,
-  categories, onToggleCategory,
+  places = [],              // ✅ 기본값
+  onRemovePlace,
+  categories = [],          // ✅ 기본값
+  onToggleCategory,
   onSave,
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);

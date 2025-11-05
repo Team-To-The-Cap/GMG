@@ -1,19 +1,39 @@
 // src/pages/participants/add-start/index.tsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useNavigate, useLocation, useParams } from "react-router-dom"; // ⬅️ 추가
 import TopBar from "@/components/ui/top-bar";
 import Button from "@/components/ui/button";
 import styles from "./style.module.css";
-import {
-  CalendarIcon,
-  PinIcon,
-  HeartIcon,          // ✅ 하트 아이콘으로 교체
-} from "@/assets/icons/icons";
+import { CalendarIcon, PinIcon, HeartIcon } from "@/assets/icons/icons";
 
 export default function AddParticipantStartPage() {
   const [name, setName] = useState("");
+  const [origin, setOrigin] = useState<string | null>(null); // ⬅️ 선택값 표시용
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { promiseId } = useParams();
+
+  // 새 페이지에서 돌아올 때 state로 전달된 선택값을 반영
+  useEffect(() => {
+    const sel = (location.state as any)?.selectedOrigin as string | undefined;
+    if (sel) {
+      setOrigin(sel);
+      // state를 비워서 뒤로가기를 또 눌러도 재적용되지 않도록 replace
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location.state, location.pathname, navigate]);
 
   const openSchedulePicker = () => { /* ... */ };
-  const openOriginPicker = () => { /* ... */ };
+
+  // ⬇️ 새 페이지로 이동
+  const openOriginPicker = () => {
+    const path = promiseId
+      ? `/create/${promiseId}/participants/new/origin`
+      : `/participants/new/origin`;
+    // 현재 입력 중 이름 같은 값이 있으면 필요 시 state로 넘겨도 됨
+    navigate(path, { state: { nameDraft: name } });
+  };
+
   const openPreferencePicker = () => { /* ... */ };
 
   const submit = () => { /* ... */ };
@@ -38,10 +58,11 @@ export default function AddParticipantStartPage() {
 
       <button className={styles.rowBtn} onClick={openOriginPicker}>
         <span className={styles.icon}><PinIcon /></span>
-        <span className={styles.rowText}>출발장소 입력하기</span>
+        <span className={styles.rowText}>
+          출발장소 입력하기{origin ? ` · ${origin}` : ""}
+        </span>
       </button>
 
-      {/* ✅ 하트 아이콘 사용 */}
       <button className={styles.rowBtn} onClick={openPreferencePicker}>
         <span className={`${styles.icon} ${styles.heartIcon}`}>
           <HeartIcon />
@@ -49,12 +70,11 @@ export default function AddParticipantStartPage() {
         <span className={styles.rowText}>선호 입력하기</span>
       </button>
 
-      {/* ✅ 가운데 정렬 */}
       <div className={styles.footer}>
         <Button
           variant="primary"
           size="lg"
-          className={styles.saveBtn}   // ← 폭/정렬 제어
+          className={styles.saveBtn}
           disabled={!name.trim()}
           onClick={submit}
         >
