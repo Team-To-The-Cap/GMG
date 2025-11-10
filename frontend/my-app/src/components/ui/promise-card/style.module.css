@@ -1,12 +1,15 @@
 /* src/components/ui/card/style.module.css */
 .card {
-  position: relative; /* ✅ 카드 기준으로 아바타를 절대 배치 */
+  position: relative;
   background: var(--card, #fff);
   border-radius: 16px;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
   padding: 16px;
   min-height: 150px;
-  /* max-width: 400px; */
+
+  /* 세로 레이아웃: header → body → footer → participantList */
+  display: flex;
+  flex-direction: column;
 }
 
 /* hero 카드: 더 둥글고, 여백 넓고, 은은한 그라데이션 */
@@ -41,6 +44,8 @@
 
 /* 본문/푸터 */
 .body {
+  /* 필요하면 내용이 많을 때만 늘어나도록 flex 줄 수도 있음 */
+  /* flex: 1; */
 }
 .footer {
   margin-top: 12px;
@@ -86,17 +91,17 @@
   color: #fff;
 }
 
-/* ✅ 카드 우측 하단 아바타 고정 포지션 */
+/* (지금 TSX에서 cardAvatar는 안 쓰고 있으면 지워도 됨)
 .cardAvatar {
   position: absolute;
-  right: 16px; /* .card padding과 맞춤 */
+  right: 16px;
   bottom: 16px;
 }
-
 .cardAvatar--hero {
-  right: 20px; /* .hero padding과 맞춤 */
+  right: 20px;
   bottom: 16px;
 }
+*/
 
 /* 아바타 공통 스타일 (Avatar 컴포넌트의 className과 매칭) */
 .avatar {
@@ -105,18 +110,16 @@
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
 }
 
-/* 참가자 리스트: 카드 우측 하단 고정 */
+/* 참가자 리스트: 카드 하단에 자연스럽게 붙게 */
 .participantList {
-  position: absolute;
+  margin-top: 12px;
   display: flex;
   align-items: center;
-  right: 16px;
-  bottom: 16px;
+  justify-content: flex-end; /* 오른쪽 정렬 */
 }
 
 .participantList--hero {
-  right: 20px;
-  bottom: 16px;
+  margin-top: 12px; /* hero에서 필요하면 숫자만 바꿔도 됨 */
 }
 
 /* 각 아바타: 살짝 겹치게 배치 */
