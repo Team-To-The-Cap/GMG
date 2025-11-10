@@ -43,9 +43,12 @@ export default function SearchOriginPage() {
         setLoading(true);
         setErr(null);
 
-        const res = await fetch(`/api/search/places?q=${encodeURIComponent(q)}`, {
-          signal: abortRef.current.signal,
-        });
+        const res = await fetch(
+          `/api/search/places?q=${encodeURIComponent(q)}`,
+          {
+            signal: abortRef.current.signal,
+          }
+        );
         if (!res.ok) throw new Error(await res.text());
         const data = (await res.json()) as { items: Item[] };
         setItems(data.items);
@@ -63,13 +66,13 @@ export default function SearchOriginPage() {
     // 이전 페이지(AddParticipantOriginPage)로 값 반환
     const label = it.name || it.title;
     const addr = it.roadAddress || it.address || "";
-    navigate(-1, { state: { selectedOrigin: `${label}${addr ? ` (${addr})` : ""}` } });
+    navigate(-1, {
+      state: { selectedOrigin: `${label}${addr ? ` (${addr})` : ""}` },
+    });
   };
 
   return (
     <div className={styles.page}>
-      <TopBar title="장소 검색" onBack={onBack} />
-
       {/* 검색 인풋 (pill) */}
       <div className={styles.searchWrap}>
         <div className={styles.searchField}>
@@ -94,14 +97,22 @@ export default function SearchOriginPage() {
 
         <ul className={styles.list}>
           {items.map((it, i) => (
-            <li key={`${it.name}-${i}`} className={styles.item} onClick={() => selectItem(it)}>
-              <div className={styles.itemIcon}><MapPin size={18} /></div>
+            <li
+              key={`${it.name}-${i}`}
+              className={styles.item}
+              onClick={() => selectItem(it)}
+            >
+              <div className={styles.itemIcon}>
+                <MapPin size={18} />
+              </div>
               <div className={styles.itemTexts}>
                 <div className={styles.itemName}>{it.name || it.title}</div>
                 <div className={styles.itemAddr}>
                   {it.roadAddress || it.address}
                 </div>
-                {it.category && <div className={styles.itemCat}>{it.category}</div>}
+                {it.category && (
+                  <div className={styles.itemCat}>{it.category}</div>
+                )}
               </div>
             </li>
           ))}

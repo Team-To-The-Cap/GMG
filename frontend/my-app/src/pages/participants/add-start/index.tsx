@@ -40,15 +40,19 @@ export default function AddParticipantStartPage() {
     navigate(path, { state: { nameDraft: name } });
   };
 
-  const openPreferencePicker = () => { /* ... */ };
+  const openPreferencePicker = () => {
+    /* ... */
+  };
 
-  const submit = () => { navigate("/participants/new") };
+  const submit = () => {
+    navigate("/participants/new");
+  };
 
   return (
     <div className={styles.container}>
-      <TopBar title="참가자 추가" />
-
-      <label className={styles.label} htmlFor="name">이름 *</label>
+      <label className={styles.label} htmlFor="name">
+        이름 *
+      </label>
       <input
         id="name"
         className={styles.input}
@@ -58,12 +62,16 @@ export default function AddParticipantStartPage() {
       />
 
       <button className={styles.rowBtn} onClick={openSchedulePicker}>
-        <span className={styles.icon}><CalendarIcon /></span>
+        <span className={styles.icon}>
+          <CalendarIcon />
+        </span>
         <span className={styles.rowText}>일정 입력하기</span>
       </button>
 
       <button className={styles.rowBtn} onClick={openOriginPicker}>
-        <span className={styles.icon}><PinIcon /></span>
+        <span className={styles.icon}>
+          <PinIcon />
+        </span>
         <span className={styles.rowText}>
           출발장소 입력하기{origin ? ` · ${origin}` : ""}
         </span>
