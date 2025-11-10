@@ -1,8 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+// src/pages/participants/serach-origin/index.tsx
+import React, { useEffect, useRef, useState } from "react"; 
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Search, MapPin } from "lucide-react";
 import TopBar from "@/components/ui/top-bar";
 import styles from "./style.module.css";
+import type { SavedPlace } from "@/lib/user-storage";
 
 type Item = {
   title: string;
@@ -13,10 +15,17 @@ type Item = {
   telephone?: string | null;
 };
 
+type LocationState = {
+  savedPlaces?: SavedPlace[];
+  nameDraft?: string;
+  selectedOrigin?: SavedPlace | null;
+};
+
 export default function SearchOriginPage() {
   const navigate = useNavigate();
   const { promiseId } = useParams();
   const location = useLocation();
+  const baseState = (location.state || {}) as LocationState;
 
   const [q, setQ] = useState("");
   const [items, setItems] = useState<Item[]>([]);
@@ -27,7 +36,7 @@ export default function SearchOriginPage() {
 
   const onBack = () => navigate(-1);
 
-  // 디바운스 검색
+  // ───────────────── 디바운스 검색 ─────────────────
   useEffect(() => {
     if (!q.trim()) {
       setItems([]);
@@ -43,9 +52,10 @@ export default function SearchOriginPage() {
         setLoading(true);
         setErr(null);
 
-        const res = await fetch(`/api/search/places?q=${encodeURIComponent(q)}`, {
-          signal: abortRef.current.signal,
-        });
+        const res = await fetch(
+          `/api/search/places?q=${encodeURIComponent(q)}`,
+          { signal: abortRef.current.signal }
+        );
         if (!res.ok) throw new Error(await res.text());
         const data = (await res.json()) as { items: Item[] };
         setItems(data.items);
@@ -54,23 +64,41 @@ export default function SearchOriginPage() {
       } finally {
         setLoading(false);
       }
-    }, 300); // 300ms 디바운스
+    }, 300);
 
     return () => clearTimeout(t);
   }, [q]);
 
+  // ───────────────── 검색 결과 선택 ─────────────────
   const selectItem = (it: Item) => {
-    // 이전 페이지(AddParticipantOriginPage)로 값 반환
     const label = it.name || it.title;
     const addr = it.roadAddress || it.address || "";
-    navigate(-1, { state: { selectedOrigin: `${label}${addr ? ` (${addr})` : ""}` } });
+
+    const place: SavedPlace = {
+      // TODO: 실제 서비스에서는 고유 id 로 바꾸기
+      id: `${label}-${addr}`,
+      name: label,
+      address: addr,
+    };
+
+    const originPath = promiseId
+      ? `/create/${promiseId}/participants/new/origin`
+      : `/participants/new/origin`;
+
+    // 숫자 -1 이 아니라, 출발장소 선택 페이지로 "직접" 이동하면서 state 전달
+    navigate(originPath, {
+      replace: true,
+      state: {
+        ...baseState,
+        selectedOrigin: place,
+      },
+    });
   };
 
   return (
     <div className={styles.page}>
       <TopBar title="장소 검색" onBack={onBack} />
 
-      {/* 검색 인풋 (pill) */}
       <div className={styles.searchWrap}>
         <div className={styles.searchField}>
           <Search className={styles.searchIcon} size={18} />
@@ -84,7 +112,6 @@ export default function SearchOriginPage() {
         </div>
       </div>
 
-      {/* 결과 리스트 */}
       <div className={styles.scroll}>
         {loading && <div className={styles.state}>검색 중…</div>}
         {err && <div className={styles.state}>{err}</div>}
@@ -94,14 +121,22 @@ export default function SearchOriginPage() {
 
         <ul className={styles.list}>
           {items.map((it, i) => (
-            <li key={`${it.name}-${i}`} className={styles.item} onClick={() => selectItem(it)}>
-              <div className={styles.itemIcon}><MapPin size={18} /></div>
+            <li
+              key={`${it.name}-${i}`}
+              className={styles.item}
+              onClick={() => selectItem(it)}
+            >
+              <div className={styles.itemIcon}>
+                <MapPin size={18} />
+              </div>
               <div className={styles.itemTexts}>
                 <div className={styles.itemName}>{it.name || it.title}</div>
                 <div className={styles.itemAddr}>
                   {it.roadAddress || it.address}
                 </div>
-                {it.category && <div className={styles.itemCat}>{it.category}</div>}
+                {it.category && (
+                  <div className={styles.itemCat}>{it.category}</div>
+                )}
               </div>
             </li>
           ))}
