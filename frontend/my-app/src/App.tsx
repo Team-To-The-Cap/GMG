@@ -72,9 +72,9 @@ export default function App() {
             element={<SearchOriginPage />}
           />
 
-          <Route path="/me" element={<MyPage />} />
-          <Route path="/time/time1" element={<Time1 />} />
-          <Route path="/time/timeresult" element={<TimeResult />} />
+        <Route path="/me" element={<MyPage />} />
+        <Route path="/create/:promiseId/promise-time" element={<Time1 />} />
+        <Route path="/time/timeresult" element={<TimeResult />} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

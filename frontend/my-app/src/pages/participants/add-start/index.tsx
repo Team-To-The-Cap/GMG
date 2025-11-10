@@ -24,7 +24,11 @@ export default function AddParticipantStartPage() {
   }, [location.state, location.pathname, navigate]);
 
   const openSchedulePicker = () => {
-    /* ... */
+    if (!promiseId) return; // 안전하게 처리
+
+    navigate(`/create/${promiseId}/promise-time`, {
+      state: { nameDraft: name }, // 필요 시 이름 같은 임시 데이터 전달 가능
+    });
   };
 
   // ⬇️ 새 페이지로 이동
