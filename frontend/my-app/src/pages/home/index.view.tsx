@@ -1,6 +1,7 @@
 // src/pages/home/index.view.tsx
 import { useNavigate } from "react-router-dom";
 import PromiseCard from "@/components/ui/promise-card";
+import SwipeableCard from "@/components/ui/swipeable-card";
 import styles from "./style.module.css";
 import type { PromiseDetail } from "@/types/promise";
 
@@ -9,9 +10,16 @@ type Props = {
   error?: string;
   items: PromiseDetail[];
   onRetry: () => void;
+  onDelete: (id: string) => void;
 };
 
-export default function HomeView({ loading, error, items, onRetry }: Props) {
+export default function HomeView({
+  loading,
+  error,
+  items,
+  onRetry,
+  onDelete,
+}: Props) {
   const navigate = useNavigate();
 
   if (loading) return <div className={styles.state}>불러오는 중…</div>;
@@ -31,14 +39,18 @@ export default function HomeView({ loading, error, items, onRetry }: Props) {
     <div className={styles.wrap}>
       <div className={styles.list}>
         {items.map((item) => (
-          <PromiseCard
+          <SwipeableCard
             key={item.id}
-            title={item.title}
-            dday={item.dday}
-            participants={item.participants}
-            className={styles.card}
-            onClick={() => navigate(`/details/${item.id}`)} // ✅ 상세 화면으로 이동
-          />
+            onCardClick={() => navigate(`/details/${item.id}`)}
+            onDeleteRequest={() => onDelete(item.id)}
+          >
+            <PromiseCard
+              title={item.title}
+              dday={item.dday}
+              participants={item.participants}
+              className={styles.card}
+            />
+          </SwipeableCard>
         ))}
       </div>
     </div>

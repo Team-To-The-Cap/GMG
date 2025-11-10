@@ -1,0 +1,38 @@
+/* src/components/ui/swipeable-card/style.module.css */
+
+.swipeWrapper {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* 오른쪽 액션 영역 (기본: 삭제) */
+.deleteAction {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 80px;
+  border: none;
+  background: #ef4444; /* red-500 */
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+/* 아이콘만 보이게 */
+.deleteAction svg {
+  width: 24px;
+  height: 24px;
+  pointer-events: none;
+}
+
+/* 실제 카드 영역 */
+.swipeContent {
+  position: relative;
+  z-index: 1;
+  touch-action: pan-y; /* 수직 스크롤은 유지, 좌우는 우리가 처리 */
+  transition: transform 150ms ease-out;
+}
