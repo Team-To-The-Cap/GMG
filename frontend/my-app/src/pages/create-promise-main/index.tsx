@@ -45,8 +45,8 @@ export default function CreatePromiseMain() {
   }, [promiseId, navigate]);
 
   const onEditPlace = useCallback(() => {
-    alert("장소 수정 기능 준비 중!");
-  }, [promiseId]);
+    navigate(`/create/${promiseId}/place-calculation`);
+  }, [promiseId, navigate]);
 
   const onEditCourse = useCallback(() => {
     alert("코스 수정 기능 준비 중!");
