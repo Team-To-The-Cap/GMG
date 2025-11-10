@@ -1,6 +1,6 @@
 /* src/pages/participants/add-start/style.module.css */
 .container {
-  padding: 16px;
+  padding: 0px 16px;
 }
 
 .label {
@@ -38,8 +38,8 @@
   gap: 12px;
   padding: 0 16px;
   cursor: pointer;
-  transition: transform .02s ease, box-shadow .2s ease, border-color .2s ease;
-  box-shadow: 0 1px 0 rgba(0,0,0,0.02);
+  transition: transform 0.02s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.02);
 }
 
 .rowBtn:active {
@@ -48,7 +48,7 @@
 
 .rowBtn:hover {
   border-color: #e5e7eb;
-  box-shadow: 0 4px 18px rgba(17,24,39,.06);
+  box-shadow: 0 4px 18px rgba(17, 24, 39, 0.06);
 }
 
 .icon {
@@ -68,12 +68,12 @@
 
 .footer {
   margin-top: 24px;
-  display: flex;               /* ✅ 가운데 정렬용 컨테이너 */
-  justify-content: center;     /* ✅ 수평 중앙 */
+  display: flex; /* ✅ 가운데 정렬용 컨테이너 */
+  justify-content: center; /* ✅ 수평 중앙 */
 }
 
 .saveBtn {
-  width: 240px;                /* ✅ 버튼 폭 고정(원하면 100%로 바꿔도 됨) */
+  width: 240px; /* ✅ 버튼 폭 고정(원하면 100%로 바꿔도 됨) */
   display: inline-flex;
   justify-content: center;
 }
@@ -85,4 +85,3 @@
   display: grid;
   place-items: center;
 }
-

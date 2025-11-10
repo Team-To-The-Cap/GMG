@@ -4,21 +4,18 @@ import TopBar from "@/components/ui/top-bar";
 import { useNavigate } from "react-router-dom";
 
 export const TimeResult = (): JSX.Element => {
-
   const navigate = useNavigate();
 
   const handleBack = () => {
     // 이전 페이지로 이동
-    navigate(-1); 
+    navigate(-1);
   };
-  
-  
+
   return (
     <>
-    <TopBar  title={''} showBack={true} onBack={handleBack}/>
-    <div>
-      <CalendarDisplaySection />
-    </div>
+      <div>
+        <CalendarDisplaySection />
+      </div>
     </>
   );
 };

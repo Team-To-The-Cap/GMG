@@ -88,8 +88,6 @@ export default function AddParticipantOriginPage() {
 
   return (
     <div className={styles.page}>
-      <TopBar title="출발장소 선택" onBack={onBack} />
-
       <div className={styles.scroll}>
         <div className={styles.sectionHeader}>
           <span className={styles.sectionTitle}>저장된 장소</span>
@@ -141,7 +139,8 @@ export default function AddParticipantOriginPage() {
               <div className={styles.itemTexts}>
                 <div className={styles.itemName}>저장된 장소가 없어요</div>
                 <div className={styles.itemAddr}>
-                  마이페이지에서 추가하거나 아래 ‘장소 선택하기’를 눌러 검색하세요
+                  마이페이지에서 추가하거나 아래 ‘장소 선택하기’를 눌러
+                  검색하세요
                 </div>
               </div>
             </li>

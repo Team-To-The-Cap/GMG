@@ -54,7 +54,9 @@ export default function SearchOriginPage() {
 
         const res = await fetch(
           `/api/search/places?q=${encodeURIComponent(q)}`,
-          { signal: abortRef.current.signal }
+          {
+            signal: abortRef.current.signal,
+          }
         );
         if (!res.ok) throw new Error(await res.text());
         const data = (await res.json()) as { items: Item[] };
@@ -97,8 +99,7 @@ export default function SearchOriginPage() {
 
   return (
     <div className={styles.page}>
-      <TopBar title="장소 검색" onBack={onBack} />
-
+      {/* 검색 인풋 (pill) */}
       <div className={styles.searchWrap}>
         <div className={styles.searchField}>
           <Search className={styles.searchIcon} size={18} />

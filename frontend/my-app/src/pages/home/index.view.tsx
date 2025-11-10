@@ -27,7 +27,6 @@ export default function HomeView({ loading, error, items, onRetry }: Props) {
 
   return (
     <div className={styles.wrap}>
-      <TopBar title={`나의 약속`} />
       <div className={styles.list}>
         {items.map((item) => (
           <PromiseCard
