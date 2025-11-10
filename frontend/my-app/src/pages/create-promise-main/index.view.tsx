@@ -39,8 +39,10 @@ type Props = {
   onCalculate?: () => void;
   onSave?: () => void;
 
-  /** 저장 로딩 상태 */
+  /** 추가: 저장 로딩 + 초안 여부 + 초기화 */
   saving?: boolean;
+  isDraft?: boolean;
+  onReset?: () => void;
 };
 
 type State = {
@@ -385,8 +387,43 @@ export default class CreatePromiseMainView extends React.PureComponent<
     );
   }
 
-  private renderFinalSaveButton() {
-    const { onSave, saving } = this.props;
+  private renderFinalSaveArea() {
+    const { onSave, saving, isDraft, onReset } = this.props;
+
+    // 초안일 때: 초기화 + 저장 버튼 둘 다 표시
+    if (isDraft) {
+      return (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1.2fr",
+            gap: 8,
+            width: "100%",
+          }}
+        >
+          <Button
+            variant="ghost"
+            size="lg"
+            style={{ width: "100%" }}
+            onClick={onReset}
+            disabled={saving}
+          >
+            초기화
+          </Button>
+          <Button
+            variant="primary"
+            size="lg"
+            style={{ width: "100%" }}
+            onClick={onSave}
+            disabled={saving}
+          >
+            {saving ? "저장 중..." : "저장하기"}
+          </Button>
+        </div>
+      );
+    }
+
+    // 기존 약속일 때: 저장하기만
     return (
       <Button
         variant="primary"
@@ -424,7 +461,7 @@ export default class CreatePromiseMainView extends React.PureComponent<
             {this.renderPlaceSection(placeLabel)}
             {this.renderCourseSection(data.course)}
             {this.renderCalculateButton()}
-            {this.renderFinalSaveButton()}
+            {this.renderFinalSaveArea()}
           </div>
         </section>
         <div className={styles.bottomSpacer} />
