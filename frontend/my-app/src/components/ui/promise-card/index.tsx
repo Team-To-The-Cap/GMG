@@ -12,7 +12,9 @@ type CardProps = {
   footer?: ReactNode;
   participants?: PromiseParticipant[];
   variant?: "default" | "hero";
-  onClick?: () => void; // 🔹 추가
+  onClick?: () => void;
+  /** ✅ 일정 미정 여부: true면 D-Day 대신 "일정 미정" 표시 */
+  unscheduled?: boolean;
 };
 
 function cx(...xs: Array<string | false | undefined>) {
@@ -25,6 +27,7 @@ function formatDday(n: number) {
   return `D+${Math.abs(n)}`;
 }
 function ddayTone(n: number): "danger" | "primary" | "muted" {
+  if (n < 0) return "muted";
   if (n <= 1) return "danger";
   if (n <= 3) return "primary";
   return "muted";
@@ -38,19 +41,35 @@ export default function PromiseCard({
   footer,
   participants = [],
   variant = "default",
-  onClick, // 🔹 추가
+  onClick,
+  unscheduled,
 }: CardProps) {
-  const hasHeader = title || dday !== undefined;
+  const clickable = !!onClick;
+
+  // ✅ 헤더를 보여줄지 여부: 제목 or D-Day or 일정 미정 배지
+  const hasHeader = !!title || dday !== undefined || unscheduled;
+
   const visibleAvatars = participants.slice(0, 3);
   const hiddenCount = participants.length - visibleAvatars.length;
-  const clickable = !!onClick;
+
+  // ✅ 배지 텍스트 / 톤 결정
+  let badgeText: string | undefined;
+  let badgeTone: "danger" | "primary" | "muted" | undefined;
+
+  if (unscheduled) {
+    badgeText = "일정 미정";
+    badgeTone = "muted";
+  } else if (dday !== undefined) {
+    badgeText = formatDday(dday);
+    badgeTone = ddayTone(dday);
+  }
 
   return (
     <section
       className={cx(
         styles.card,
         styles[variant],
-        clickable && styles.clickable, // 🔹 클릭 스타일
+        clickable && styles.clickable,
         className
       )}
       onClick={onClick}
@@ -64,21 +83,23 @@ export default function PromiseCard({
               {title}
             </h3>
           )}
-          {dday !== undefined && (
+
+          {badgeText && (
             <span
               className={cx(
                 styles.badge,
                 styles[`badge--${variant}`],
-                styles[ddayTone(dday)]
+                badgeTone ? styles[badgeTone] : undefined // ✅ 여기 수정
               )}
             >
-              {formatDday(dday)}
+              {badgeText}
             </span>
           )}
         </header>
       )}
 
       <div className={styles.body}>{children}</div>
+
       {footer && <footer className={styles.footer}>{footer}</footer>}
 
       <div

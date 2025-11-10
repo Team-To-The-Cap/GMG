@@ -111,26 +111,27 @@ export async function savePromiseDetail(
   return detail;
 }
 
-// ✅ 빈 약속 하나 생성 (실서버용 예시)
+/**
+ * ✅ 빈 약속 하나 생성 (실서버용)
+ * - 여기서는 schedule을 보내지 않고, id/schedule 등은 서버가 채워주도록 맡김
+ */
 export async function createEmptyPromise(): Promise<PromiseDetail> {
-  const now = new Date().toISOString();
-
-  // 서버에 실제로는 필요한 필드만 보내도 되는데,
-  // 여기서는 타입 맞추려고 전체 구조를 보낸다고 가정
+  // 서버에 실제로는 필요한 필드만 보내면 됨
   const payload: Partial<PromiseDetail> = {
     title: "",
     participants: [],
-    schedule: { dateISO: now },
-    course: {
-      title: "추천 코스",
-      summary: {
-        totalMinutes: 0,
-        activityMinutes: 0,
-        travelMinutes: 0,
-      },
-      items: [],
-      source: "auto",
-    },
+    // schedule은 보내지 않음 (서버가 기본값을 채움)
+    // course도 서버에서 기본값을 갖게 할 수 있음; 필요하면 아래처럼 보내도 됨
+    // course: {
+    //   title: "추천 코스",
+    //   summary: {
+    //     totalMinutes: 0,
+    //     activityMinutes: 0,
+    //     travelMinutes: 0,
+    //   },
+    //   items: [],
+    //   source: "auto",
+    // },
   };
 
   const created = await http.request<PromiseDetail>("/promises", {
@@ -141,5 +142,6 @@ export async function createEmptyPromise(): Promise<PromiseDetail> {
     body: JSON.stringify(payload),
   });
 
+  // created 안에 서버가 생성한 id, schedule 등이 들어있다고 가정
   return created;
 }

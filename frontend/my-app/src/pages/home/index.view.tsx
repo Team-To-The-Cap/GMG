@@ -49,6 +49,8 @@ export default function HomeView({
               dday={item.dday}
               participants={item.participants}
               className={styles.card}
+              // ✅ 일정이 없으면 일정 미정으로 표시
+              unscheduled={!item.schedule?.dateISO}
             />
           </SwipeableCard>
         ))}

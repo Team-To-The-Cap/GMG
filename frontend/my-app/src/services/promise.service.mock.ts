@@ -391,6 +391,7 @@ export async function savePromiseDetail(
 
 /**
  * ✅ Test mode용: 메모리 MOCK_DB에 빈 약속 추가하고 ID 반환
+ * - 여기서는 클라이언트에서 id 직접 생성
  */
 export async function createEmptyPromise(): Promise<PromiseDetail> {
   await delay(200);
@@ -401,10 +402,11 @@ export async function createEmptyPromise(): Promise<PromiseDetail> {
   const detail: PromiseDetail = {
     id,
     title: "",
-    dday: calcDdayFromISO(now),
+    // 새로 만든 약속은 일정 미정이니까 dday는 의미 없는 값으로 둔다
+    dday: undefined as unknown as number,
     participants: [],
-    schedule: { dateISO: now },
-    // place는 아직 비어 있음
+    // 일정 미정
+    schedule: { dateISO: "" },
     course: {
       title: "추천 코스",
       summary: {
