@@ -63,7 +63,7 @@ export default function App() {
         />
 
         <Route path="/me" element={<MyPage />} />
-        <Route path="/time/time1" element={<Time1 />} />
+        <Route path="/create/:promiseId/promise-time" element={<Time1 />} />
         <Route path="/time/timeresult" element={<TimeResult />} />
 
         {/* 404 */}

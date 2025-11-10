@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { MapPin, ChevronRight, CheckCircle2 } from "lucide-react"; // ⬅️ 체크 아이콘 추가
 import TopBar from "@/components/ui/top-bar";
@@ -53,7 +53,7 @@ export default function AddParticipantOriginPage() {
   // ✅ 확인 버튼: 선택된 장소를 이전 페이지로 반환
   const onConfirm = () => {
     if (!selectedPlace) return;
-    navigate(-1, { state: { selectedOrigin: selectedPlace.name } });
+    navigate("/participants", { state: { selectedOrigin: selectedPlace.name } });
   };
 
   return (

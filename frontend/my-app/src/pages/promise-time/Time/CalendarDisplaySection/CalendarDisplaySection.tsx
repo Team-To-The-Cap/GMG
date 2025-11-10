@@ -104,7 +104,7 @@ export const CalendarDisplaySection = (): JSX.Element =>  {
   return (
     <section className="flex flex-col items-center justify-center gap-[15px] px-5 py-5 bg-[#f7f7f7]">
       {/* 상단 안내 텍스트 */}
-      <h2 className="w-full font-normal text-black text-base tracking-[0.50px] leading-4">
+      <h2 className="w-full font-semibold text-black text-lg tracking-[0.3px] leading-7">
         가능한 날짜를 선택해주세요
       </h2>
 
