@@ -58,12 +58,12 @@ export default function AddParticipantOriginPage() {
 
   return (
     <div className={styles.page}>
-      <TopBar title="출발장소 선택" onBack={onBack} />
-
       <div className={styles.scroll}>
         <div className={styles.sectionHeader}>
           <span className={styles.sectionTitle}>저장된 장소</span>
-          <button className={styles.linkBtn} onClick={openAll}>전체보기</button>
+          <button className={styles.linkBtn} onClick={openAll}>
+            전체보기
+          </button>
         </div>
 
         <ul className={styles.list}>
@@ -72,13 +72,19 @@ export default function AddParticipantOriginPage() {
             return (
               <li
                 key={p.id}
-                className={`${styles.item} ${active ? styles.itemSelected : ""}`}
+                className={`${styles.item} ${
+                  active ? styles.itemSelected : ""
+                }`}
                 onClick={() => toggleSelect(p)}
                 role="button"
                 aria-pressed={active}
                 tabIndex={0}
               >
-                <div className={`${styles.itemIcon} ${active ? styles.itemIconActive : ""}`}>
+                <div
+                  className={`${styles.itemIcon} ${
+                    active ? styles.itemIconActive : ""
+                  }`}
+                >
                   <MapPin size={20} />
                 </div>
                 <div className={styles.itemTexts}>
@@ -103,7 +109,8 @@ export default function AddParticipantOriginPage() {
               <div className={styles.itemTexts}>
                 <div className={styles.itemName}>저장된 장소가 없어요</div>
                 <div className={styles.itemAddr}>
-                  마이페이지에서 추가하거나 아래 ‘장소 선택하기’를 눌러 검색하세요
+                  마이페이지에서 추가하거나 아래 ‘장소 선택하기’를 눌러
+                  검색하세요
                 </div>
               </div>
             </li>
@@ -113,7 +120,9 @@ export default function AddParticipantOriginPage() {
         <div className={styles.gap} />
 
         <button className={styles.bigSelect} onClick={openSearch}>
-          <div className={styles.bigIcon}><MapPin size={24} /></div>
+          <div className={styles.bigIcon}>
+            <MapPin size={24} />
+          </div>
           <div className={styles.bigTitle}>장소 선택하기</div>
           <div className={styles.bigSub}>저장된 장소 또는 검색으로 선택</div>
         </button>

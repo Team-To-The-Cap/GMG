@@ -1,5 +1,6 @@
 html,
 body {
+  width: 100%;
   height: 100%;
   margin: 0;
   background: #f7f7f9;
@@ -7,14 +8,9 @@ body {
     sans-serif;
 }
 
-/* body를 flex로 하지 않음 */
 #root {
   width: 100%;
-  max-width: 650px; /* 가운데 내용 최대 폭 제한 */
-  margin: 0 auto; /* 🔹 수평 중앙 정렬 */
-  padding: 0 20px 64px; /* 하단 여백 */
   min-height: 100dvh;
-  box-sizing: border-box;
 }
 
 * {
