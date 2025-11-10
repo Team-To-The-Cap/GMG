@@ -1,6 +1,6 @@
 // src/services/promise.service.http.ts
 import { http } from "@/lib/http";
-import type { PromiseDetail} from "@/types/promise";
+import type { PromiseDetail } from "@/types/promise";
 import type { Participant } from "@/types/participant";
 
 /**
@@ -18,44 +18,95 @@ export async function getPromiseDetail(
   const normalized = participants.map((p) => ({
     id: String(p.id),
     name: p.name,
-    // avatarUrl 없으면 기본값으로 채움(서버에서 제공되면 그대로 사용)
     avatarUrl: p.avatarUrl || `https://i.pravatar.cc/40?u=${p.id}`,
   }));
+
+  const now = new Date();
+  const scheduleISO = now.toISOString();
+
+  // dday 임시 계산 (오늘 기준)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(scheduleISO);
+  target.setHours(0, 0, 0, 0);
+  const diffMs = target.getTime() - today.getTime();
+  const dday = Math.round(diffMs / (1000 * 60 * 60 * 24));
 
   // TODO: 실제 약속 상세 API가 생기면 title/dday/schedule/course를 서버 값으로 교체
   const detail: PromiseDetail = {
     id: promiseId,
     title: "서버 데이터 기반 약속",
-    dday: 2,
+    dday,
     participants: normalized,
-    schedule: { dateISO: new Date().toISOString() },
-    course: { text: "서버 participants를 사용해 구성한 약속 상세" },
+    schedule: { dateISO: scheduleISO },
+    course: {
+      title: "임시 코스",
+      summary: {
+        totalMinutes: 0,
+        activityMinutes: 0,
+        travelMinutes: 0,
+      },
+      items: [],
+      source: "http-mock",
+    },
   };
 
   return detail;
 }
-
 
 export async function getPromiseList(): Promise<PromiseDetail[]> {
   try {
     return await http.request<PromiseDetail[]>("/promises");
   } catch {
     // 임시 폴백: participants만 있을 때 한 개짜리 Detail 구성
-    const participants = await http.request<Array<{ id: string; name: string; avatarUrl?: string }>>("/participants/");
+    const participants = await http.request<
+      Array<{ id: string; name: string; avatarUrl?: string }>
+    >("/participants/");
     const normalized = participants.map((p) => ({
       id: String(p.id),
       name: p.name,
       avatarUrl: p.avatarUrl || `https://i.pravatar.cc/40?u=${p.id}`,
     }));
+
+    const now = new Date();
+    const scheduleISO = now.toISOString();
+
     return [
       {
         id: "participants-aggregate",
         title: "서버 데이터 기반 약속(임시)",
         dday: 0,
         participants: normalized,
-        schedule: { dateISO: new Date().toISOString() },
-        course: { text: "participants를 이용해 구성한 임시 상세" },
+        schedule: { dateISO: scheduleISO },
+        course: {
+          title: "임시 코스",
+          summary: {
+            totalMinutes: 0,
+            activityMinutes: 0,
+            travelMinutes: 0,
+          },
+          items: [],
+          source: "http-mock",
+        },
       },
     ];
   }
+}
+
+/**
+ * ✅ 약속 저장 (HTTP 버전)
+ * 실제 서버 API 스펙에 맞게 method/url/body는 나중에 조정해도 됨.
+ */
+export async function savePromiseDetail(
+  detail: PromiseDetail
+): Promise<PromiseDetail> {
+  await http.request<PromiseDetail>(`/promises/${detail.id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(detail),
+  });
+
+  return detail;
 }

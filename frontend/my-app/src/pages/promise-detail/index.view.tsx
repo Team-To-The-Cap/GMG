@@ -1,5 +1,5 @@
+// src/pages/promise-detail/index.view.tsx
 import React from "react";
-import TopBar from "@/components/ui/top-bar";
 import SectionHeader from "@/components/ui/section-header";
 import Button from "@/components/ui/button";
 import PromiseCard from "@/components/ui/promise-card";
@@ -13,7 +13,12 @@ import {
   EditIcon,
 } from "@/assets/icons/icons";
 import styles from "./style.module.css";
-import type { Participant, PromiseDetail } from "@/types/promise";
+import type {
+  Participant,
+  PromiseDetail,
+  CourseVisit,
+  CourseTransfer,
+} from "@/types/promise";
 import CourseSummaryCard from "@/components/ui/course-summary-card";
 import CourseDetailList from "@/components/ui/course-detail-list";
 
@@ -35,9 +40,12 @@ type Props = {
 
   onRemoveParticipant?: (id: string) => void;
 
-  /** ✅ 추가: 하단 버튼 액션 */
+  /** 하단 버튼 액션 */
   onCalculate?: () => void;
   onSave?: () => void;
+
+  /** 저장 로딩 상태 */
+  saving?: boolean;
 };
 
 type State = {
@@ -46,10 +54,12 @@ type State = {
   placeDraft: string;
 };
 
-type VisitItem = { type: "visit"; stayMinutes: number };
-type TransferItem = { type: "transfer"; minutes: number };
+type VisitItem = CourseVisit;
+type TransferItem = CourseTransfer;
 
-function summarizeFromItems(items: Array<VisitItem | TransferItem> = []) {
+function summarizeFromItems(
+  items: Array<VisitItem | TransferItem> = []
+): PromiseDetail["course"]["summary"] {
   let activity = 0,
     travel = 0;
   for (const it of items) {
@@ -61,14 +71,6 @@ function summarizeFromItems(items: Array<VisitItem | TransferItem> = []) {
     activityMinutes: activity,
     travelMinutes: travel,
   };
-}
-
-function isCourseWithItems(
-  course: PromiseDetail["course"] | { text: string }
-): course is PromiseDetail["course"] & {
-  items: Array<VisitItem | TransferItem>;
-} {
-  return Array.isArray((course as any)?.items);
 }
 
 function toYMD(iso?: string): string {
@@ -334,10 +336,8 @@ export default class CreatePromiseMainView extends React.PureComponent<
   private renderCourseSection(course: PromiseDetail["course"]) {
     const { onEditCourse } = this.props;
 
-    const items = isCourseWithItems(course) ? course.items : [];
-    const summary = isCourseWithItems(course)
-      ? course.summary ?? summarizeFromItems(items)
-      : { totalMinutes: 0, activityMinutes: 0, travelMinutes: 0 };
+    const items = course.items ?? [];
+    const summary = course.summary ?? summarizeFromItems(items);
 
     return (
       <section className={styles.section}>
@@ -383,15 +383,16 @@ export default class CreatePromiseMainView extends React.PureComponent<
   }
 
   private renderFinalSaveButton() {
-    const { onSave } = this.props;
+    const { onSave, saving } = this.props;
     return (
       <Button
         variant="primary"
         size="lg"
         style={{ width: "97%", justifySelf: "center" }}
         onClick={onSave}
+        disabled={saving}
       >
-        저장하기
+        {saving ? "저장 중..." : "저장하기"}
       </Button>
     );
   }

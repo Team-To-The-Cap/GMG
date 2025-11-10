@@ -2,7 +2,10 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useState, useCallback } from "react";
 import CreatePromiseMainView from "./index.view";
-import { getPromiseDetail } from "@/services/promise.service";
+import {
+  getPromiseDetail,
+  savePromiseDetail,
+} from "@/services/promise.service";
 import type { PromiseDetail } from "@/types/promise";
 import { DEFAULT_PROMISE_ID } from "@/config/runtime";
 
@@ -11,6 +14,7 @@ export default function PromiseDetailPage() {
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false); // ✅ 저장 중 상태
   const [error, setError] = useState<string>();
   const [data, setData] = useState<PromiseDetail>();
 
@@ -68,7 +72,7 @@ export default function PromiseDetailPage() {
   // 제목 변경(낙관적 업데이트 예시)
   const onChangeTitle = useCallback((value: string) => {
     setData((prev) => (prev ? { ...prev, title: value } : prev));
-    // TODO: API PATCH
+    // TODO: API PATCH (부분 저장 필요하면 여기에)
   }, []);
 
   // 참여자 삭제(낙관적 업데이트 예시)
@@ -78,7 +82,7 @@ export default function PromiseDetailPage() {
       const next = (prev.participants ?? []).filter((p) => p.id !== id);
       return { ...prev, participants: next };
     });
-    // TODO: API DELETE
+    // TODO: API DELETE (부분 저장 필요하면 여기에)
   }, []);
 
   // ✅ 계산 버튼 액션
@@ -87,10 +91,22 @@ export default function PromiseDetailPage() {
     alert("일정/장소/코스 계산 로직을 연결하세요!");
   }, [data]);
 
-  // ✅ 저장 버튼 액션
-  const onSave = useCallback(() => {
-    console.log("save", data);
-    alert("저장 로직을 연결하세요!");
+  // ✅ 저장 버튼 액션 (실제 서비스 호출)
+  const onSave = useCallback(async () => {
+    if (!data) return;
+    try {
+      setSaving(true);
+      const saved = await savePromiseDetail(data);
+      setData(saved); // mock 환경에서는 업데이트된 상태 반영
+      alert("저장되었습니다!");
+      // 필요하면 여기서 navigate 해서 리스트로 돌아가도 됨
+      // navigate("/");
+    } catch (e: any) {
+      console.error(e);
+      alert(e?.message ?? "저장 중 오류가 발생했습니다.");
+    } finally {
+      setSaving(false);
+    }
   }, [data]);
 
   return (
@@ -108,6 +124,7 @@ export default function PromiseDetailPage() {
       onRemoveParticipant={onRemoveParticipant}
       onCalculate={onCalculate}
       onSave={onSave}
+      saving={saving}
     />
   );
 }
