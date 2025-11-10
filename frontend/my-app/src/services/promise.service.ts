@@ -17,11 +17,17 @@ export async function getPromiseList(): Promise<PromiseDetail[]> {
   return useMock ? mockImpl.getPromiseList() : httpImpl.getPromiseList();
 }
 
-/** ✅ 저장 API: mock / http 둘 다 지원 */
 export async function savePromiseDetail(
   detail: PromiseDetail
 ): Promise<PromiseDetail> {
   return useMock
     ? mockImpl.savePromiseDetail(detail)
     : httpImpl.savePromiseDetail(detail);
+}
+
+/** ✅ 새 빈 약속 생성 후, 생성된 PromiseDetail 반환 */
+export async function createEmptyPromise(): Promise<PromiseDetail> {
+  return useMock
+    ? mockImpl.createEmptyPromise()
+    : httpImpl.createEmptyPromise();
 }

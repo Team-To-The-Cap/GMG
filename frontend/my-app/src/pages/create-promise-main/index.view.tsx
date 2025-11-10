@@ -1,5 +1,5 @@
+// src/pages/create-promise-main/index.view.tsx
 import React from "react";
-import TopBar from "@/components/ui/top-bar";
 import SectionHeader from "@/components/ui/section-header";
 import Button from "@/components/ui/button";
 import PromiseCard from "@/components/ui/promise-card";
@@ -35,9 +35,12 @@ type Props = {
 
   onRemoveParticipant?: (id: string) => void;
 
-  /** ✅ 추가: 하단 버튼 액션 */
+  /** 하단 버튼 액션 */
   onCalculate?: () => void;
   onSave?: () => void;
+
+  /** 저장 로딩 상태 */
+  saving?: boolean;
 };
 
 type State = {
@@ -383,15 +386,16 @@ export default class CreatePromiseMainView extends React.PureComponent<
   }
 
   private renderFinalSaveButton() {
-    const { onSave } = this.props;
+    const { onSave, saving } = this.props;
     return (
       <Button
         variant="primary"
         size="lg"
         style={{ width: "97%", justifySelf: "center" }}
         onClick={onSave}
+        disabled={saving}
       >
-        저장하기
+        {saving ? "저장 중..." : "저장하기"}
       </Button>
     );
   }

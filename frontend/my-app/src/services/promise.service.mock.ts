@@ -388,3 +388,36 @@ export async function savePromiseDetail(
   };
   return MOCK_DB[detail.id];
 }
+
+/**
+ * ✅ Test mode용: 메모리 MOCK_DB에 빈 약속 추가하고 ID 반환
+ */
+export async function createEmptyPromise(): Promise<PromiseDetail> {
+  await delay(200);
+
+  const id = `mock-${Date.now()}`;
+  const now = new Date().toISOString();
+
+  const detail: PromiseDetail = {
+    id,
+    title: "",
+    dday: calcDdayFromISO(now),
+    participants: [],
+    schedule: { dateISO: now },
+    // place는 아직 비어 있음
+    course: {
+      title: "추천 코스",
+      summary: {
+        totalMinutes: 0,
+        activityMinutes: 0,
+        travelMinutes: 0,
+      },
+      items: [],
+      generatedAtISO: now,
+      source: "mock-empty",
+    },
+  };
+
+  MOCK_DB[id] = detail;
+  return detail;
+}

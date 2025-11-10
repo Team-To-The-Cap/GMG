@@ -1,7 +1,11 @@
+// src/pages/create-promise-main/index.tsx
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useState, useCallback } from "react";
 import CreatePromiseMainView from "./index.view";
-import { getPromiseDetail } from "@/services/promise.service";
+import {
+  getPromiseDetail,
+  savePromiseDetail,
+} from "@/services/promise.service";
 import type { PromiseDetail } from "@/types/promise";
 import { DEFAULT_PROMISE_ID } from "@/config/runtime";
 
@@ -10,6 +14,7 @@ export default function CreatePromiseMain() {
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false); // ✅ 저장 중 여부
   const [error, setError] = useState<string>();
   const [data, setData] = useState<PromiseDetail>();
 
@@ -53,7 +58,6 @@ export default function CreatePromiseMain() {
   }, [promiseId]);
 
   // ✅ 새 인원 추가 버튼 핸들러
-  // ✅ 1) onAddParticipant 만 교체
   const onAddParticipant = useCallback(() => {
     if (!promiseId) return; // 혹시 모를 가드
     navigate(`/create/${promiseId}/participants/new`);
@@ -67,7 +71,7 @@ export default function CreatePromiseMain() {
   // 제목 변경(낙관적 업데이트 예시)
   const onChangeTitle = useCallback((value: string) => {
     setData((prev) => (prev ? { ...prev, title: value } : prev));
-    // TODO: API PATCH
+    // TODO: 이름만 별도 PATCH 하고 싶으면 여기서 호출
   }, []);
 
   // 참여자 삭제(낙관적 업데이트 예시)
@@ -77,23 +81,31 @@ export default function CreatePromiseMain() {
       const next = (prev.participants ?? []).filter((p) => p.id !== id);
       return { ...prev, participants: next };
     });
-    // TODO: API DELETE
+    // TODO: 개별 삭제 API가 있으면 여기서 호출
   }, []);
 
   // ✅ 계산 버튼 액션
   const onCalculate = useCallback(() => {
-    // 여기에 일정/장소/코스 계산 트리거 로직 연결
-    // 예: navigate(`/create/${promiseId}/calculate`) 또는 API 호출
     console.log("calculate with", data);
     alert("일정/장소/코스 계산 로직을 연결하세요!");
   }, [data, promiseId, navigate]);
 
-  // ✅ 저장 버튼 액션
-  const onSave = useCallback(() => {
-    // 현재 data를 서버에 저장하는 로직 연결
-    // 예: await savePromise(data)
-    console.log("save", data);
-    alert("저장 로직을 연결하세요!");
+  // ✅ 저장 버튼 액션 (실제로 서버/모크에 저장)
+  const onSave = useCallback(async () => {
+    if (!data) return;
+    try {
+      setSaving(true);
+      const saved = await savePromiseDetail(data);
+      setData(saved);
+      alert("저장되었습니다!");
+      // 필요하면 여기서 다른 화면으로 이동해도 됨
+      // navigate(`/details/${saved.id}`);
+    } catch (e: any) {
+      console.error(e);
+      alert(e?.message ?? "저장 중 오류가 발생했습니다.");
+    } finally {
+      setSaving(false);
+    }
   }, [data]);
 
   return (
@@ -109,9 +121,9 @@ export default function CreatePromiseMain() {
       onEditTitle={onEditTitle}
       onChangeTitle={onChangeTitle}
       onRemoveParticipant={onRemoveParticipant}
-      /* ↓ 추가된 두 액션 */
       onCalculate={onCalculate}
       onSave={onSave}
+      saving={saving} // ✅ 추가
     />
   );
 }

@@ -35,3 +35,9 @@
   color: #007aff; /* active color */
   font-weight: 600;
 }
+
+.item:disabled,
+.itemActive:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

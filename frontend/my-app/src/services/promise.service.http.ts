@@ -110,3 +110,36 @@ export async function savePromiseDetail(
 
   return detail;
 }
+
+// ✅ 빈 약속 하나 생성 (실서버용 예시)
+export async function createEmptyPromise(): Promise<PromiseDetail> {
+  const now = new Date().toISOString();
+
+  // 서버에 실제로는 필요한 필드만 보내도 되는데,
+  // 여기서는 타입 맞추려고 전체 구조를 보낸다고 가정
+  const payload: Partial<PromiseDetail> = {
+    title: "",
+    participants: [],
+    schedule: { dateISO: now },
+    course: {
+      title: "추천 코스",
+      summary: {
+        totalMinutes: 0,
+        activityMinutes: 0,
+        travelMinutes: 0,
+      },
+      items: [],
+      source: "auto",
+    },
+  };
+
+  const created = await http.request<PromiseDetail>("/promises", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return created;
+}
