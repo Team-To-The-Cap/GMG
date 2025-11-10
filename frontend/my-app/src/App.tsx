@@ -8,6 +8,8 @@ import MyPage from "@/pages/my-page";
 import { Time as Time1 } from "@/pages/promise-time/Time";
 import {TimeResult} from "@/pages/promise-time/TimeResult";
 import AddParticipantStartPage from "@/pages/participants/add-start";
+import AddParticipantOriginPage from "@/pages/participants/add-origin";
+import SearchOriginPage from "@/pages/participants/search-origin";
 
 // components
 import BottomNav from "@/components/layout/bottom-nav";
@@ -38,6 +40,27 @@ export default function App() {
           element={<AddParticipantStartPage />}
         />
         <Route path="/participants/new" element={<AddParticipantStartPage />} />
+        
+        
+        {/* ⬇️ 출발장소 선택 페이지 라우트 추가 */}
+        <Route
+          path="/create/:promiseId/participants/new/origin"
+          element={<AddParticipantOriginPage />}
+        />
+
+        <Route
+          path="/participants/new/origin"
+          element={<AddParticipantOriginPage />}
+        />
+
+        <Route
+          path="/create/:promiseId/participants/new/origin/search"
+          element={<SearchOriginPage />}
+        />
+        <Route
+          path="/participants/new/origin/search"
+          element={<SearchOriginPage />}
+        />
 
         <Route path="/me" element={<MyPage />} />
         <Route path="/time/time1" element={<Time1 />} />
