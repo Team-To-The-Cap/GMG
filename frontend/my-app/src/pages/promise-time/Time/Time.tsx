@@ -1,6 +1,5 @@
 import type { JSX } from "react";
 import { CalendarDisplaySection } from "./CalendarDisplaySection";
-import TopBar from "@/components/ui/top-bar";
 import { useNavigate } from "react-router-dom";
 
 export const Time = (): JSX.Element => {

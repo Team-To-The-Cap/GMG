@@ -1,7 +1,6 @@
 // src/pages/participants/add-start/index.tsx
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation, useParams } from "react-router-dom"; // ⬅️ 추가
-import TopBar from "@/components/ui/top-bar";
 import Button from "@/components/ui/button";
 import styles from "./style.module.css";
 import { CalendarIcon, PinIcon, HeartIcon } from "@/assets/icons/icons";
@@ -9,18 +8,34 @@ import { CalendarIcon, PinIcon, HeartIcon } from "@/assets/icons/icons";
 export default function AddParticipantStartPage() {
   const [name, setName] = useState("");
   const [origin, setOrigin] = useState<string | null>(null); // ⬅️ 선택값 표시용
+  const [availableTimes, setAvailableTimes] = useState<
+  { start_time: string; end_time: string }[]
+>([]);
+  //const [transportation, setTransportation] = useState("지하철");
+  //const [favActivity, setFanActivity] = useState("카페");
+  //const [memberId, setMemberId] = useState<number>(0);
+  
   const navigate = useNavigate();
   const location = useLocation();
   const { promiseId } = useParams();
 
   // 새 페이지에서 돌아올 때 state로 전달된 선택값을 반영
   useEffect(() => {
-    const sel = (location.state as any)?.selectedOrigin as string | undefined;
-    if (sel) {
-      setOrigin(sel);
-      // state를 비워서 뒤로가기를 또 눌러도 재적용되지 않도록 replace
+    const state = location.state as any;
+
+    if (state?.selectedOrigin) {
+      setOrigin(state.selectedOrigin);
       navigate(location.pathname, { replace: true });
     }
+    if (state?.selectedTimes) {
+      setAvailableTimes(state.selectedTimes);
+      navigate(location.pathname, { replace: true });
+    }
+    /*
+    if (state?.selectedPreferences) {
+      setFavActivity(state.selectedPreferences);
+      navigate(location.pathname, { replace: true });
+    }*/
   }, [location.state, location.pathname, navigate]);
 
   const openSchedulePicker = () => {
@@ -44,9 +59,46 @@ export default function AddParticipantStartPage() {
     /* ... */
   };
 
-  const submit = () => {
-    navigate("/participants/new");
-  };
+  const submit = async () => {
+    if (!promiseId) return alert("약속 ID가 없습니다.");
+    if (!name.trim()) return alert("이름을 입력하세요.");
+
+    const payload = {
+      name,
+      //member_id: memberId,
+      start_address: origin ?? "",
+      //transportation,
+      //fav_activity: favActivity,
+      available_times: availableTimes,
+    };
+
+    console.log("전송 데이터:", payload);
+
+    try {
+      const res = await fetch(
+        `http://223.130.152.114:8001/meetings/${promiseId}/participants/`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            accept: "application/json",
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(err || "저장 실패");
+      }
+
+      alert("참석자 정보가 성공적으로 저장되었습니다!");
+      navigate(`/create/${promiseId}/participants`);
+    } catch (error) {
+      console.error(error);
+      alert("참석자 저장 중 오류가 발생했습니다.");
+  }
+};
 
   return (
     <div className={styles.container}>
