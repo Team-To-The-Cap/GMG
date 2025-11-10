@@ -10,6 +10,7 @@ import {TimeResult} from "@/pages/promise-time/TimeResult";
 import AddParticipantStartPage from "@/pages/participants/add-start";
 import AddParticipantOriginPage from "@/pages/participants/add-origin";
 import SearchOriginPage from "@/pages/participants/search-origin";
+import { PlaceCalculationScreen } from "@/pages/participants/place-calculation";
 
 // components
 import BottomNav from "@/components/layout/bottom-nav";
@@ -57,6 +58,9 @@ export default function App() {
           path="/create/:promiseId/participants/new/origin/search"
           element={<SearchOriginPage />}
         />
+
+        <Route path="/create/:promiseId/place-calculation" element={<PlaceCalculationScreen />} />
+        
         <Route
           path="/participants/new/origin/search"
           element={<SearchOriginPage />}
