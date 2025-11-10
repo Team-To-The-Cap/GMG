@@ -15,11 +15,16 @@ export function getTopBarConfig(pathname: string): TopBarConfig {
   }
 
   if (is("/me")) {
-    return { title: "마이페이지", showBack: false };
+    return { title: "마이페이지", showBack: true };
   }
 
   if (is("/create/:promiseId")) {
-    return { title: "새로운 약속 추가", showBack: false };
+    return { title: "약속 만들기", showBack: true };
+  }
+
+  // ✅ 약속 상세 화면
+  if (is("/details/:promiseId")) {
+    return { title: "약속 상세", showBack: true };
   }
 
   if (is("/create/:promiseId/participants/new") || is("/participants/new")) {

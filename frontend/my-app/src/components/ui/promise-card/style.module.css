@@ -144,3 +144,14 @@
   align-items: center;
   justify-content: center;
 }
+
+/* 카드 전체 클릭 가능하게 */
+.clickable {
+  cursor: pointer;
+}
+
+.clickable:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}

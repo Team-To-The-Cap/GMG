@@ -1,17 +1,19 @@
 // src/pages/home/index.view.tsx
+import { useNavigate } from "react-router-dom";
 import PromiseCard from "@/components/ui/promise-card";
 import styles from "./style.module.css";
 import type { PromiseDetail } from "@/types/promise";
-import TopBar from "@/components/ui/top-bar";
 
 type Props = {
   loading: boolean;
   error?: string;
-  items: PromiseDetail[]; // ← 여기!
+  items: PromiseDetail[];
   onRetry: () => void;
 };
 
 export default function HomeView({ loading, error, items, onRetry }: Props) {
+  const navigate = useNavigate();
+
   if (loading) return <div className={styles.state}>불러오는 중…</div>;
   if (error)
     return (
@@ -35,6 +37,7 @@ export default function HomeView({ loading, error, items, onRetry }: Props) {
             dday={item.dday}
             participants={item.participants}
             className={styles.card}
+            onClick={() => navigate(`/details/${item.id}`)} // ✅ 상세 화면으로 이동
           />
         ))}
       </div>
