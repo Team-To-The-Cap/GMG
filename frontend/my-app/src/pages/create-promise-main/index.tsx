@@ -41,7 +41,7 @@ export default function CreatePromiseMain() {
   }, [promiseId]);
 
   const onEditSchedule = useCallback(() => {
-    navigate("/time/time1");
+    navigate("/time/timeresult");
   }, [promiseId, navigate]);
 
   const onEditPlace = useCallback(() => {

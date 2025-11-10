@@ -1,9 +1,10 @@
 import type { JSX } from "react";
-import { CalendarDisplaySection } from "./CalendarDisplaySection";
+import { CalendarDisplaySection } from "./CalendarDisplaySection/CalendarDisplaySection";
 import TopBar from "@/components/ui/top-bar";
 import { useNavigate } from "react-router-dom";
 
-export const Time = (): JSX.Element => {
+export const TimeResult = (): JSX.Element => {
+
   const navigate = useNavigate();
 
   const handleBack = () => {
@@ -11,10 +12,11 @@ export const Time = (): JSX.Element => {
     navigate(-1); 
   };
   
+  
   return (
     <>
-    <TopBar  title={`일정 입력하기`} showBack={true} onBack={handleBack}/>
-    <div className="flex flex-col w-full bg-white" data-model-id="76:817">
+    <TopBar  title={''} showBack={true} onBack={handleBack}/>
+    <div>
       <CalendarDisplaySection />
     </div>
     </>

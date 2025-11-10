@@ -15,6 +15,11 @@ export interface CalendarProps {
   apiDays?: Partial<Record<number, { disabled?: boolean }>>;
   className?: string;
   initialSelected?: number[];
+  /** ▼ 결과 표시용 옵션들 */
+  interactive?: boolean; // 기본 true. false면 클릭/드래그 완전 비활성
+  availability?: Record<number, number>; // day(1~31) -> 가능한 인원 수
+  maxAvailability?: number;              // 최대 인원(색 정규화 기준). 없으면 availability의 max 사용
+  onDayClick?: (day: number) => void; 
 }
 
 /** month/year로 5×7 그리드 생성 (항상 35칸) — 월요일 시작 기준 */
@@ -49,6 +54,10 @@ export function Calendar({
   apiDays,
   className,
   initialSelected = [],
+  interactive = true,
+  availability,
+  maxAvailability,
+  onDayClick,
 }: CalendarProps) {
   /** 내부 선택 상태: 일(day) 숫자 Set */
   const [selected, setSelected] = useState<Set<number>>(new Set(initialSelected));
@@ -58,9 +67,28 @@ export function Calendar({
   React.useEffect(() => {
     // initialSelected가 변경될 때마다 상태를 재설정
     setSelected(new Set(initialSelected));
-  }, [year, month, initialSelected]);
+  }, [year, month, JSON.stringify(initialSelected)]);
 
   const grid = useMemo(() => buildGrid(year, month, apiDays), [year, month, apiDays]);
+
+  const maxAvail = useMemo(() => {
+    if (!availability) return 0;
+    if (typeof maxAvailability === "number") return Math.max(1, maxAvailability);
+    return Math.max(1, ...Object.values(availability));
+  }, [availability, maxAvailability]);
+
+  const colorFor = (day: number) => {
+    if (!availability) return null;
+    const cnt = availability[day] ?? 0;
+    if (cnt <= 0) return null;
+    const t = Math.min(1, Math.max(0, cnt / maxAvail)); // 0~1
+    // 진파랑(#3e93fa) → 아주 옅은 하늘색 쪽으로 보간
+    // hsl 보간(파랑 210deg 근처) : L을 높이며 옅게
+    const lightness = 40 + Math.round((1 - t) * 40); // t=1 -> L=40(진), t=0.25 -> L=70 등
+    const bg = `hsl(210 90% ${lightness}%)`;
+    const fg = lightness < 55 ? "#fff" : "#0b2540";   // 진하면 흰글자, 옅으면 진남
+    return { bg, fg };
+  };
 
   const applySelection = (days: number[], mode: DragMode) => {
     if (mode === "idle") return;
@@ -74,15 +102,26 @@ export function Calendar({
     onSelect?.(picked);
   };
 
+  const canInteract = interactive === true;
+
   const handleDown = (day: number, disabled?: boolean) => {
     if (!day || disabled) return;
-    isPointerDown.current = true;
-    const mode: DragMode = selected.has(day) ? "erase" : "paint";
-    setDragMode(mode);
-    applySelection([day], mode);
-  };
 
+    if (canInteract) {
+      // 1. INTERACTIVE MODE (Drag/Paint)
+      isPointerDown.current = true;
+      const mode: DragMode = selected.has(day) ? "erase" : "paint";
+      setDragMode(mode);
+      applySelection([day], mode);
+    } else if (onDayClick) {
+      // 2. NON-INTERACTIVE MODE (Single Click)
+      // interactive가 false일 때, onDayClick이 있으면 실행합니다.
+      onDayClick(day);
+    }
+  };
+  
   const handleEnter = (day: number, disabled?: boolean) => {
+    if(!canInteract) return;
     if (!isPointerDown.current || !day || disabled) return;
     applySelection([day], dragMode);
   };
@@ -125,6 +164,8 @@ export function Calendar({
               const day = cell.day ?? 0;
               const isSelected = !!cell.day && selected.has(day);
               const isDisabled = !!cell.disabled;
+
+              const paint = !canInteract ? colorFor(day): null;
               
               // cell: center, height 43px
               return (
@@ -146,12 +187,26 @@ export function Calendar({
                       }}
                       onTouchEnd={endDrag}
                       // dayBtn: 40x40, rounded-full, transition
-                      className={cn(
-                      "h-10 w-10 rounded-full inline-flex items-center justify-center border-0 cursor-pointer transition-colors duration-150 ease-in-out",
-                      isDisabled ? "opacity-40 pointer-events-none" : "hover:bg-blue-100",
-                      isSelected ? "bg-blue-500 text-white shadow-md" : "text-gray-700"
+                     className={cn(
+                        "w-10 h-10 rounded-full inline-flex items-center justify-center",
+                        "p-0 m-0 box-border select-none align-middle",
+                        "appearance-none border-0 outline-none ring-0 focus:outline-none focus:ring-0",
+                        "transition-colors duration-150 ease-in-out shadow-none",
+                        isDisabled ? "opacity-40 pointer-events-none" : (canInteract ? "hover:bg-blue-100": ""),
+                        canInteract
+                          ? (isSelected ? "bg-[#3e93fa] text-white" : "bg-transparent text-[#111]")
+                          : "bg-transparent"
                       )}
-                    >
+                      style={{
+                        border: "0 none",
+                        outline: "none",
+                        // ▼ 표시 전용 색 우선 적용
+                        backgroundColor: paint ? paint.bg : (canInteract && isSelected ? "#3e93fa" : "transparent"),
+                        color: paint ? paint.fg : (canInteract && isSelected ? "#fff" : undefined),
+                        boxShadow: paint || (canInteract && isSelected) ? "0 2px 6px rgba(0,0,0,.12)" : "none",
+                        cursor: canInteract ? "pointer" : "default",
+                      }}
+                      >
                     <span className="font-semibold text-base leading-none">{day}</span>
                     </button>
                   ) : (

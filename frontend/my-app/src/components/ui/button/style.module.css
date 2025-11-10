@@ -74,6 +74,7 @@
 /* full width */
 .fullWidth {
   width: 100%;
+  display: block;
 }
 
 /* 아이콘/라벨 */
