@@ -21,6 +21,8 @@
   padding: var(--pad-y) var(--pad-x);
   width: 100%;
   height: var(--h);
+
+  margin-bottom: 20px;
 }
 
 /* ===== Size variants ===== */

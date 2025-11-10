@@ -174,7 +174,6 @@ export default class CreatePromiseMainView extends React.PureComponent<
   private renderSkeleton() {
     return (
       <div className={styles.container}>
-        <TopBar title="약속 상세" />
         <PromiseCard className={styles.heroCard}>로딩 중…</PromiseCard>
       </div>
     );
@@ -183,7 +182,6 @@ export default class CreatePromiseMainView extends React.PureComponent<
   private renderError(msg: string) {
     return (
       <div className={styles.container}>
-        <TopBar title="약속 상세" />
         <PromiseCard className={styles.heroCard}>에러: {msg}</PromiseCard>
       </div>
     );
@@ -413,7 +411,6 @@ export default class CreatePromiseMainView extends React.PureComponent<
 
     return (
       <div className={styles.container}>
-        <TopBar title={`새로운 약속 추가`} />
         {this.renderTitleSection(data.title)}
         {this.renderParticipantsSection(data.participants)}
         <section className={styles.section}>
