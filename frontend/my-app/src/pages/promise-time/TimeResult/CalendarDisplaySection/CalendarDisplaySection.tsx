@@ -36,7 +36,7 @@ const initialDateSelections = [
     ],
     extraCount: 1,
     borderColor: "border-[#41a0f4]",
-    isSelected: true,
+    isSelected: false,
   },
   {
     date: "2025. 10. 30", // 다른 클릭 예시 날짜
@@ -128,7 +128,7 @@ export const CalendarDisplaySection = (): JSX.Element => {
       </h2>
 
       {/* 카드(하얀 배경, 라운드, 그림자) */}
-            <div className="w-full max-w-[352px] bg-white rounded-[18px] border border-[#eaeaea] shadow-[0px_4px_32px_#aaaaaa08]">
+            <div className="w-full bg-white rounded-[18px] border border-[#eaeaea] shadow-[0px_4px_32px_#aaaaaa08]">
               <div className="flex flex-col gap-6 px-[25px] py-[30px]">
                 {/* 헤더: 월/년 + 이동 버튼 */}
                 <header className="flex items-center justify-between w-full">
