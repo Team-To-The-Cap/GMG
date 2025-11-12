@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+// src/pages/participants/add-origin/index.tsx
+import React, { useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { MapPin, ChevronRight, CheckCircle2 } from "lucide-react"; // ⬅️ 체크 아이콘 추가
+import { MapPin, ChevronRight, CheckCircle2 } from "lucide-react";
 import TopBar from "@/components/ui/top-bar";
 import Button from "@/components/ui/button";
 import styles from "./style.module.css";
@@ -10,6 +11,7 @@ import { loadSavedPlaces, type SavedPlace } from "@/lib/user-storage";
 type LocationState = {
   savedPlaces?: SavedPlace[];
   nameDraft?: string;
+  selectedOrigin?: SavedPlace | null;
 };
 
 export default function AddParticipantOriginPage() {
@@ -18,14 +20,28 @@ export default function AddParticipantOriginPage() {
   const location = useLocation();
   const state = (location.state || {}) as LocationState;
 
-  // 저장된 장소
-  const saved = useMemo<SavedPlace[]>(() => {
+  // ───────────────── 저장된 장소 ─────────────────
+  const baseSaved = useMemo<SavedPlace[]>(() => {
     if (state.savedPlaces && state.savedPlaces.length) return state.savedPlaces;
     return loadSavedPlaces();
   }, [state.savedPlaces]);
 
-  // ✅ 선택 상태
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // 검색 화면 등에서 돌아온 선택 결과
+  const externalSelected = state.selectedOrigin ?? null;
+
+  // 최종 리스트: externalSelected 가 saved 에 없으면 맨 위에 추가
+  const saved = useMemo<SavedPlace[]>(() => {
+    if (!externalSelected) return baseSaved;
+    const exists = baseSaved.some((p) => p.id === externalSelected.id);
+    if (exists) return baseSaved;
+    return [externalSelected, ...baseSaved];
+  }, [baseSaved, externalSelected]);
+
+  // 선택 상태 (초기값: 외부에서 넘어온 selectedOrigin)
+  const [selectedId, setSelectedId] = useState<string | null>(
+    externalSelected?.id ?? null
+  );
+
   const selectedPlace = useMemo(
     () => saved.find((p) => p.id === selectedId) || null,
     [saved, selectedId]
@@ -33,27 +49,41 @@ export default function AddParticipantOriginPage() {
 
   const onBack = () => navigate(-1);
 
-  // 리스트 아이템 클릭 → 선택/해제
   const toggleSelect = (p: SavedPlace) => {
     setSelectedId((cur) => (cur === p.id ? null : p.id));
   };
 
-  // “장소 선택하기”(검색 페이지로 이동)
+  // ───────────────── “장소 선택하기” → 검색 페이지 ─────────────────
   const openSearch = () => {
     const path = promiseId
       ? `/create/${promiseId}/participants/new/origin/search`
       : `/participants/new/origin/search`;
-    navigate(path, { state });
+
+    navigate(path, {
+      replace: true,
+      state: {
+        ...state,
+        savedPlaces: baseSaved,
+        // 현재까지 선택된 값 유지해서 넘겨주기
+        selectedOrigin: selectedPlace ?? externalSelected ?? null,
+      },
+    });
   };
 
   const openAll = () => {
     alert("전체보기로 이동 (라우트 연결 예정)");
   };
 
-  // ✅ 확인 버튼: 선택된 장소를 이전 페이지로 반환
+  // ───────────────── 확인 버튼: 이전 페이지로 선택 결과 반환 ─────────────────
   const onConfirm = () => {
     if (!selectedPlace) return;
-    navigate("/participants", { state: { selectedOrigin: selectedPlace.name } });
+
+    navigate(-1, {
+      state: {
+        ...state,
+        selectedOrigin: selectedPlace, // SavedPlace 전체 반환
+      },
+    });
   };
 
   return (
@@ -62,7 +92,8 @@ export default function AddParticipantOriginPage() {
         <div className={styles.sectionHeader}>
           <span className={styles.sectionTitle}>저장된 장소</span>
           <button className={styles.linkBtn} onClick={openAll}>
-            전체보기
+            <span>전체보기</span>
+            <ChevronRight size={14} />
           </button>
         </div>
 
@@ -92,7 +123,6 @@ export default function AddParticipantOriginPage() {
                   <div className={styles.itemAddr}>{p.address}</div>
                 </div>
 
-                {/* 오른쪽: 선택 시 체크, 아니면 > 아이콘 */}
                 <div className={styles.itemRight}>
                   {active ? (
                     <CheckCircle2 className={styles.checkIcon} size={20} />
@@ -119,16 +149,23 @@ export default function AddParticipantOriginPage() {
 
         <div className={styles.gap} />
 
+        {/* 장소 선택하기 카드 */}
         <button className={styles.bigSelect} onClick={openSearch}>
           <div className={styles.bigIcon}>
             <MapPin size={24} />
           </div>
-          <div className={styles.bigTitle}>장소 선택하기</div>
-          <div className={styles.bigSub}>저장된 장소 또는 검색으로 선택</div>
+
+          <div className={styles.bigTexts}>
+            <div className={styles.bigTitle}>장소 선택하기</div>
+            <div className={styles.bigSub}>저장된 장소 또는 검색으로 선택</div>
+          </div>
+
+          <div className={styles.itemRight}>
+            <ChevronRight size={18} />
+          </div>
         </button>
       </div>
 
-      {/* ✅ 하단 고정: 취소 / 확인 */}
       <div className={styles.footerRow}>
         <Button variant="ghost" size="md" onClick={onBack}>
           취소
