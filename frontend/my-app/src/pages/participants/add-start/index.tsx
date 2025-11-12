@@ -25,11 +25,11 @@ export default function AddParticipantStartPage() {
 
     if (state?.selectedOrigin) {
       setOrigin(state.selectedOrigin);
-      navigate(location.pathname, { replace: true });
+      //navigate(location.pathname, { replace: true });
     }
     if (state?.selectedTimes) {
       setAvailableTimes(state.selectedTimes);
-      navigate(location.pathname, { replace: true });
+      //navigate(location.pathname, { replace: true });
     }
     /*
     if (state?.selectedPreferences) {
@@ -42,8 +42,11 @@ export default function AddParticipantStartPage() {
     if (!promiseId) return; // 안전하게 처리
 
     navigate(`/create/${promiseId}/promise-time`, {
-      state: { nameDraft: name }, // 필요 시 이름 같은 임시 데이터 전달 가능
-    });
+    state: {
+      nameDraft: name,
+      selectedOrigin: origin, // ✅ 장소정보 유지
+    },
+  });
   };
 
   // ⬇️ 새 페이지로 이동
@@ -52,7 +55,12 @@ export default function AddParticipantStartPage() {
       ? `/create/${promiseId}/participants/new/origin`
       : `/participants/new/origin`;
     // 현재 입력 중 이름 같은 값이 있으면 필요 시 state로 넘겨도 됨
-    navigate(path, { state: { nameDraft: name } });
+    navigate(path, {
+    state: {
+      nameDraft: name,
+      selectedTimes: availableTimes, // ✅ 일정정보 유지
+    },
+  });
   };
 
   const openPreferencePicker = () => {
@@ -65,18 +73,19 @@ export default function AddParticipantStartPage() {
 
     const payload = {
       name,
-      //member_id: memberId,
+      member_id: 0, // 서버 필수 필드 (임시 더미값)
       start_address: origin ?? "",
-      //transportation,
-      //fav_activity: favActivity,
+      transportation: "지하철", // 기본값 혹은 빈 문자열
+      fav_activity: "카페",    // 기본값 혹은 빈 문자열
       available_times: availableTimes,
     };
 
     console.log("전송 데이터:", payload);
+    const numericId = promiseId?.replace(/\D/g, "")
 
     try {
       const res = await fetch(
-        `http://223.130.152.114:8001/meetings/${promiseId}/participants/`,
+        `http://223.130.152.114:8001/meetings/${numericId}/participants/`,
         {
           method: "POST",
           headers: {
@@ -113,21 +122,31 @@ export default function AddParticipantStartPage() {
         onChange={(e) => setName(e.target.value)}
       />
 
-      <button className={styles.rowBtn} onClick={openSchedulePicker}>
-        <span className={styles.icon}>
-          <CalendarIcon />
-        </span>
-        <span className={styles.rowText}>일정 입력하기</span>
-      </button>
+      <button
+  className={`${styles.rowBtn} ${
+    availableTimes.length > 0 ? styles.active : ""
+  }`}
+  onClick={openSchedulePicker}
+>
+  <span className={styles.icon}>
+    <CalendarIcon />
+  </span>
+  <span className={styles.rowText}>
+    일정 입력하기{availableTimes.length > 0 ? " ✓" : ""}
+  </span>
+</button>
 
-      <button className={styles.rowBtn} onClick={openOriginPicker}>
-        <span className={styles.icon}>
-          <PinIcon />
-        </span>
-        <span className={styles.rowText}>
-          출발장소 입력하기{origin ? ` · ${origin}` : ""}
-        </span>
-      </button>
+      <button
+  className={`${styles.rowBtn} ${origin ? styles.active : ""}`}
+  onClick={openOriginPicker}
+>
+  <span className={styles.icon}>
+    <PinIcon />
+  </span>
+  <span className={styles.rowText}>
+    출발장소 입력하기{origin ? ` · ${origin}` : ""}
+  </span>
+</button>
 
       <button className={styles.rowBtn} onClick={openPreferencePicker}>
         <span className={`${styles.icon} ${styles.heartIcon}`}>

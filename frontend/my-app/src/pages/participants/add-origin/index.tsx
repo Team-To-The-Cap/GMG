@@ -1,8 +1,7 @@
 // src/pages/participants/add-origin/index.tsx
 import React, { useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { MapPin, ChevronRight, CheckCircle2 } from "lucide-react";
-import TopBar from "@/components/ui/top-bar";
+import { MapPin, ChevronRight, CheckCircle2 } from "lucide-react"; // ⬅️ 체크 아이콘 추가
 import Button from "@/components/ui/button";
 import styles from "./style.module.css";
 
@@ -78,11 +77,15 @@ export default function AddParticipantOriginPage() {
   const onConfirm = () => {
     if (!selectedPlace) return;
 
-    navigate(-1, {
-      state: {
-        ...state,
-        selectedOrigin: selectedPlace, // SavedPlace 전체 반환
-      },
+    const path = promiseId
+    ? `/create/${promiseId}/participants/new`
+    : `/participants/new`;
+
+    navigate(path, {
+    state: {
+      ...state,
+      selectedOrigin: selectedPlace.address, // 도로명주소만 전달
+    },
     });
   };
 
