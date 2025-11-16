@@ -1,8 +1,7 @@
 // src/pages/participants/serach-origin/index.tsx
-import React, { useEffect, useRef, useState } from "react"; 
+import { useEffect, useRef, useState } from "react"; 
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Search, MapPin } from "lucide-react";
-import TopBar from "@/components/ui/top-bar";
 import styles from "./style.module.css";
 import type { SavedPlace } from "@/lib/user-storage";
 

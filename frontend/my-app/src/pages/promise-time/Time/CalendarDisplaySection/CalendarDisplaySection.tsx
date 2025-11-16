@@ -2,6 +2,7 @@ import { useMemo, useState, type JSX } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Calendar } from "@/components/ui/Calendar"; // 네가 만든 드래그/페인트 캘린더
 import  Button  from "@/components/ui/button";
+import {useNavigate, useParams} from "react-router-dom"
 
 const MONTHS = [
   "January","February","March","April","May","June",
@@ -24,11 +25,18 @@ const compileSelectedDates = (selByMonth: Record<string, number[]>): string[] =>
       });
     }
   }
-
   // 날짜 순서로 정렬하여 보내면 백엔드에서 처리하기 더 깔끔할 수 있습니다.
   // (필수 아님, 백엔드에서 정렬 가능)
   return allDates.sort(); 
 };
+
+//날짜 시간순으로 00~24로 변환
+  const makeFullDayTimes = (dates: string[]) => {
+    return dates.map(date => ({
+      start_time: `${date}T00:00:01Z`,
+      end_time: `${date}T23:59:59Z`,
+    }));
+  }
 
 export const CalendarDisplaySection = (): JSX.Element =>  {
   const [year, setYear] = useState(2025);
@@ -66,38 +74,17 @@ export const CalendarDisplaySection = (): JSX.Element =>  {
   return total;
 }, [selByMonth]);
 
+  const navigate = useNavigate();
+  const {promiseId} = useParams();
   const handleSubmit = async () => {
-  const datesToSend = compileSelectedDates(selByMonth);
-  console.log("전송할 데이터:", datesToSend);
+    const datesToSend = compileSelectedDates(selByMonth);
+    const availableTimes = makeFullDayTimes(datesToSend);
 
-  // 전송할 데이터 객체 (필요한 다른 정보가 있다면 여기에 추가)
-  const payload = {
-    selectedDates: datesToSend,
-    // userId: '...', // 사용자 식별 정보 (필요하다면)
-  };
-
-  try {
-    const response = await fetch("/api/submit-availability", { // 백엔드 엔드포인트
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        // 'Authorization': 'Bearer ...' // 인증 토큰 (필요하다면)
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (response.ok) {
-      const result = await response.json();
-      alert("날짜 선택이 성공적으로 제출되었습니다!");
-      // 추가 처리 (예: 다음 페이지로 이동) navigate하면 될듯
-    } else {
-      console.error("제출 실패:", response.status, response.statusText);
-      alert("날짜 제출에 실패했습니다. 다시 시도해 주세요.");
-    }
-  } catch (error) {
-    console.error("네트워크 오류:", error);
-    alert("네트워크 오류로 제출에 실패했습니다.");
-  }
+    navigate(`/create/${promiseId}/participants/new`, {
+    state: {
+      selectedTimes: availableTimes,
+    },
+  });
 };
 
 

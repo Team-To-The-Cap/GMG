@@ -1,10 +1,8 @@
 // src/pages/participants/add-origin/index.tsx
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { MapPin, ChevronRight, CheckCircle2 } from "lucide-react";
-import TopBar from "@/components/ui/top-bar";
+import { MapPin, ChevronRight, CheckCircle2 } from "lucide-react"; // ⬅️ 체크 아이콘 추가
 import Button from "@/components/ui/button";
-import styles from "./style.module.css";
 
 import { loadSavedPlaces, type SavedPlace } from "@/lib/user-storage";
 
@@ -12,6 +10,7 @@ type LocationState = {
   savedPlaces?: SavedPlace[];
   nameDraft?: string;
   selectedOrigin?: SavedPlace | null;
+  selectedTransportation?: string | null;
 };
 
 export default function AddParticipantOriginPage() {
@@ -47,6 +46,10 @@ export default function AddParticipantOriginPage() {
     [saved, selectedId]
   );
 
+  const [transportation, setTransportation] = useState<string>(
+    state.selectedTransportation ?? "대중교통"
+  );
+
   const onBack = () => navigate(-1);
 
   const toggleSelect = (p: SavedPlace) => {
@@ -78,95 +81,139 @@ export default function AddParticipantOriginPage() {
   const onConfirm = () => {
     if (!selectedPlace) return;
 
-    navigate(-1, {
-      state: {
-        ...state,
-        selectedOrigin: selectedPlace, // SavedPlace 전체 반환
-      },
+    const path = promiseId
+    ? `/create/${promiseId}/participants/new`
+    : `/participants/new`;
+
+    navigate(path, {
+    state: {
+      ...state,
+      selectedOrigin: selectedPlace.address, // 도로명주소만 전달
+      selectedTransportation: transportation,
+    },
     });
   };
 
-  return (
-    <div className={styles.page}>
-      <div className={styles.scroll}>
-        <div className={styles.sectionHeader}>
-          <span className={styles.sectionTitle}>저장된 장소</span>
-          <button className={styles.linkBtn} onClick={openAll}>
-            <span>전체보기</span>
-            <ChevronRight size={14} />
-          </button>
-        </div>
+return (
+  <div className="min-h-screen flex flex-col">
+    <div className="px-4 py-3">
+      {/* 저장된 장소 헤더 */}
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm font-semibold text-slate-900">저장된 장소</span>
 
-        <ul className={styles.list}>
-          {saved.map((p) => {
-            const active = selectedId === p.id;
-            return (
-              <li
-                key={p.id}
-                className={`${styles.item} ${
-                  active ? styles.itemSelected : ""
-                }`}
-                onClick={() => toggleSelect(p)}
-                role="button"
-                aria-pressed={active}
-                tabIndex={0}
-              >
-                <div
-                  className={`${styles.itemIcon} ${
-                    active ? styles.itemIconActive : ""
-                  }`}
-                >
-                  <MapPin size={20} />
-                </div>
-                <div className={styles.itemTexts}>
-                  <div className={styles.itemName}>{p.name}</div>
-                  <div className={styles.itemAddr}>{p.address}</div>
-                </div>
-
-                <div className={styles.itemRight}>
-                  {active ? (
-                    <CheckCircle2 className={styles.checkIcon} size={20} />
-                  ) : (
-                    <ChevronRight size={18} />
-                  )}
-                </div>
-              </li>
-            );
-          })}
-
-          {!saved.length && (
-            <li className={styles.item} aria-disabled>
-              <div className={styles.itemTexts}>
-                <div className={styles.itemName}>저장된 장소가 없어요</div>
-                <div className={styles.itemAddr}>
-                  마이페이지에서 추가하거나 아래 ‘장소 선택하기’를 눌러
-                  검색하세요
-                </div>
-              </div>
-            </li>
-          )}
-        </ul>
-
-        <div className={styles.gap} />
-
-        {/* 장소 선택하기 카드 */}
-        <button className={styles.bigSelect} onClick={openSearch}>
-          <div className={styles.bigIcon}>
-            <MapPin size={24} />
-          </div>
-
-          <div className={styles.bigTexts}>
-            <div className={styles.bigTitle}>장소 선택하기</div>
-            <div className={styles.bigSub}>저장된 장소 또는 검색으로 선택</div>
-          </div>
-
-          <div className={styles.itemRight}>
-            <ChevronRight size={18} />
-          </div>
+        <button
+          onClick={openAll}
+          className="text-indigo-500 text-xs font-medium px-2 py-1 rounded-full hover:bg-indigo-100"
+        >
+          전체보기
         </button>
       </div>
 
-      <div className={styles.footerRow}>
+      {/* 리스트 */}
+      <ul className="space-y-2">
+        {saved.map((p) => {
+          const active = selectedId === p.id;
+          return (
+            <li
+              key={p.id}
+              onClick={() => toggleSelect(p)}
+              className={`flex items-center gap-3 p-3.5 rounded-2xl border shadow-sm cursor-pointer 
+                active:scale-[0.99] transition
+                ${active ? "bg-indigo-50 border-indigo-200" : "bg-white border-slate-100"}
+              `}
+            >
+              <div
+                className={`w-9 h-9 grid place-items-center rounded-full
+                  ${active ? "bg-indigo-100 text-indigo-600" : "bg-indigo-50 text-indigo-500"}
+                `}
+              >
+                <MapPin size={20} />
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <div className="text-[15px] font-semibold text-slate-900 truncate">
+                  {p.name}
+                </div>
+                <div className="text-[12px] text-slate-500 truncate">
+                  {p.address}
+                </div>
+              </div>
+
+              <div className="text-slate-400">
+                {active ? (
+                  <CheckCircle2 size={20} className="text-indigo-600" />
+                ) : (
+                  <ChevronRight size={18} />
+                )}
+              </div>
+            </li>
+          );
+        })}
+
+        {!saved.length && (
+          <li className="p-3.5 rounded-xl bg-white border text-sm text-slate-500">
+            저장된 장소가 없어요.
+          </li>
+        )}
+      </ul>
+
+      <div className="h-4" />
+
+      {/* 장소 선택 카드 */}
+      <button
+        onClick={openSearch}
+        className="w-full flex items-start gap-2 px-4 py-3.5 rounded-2xl shadow-md bg-white active:scale-[0.99] transition mb-6"
+      >
+      {/* 아이콘 */}
+      <div className="w-9 h-9 flex items-center justify-center rounded-full bg-indigo-50 text-indigo-500 mt-0.5">
+        <MapPin size={24} />
+      </div>
+
+      {/* 텍스트 묶음: 왼쪽 정렬 */}
+      <div className="flex flex-col flex-1 text-left">
+        <div className="text-[15px] font-semibold text-gray-900">
+          장소 선택하기
+        </div>
+        <div className="text-[12px] text-gray-500">
+          저장된 장소 또는 검색으로 선택
+        </div>
+      </div>
+
+      {/* 오른쪽 화살표 */}
+      <ChevronRight size={18} className="text-slate-400" />
+    </button>
+
+
+      {/* 이동수단 선택 */}
+      <div className="mt-4">
+        <div className="text-sm font-semibold text-gray-800 mb-2 px-1">
+          이동수단
+        </div>
+
+        <div className="flex items-center bg-white rounded-xl p-1 shadow-sm border border-gray-200 w-full">
+        {["대중교통", "자동차", "도보"].map((t) => {
+          const active = transportation === t;
+          return (
+            <button
+              key={t}
+              onClick={() => setTransportation(t)}
+              className={[
+                "flex-1 py-2 rounded-lg text-sm font-medium transition",
+              active
+              ? "bg-blue-400 text-white shadow-sm"
+              : "text-gray-500 hover:bg-gray-100"
+          ].join(" ")}
+      >
+          {t}
+        </button>
+        );
+      })}
+      </div>
+
+      </div>
+
+      {/* 취소 / 확인 버튼 */}
+      <div className="mt-6 grid grid-cols-2 gap-3 px-1 pb-10">
         <Button variant="ghost" size="md" onClick={onBack}>
           취소
         </Button>
@@ -175,11 +222,11 @@ export default function AddParticipantOriginPage() {
           size="md"
           onClick={onConfirm}
           disabled={!selectedPlace}
-          className={styles.confirmBtn}
         >
           확인
         </Button>
       </div>
     </div>
-  );
+  </div>
+);
 }
