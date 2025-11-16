@@ -5,6 +5,7 @@ import CreatePromiseMainView from "./index.view";
 import {
   getPromiseDetail,
   savePromiseDetail,
+  createEmptyPromise, // ⬅️ 추가
 } from "@/services/promise.service";
 import type { PromiseDetail } from "@/types/promise";
 import { DEFAULT_PROMISE_ID } from "@/config/runtime";
@@ -40,9 +41,41 @@ export default function CreatePromiseMain() {
       try {
         setLoading(true);
         setError(undefined);
+
+        // 1️⃣ 새 약속 생성 모드: /create/new
+        if (promiseId === "new") {
+          const draft = await createEmptyPromise();
+          if (!alive) return;
+
+          // draft id 기억
+          localStorage.setItem(DRAFT_PROMISE_ID_KEY, draft.id);
+
+          // URL을 새 id로 교체
+          navigate(`/create/${draft.id}`, { replace: true });
+
+          setData(draft);
+          return;
+        }
+
+        // 2️⃣ 기존 약속 조회 모드
         const res = await getPromiseDetail(promiseId);
         if (alive) setData(res);
       } catch (e: any) {
+        // mock-로 시작하는데 DB에 없으면, 새 초안으로 갈아타기
+        if (promiseId.startsWith("mock-")) {
+          try {
+            const draft = await createEmptyPromise();
+            if (!alive) return;
+
+            localStorage.setItem(DRAFT_PROMISE_ID_KEY, draft.id);
+            navigate(`/create/${draft.id}`, { replace: true });
+            setData(draft);
+            return;
+          } catch (inner) {
+            console.error(inner);
+          }
+        }
+
         if (alive) setError(e?.message ?? "알 수 없는 오류");
       } finally {
         if (alive) setLoading(false);
@@ -155,8 +188,7 @@ export default function CreatePromiseMain() {
       title: "",
       participants: [],
       place: undefined,
-      // 코스/스케줄은 어떻게 할지 정책에 따라 다르게:
-      // 여기서는 스케줄/코스는 일단 유지한다고 가정
+      // 코스/스케줄은 정책에 맞게 조정 가능
       // schedule: { dateISO: new Date().toISOString() },
       // course: { ...data.course, items: [], summary: { totalMinutes: 0, ... } }
     };
