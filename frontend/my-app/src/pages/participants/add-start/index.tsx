@@ -18,10 +18,11 @@ export default function AddParticipantStartPage() {
   >([]);
   const [transportation, setTransportation] = useState<string | null>(null);
 
-  // ✅ 이번에 추가: 선호 카테고리 (최대 4개 선택한다고 가정)
   const [preferredCats, setPreferredCats] = useState<PlaceCategory[]>([]);
 
-  // 새 페이지에서 돌아올 때 state로 전달된 선택값을 반영
+  // ✅ 추가: 제출 중인지 여부
+  const [submitting, setSubmitting] = useState(false);
+
   useEffect(() => {
     const state = location.state as any;
 
@@ -46,7 +47,6 @@ export default function AddParticipantStartPage() {
     }
   }, [location.state]);
 
-  /** 일정 입력 페이지로 이동 */
   const openSchedulePicker = () => {
     if (!promiseId) return;
 
@@ -60,7 +60,6 @@ export default function AddParticipantStartPage() {
     });
   };
 
-  /** 출발 장소 입력 페이지로 이동 */
   const openOriginPicker = () => {
     const path = promiseId
       ? `/details/${promiseId}/participants/new/origin`
@@ -76,7 +75,6 @@ export default function AddParticipantStartPage() {
     });
   };
 
-  /** 선호 입력 페이지로 이동 */
   const openPreferencePicker = () => {
     if (!promiseId) return;
 
@@ -95,9 +93,12 @@ export default function AddParticipantStartPage() {
     if (!promiseId) return alert("약속 ID가 없습니다.");
     if (!name.trim()) return alert("이름을 입력하세요.");
 
+    // ✅ 이미 제출 중이면 더 이상 진행하지 않음
+    if (submitting) return;
+
     const payload: any = {
       name,
-      member_id: 0, // 서버 필수 필드 (임시 더미값)
+      member_id: 0,
       fav_activity: "카페",
     };
 
@@ -106,9 +107,11 @@ export default function AddParticipantStartPage() {
     if (availableTimes.length > 0) payload.available_times = availableTimes;
 
     console.log("전송 데이터:", payload);
-    const numericId = promiseId?.replace(/\D/g, "");
+    const numericId = promiseId.replace(/\D/g, "");
 
     try {
+      setSubmitting(true); // 🔹 제출 시작
+
       const res = await fetch(
         `http://223.130.152.114:8001/meetings/${numericId}/participants/`,
         {
@@ -127,14 +130,12 @@ export default function AddParticipantStartPage() {
       }
 
       alert("참석자 정보가 성공적으로 저장되었습니다!");
-
-      // 🔽 어디서 왔는지 보고 이동 결정
-      const from = (location.state as any)?.from;
-
       navigate(`/details/${promiseId}`);
     } catch (error) {
       console.error(error);
       alert("참석자 저장 중 오류가 발생했습니다.");
+    } finally {
+      setSubmitting(false); // 🔹 성공/실패 상관없이 다시 풀어줌
     }
   };
 
@@ -195,10 +196,10 @@ export default function AddParticipantStartPage() {
           variant="primary"
           size="lg"
           className={styles.saveBtn}
-          disabled={!name.trim()}
+          disabled={!name.trim() || submitting} // ✅ 제출 중이면 버튼 비활성화
           onClick={submit}
         >
-          저장하기
+          {submitting ? "저장 중..." : "저장하기"}
         </Button>
       </div>
     </div>
