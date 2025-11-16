@@ -3,7 +3,9 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useCallback, useState } from "react";
 import styles from "./style.module.css";
 import { HomeIcon, PlusIcon, UserIcon } from "@/assets/icons/icons";
-import { createEmptyPromise } from "@/services/promise.service";
+
+// 🚀 FastAPI용 서비스
+import { createMeeting } from "@/services/meeting.service";
 
 const DRAFT_PROMISE_ID_KEY = "GMG_LAST_DRAFT_PROMISE_ID";
 
@@ -13,21 +15,28 @@ export default function BottomNav() {
   const [creating, setCreating] = useState(false);
 
   const handleCreateClick = useCallback(async () => {
-    if (creating) return;
+    if (creating) return; // 중복 방지
 
-    // 1) 기존 작성 중 초안 ID가 있으면 그걸로 이동
+    // 1) 기존 작성 중인 초안이 있으면 그걸로 이동
     const savedDraftId = localStorage.getItem(DRAFT_PROMISE_ID_KEY);
     if (savedDraftId) {
       navigate(`/create/${savedDraftId}`);
       return;
     }
 
-    // 2) 없으면 서버/모크에서 "빈 ID" 하나 발급
+    // 2) 없다면 FastAPI에 새 미팅 생성 요청
     try {
       setCreating(true);
-      const draft = await createEmptyPromise(); // PromiseDetail 반환 가정
-      localStorage.setItem(DRAFT_PROMISE_ID_KEY, draft.id);
-      navigate(`/create/${draft.id}`);
+
+      // FastAPI: POST /api/meetings/
+      const meeting = await createMeeting("새 약속");
+      const meetingId = String(meeting.id);
+
+      // draft ID 저장
+      localStorage.setItem(DRAFT_PROMISE_ID_KEY, meetingId);
+
+      // 생성된 약속 편집 화면으로 이동
+      navigate(`/create/${meetingId}`);
     } catch (e: any) {
       console.error(e);
       alert(e?.message ?? "약속 생성 중 오류가 발생했습니다.");
@@ -50,7 +59,7 @@ export default function BottomNav() {
         <span>홈</span>
       </NavLink>
 
-      {/* ✅ NavLink 대신 버튼으로 변경 */}
+      {/* 생성 버튼 */}
       <button
         type="button"
         className={isCreateActive ? styles.itemActive : styles.item}
