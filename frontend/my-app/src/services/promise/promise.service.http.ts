@@ -2,22 +2,8 @@
 import { DRAFT_PROMISE_ID_KEY } from "@/assets/constants/storage";
 import { http } from "@/lib/http";
 import type { PromiseDetail } from "@/types/promise";
+import type { MeetingResponse } from "@/types/meeting";
 
-// 백엔드 Meeting 응답 형태 (Swagger 기준)
-type MeetingResponse = {
-  id: number;
-  name: string;
-  participants: Array<{
-    id: number;
-    name: string;
-    // 백엔드에 프로필 이미지 필드가 있으면 여기에 추가
-    avatar_url?: string | null;
-  }>;
-};
-
-/**
- * Meeting 1건을 PromiseDetail로 변환하는 헬퍼
- */
 function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
   const participants = meeting.participants.map((p) => ({
     id: String(p.id),
@@ -25,10 +11,10 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
     avatarUrl: p.avatar_url || `https://i.pravatar.cc/40?u=${p.id}`,
   }));
 
-  const now = new Date();
-  const scheduleISO = now.toISOString();
+  // 🔹 1) 일정: plan.meeting_time이 있으면 그걸 우선 사용
+  const scheduleISO = meeting.plan?.meeting_time ?? new Date().toISOString();
 
-  // dday 임시 계산 (오늘 기준)
+  // 🔹 2) D-day 계산 (scheduleISO 기준)
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const target = new Date(scheduleISO);
@@ -36,12 +22,34 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
   const diffMs = target.getTime() - today.getTime();
   const dday = Math.round(diffMs / (1000 * 60 * 60 * 24));
 
+  // 🔹 3) 장소: 우선 plan.address 사용, 없으면 places[0] 사용
+  const primaryPlace =
+    meeting.plan?.address && meeting.plan.address.trim()
+      ? {
+          name: meeting.plan.address,
+          address: meeting.plan.address,
+          lat: meeting.plan.latitude ?? undefined,
+          lng: meeting.plan.longitude ?? undefined,
+        }
+      : meeting.places && meeting.places.length > 0
+      ? {
+          name: meeting.places[0].name,
+          address: meeting.places[0].address,
+          lat: meeting.places[0].latitude,
+          lng: meeting.places[0].longitude,
+        }
+      : undefined;
+
   return {
     id: String(meeting.id),
     title: meeting.name,
     dday,
     participants,
     schedule: { dateISO: scheduleISO },
+
+    // ✅ 이제 PromiseDetail.place에 실제 장소가 들어간다
+    place: primaryPlace,
+
     course: {
       title: "임시 코스",
       summary: {
