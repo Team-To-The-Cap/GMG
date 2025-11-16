@@ -162,11 +162,11 @@ export default function AddParticipantOriginPage() {
             );
           })}
 
-          {!saved.length && (
+          {/* {!saved.length && (
             <li className="p-3.5 rounded-xl bg-white border text-sm text-slate-500">
               저장된 장소가 없어요.
             </li>
-          )}
+          )} */}
         </ul>
 
         <div className="h-4" />
