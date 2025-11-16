@@ -19,7 +19,12 @@ export function getTopBarConfig(pathname: string): TopBarConfig {
   }
 
   if (is("/create/:promiseId")) {
-    return { title: "새로운 약속 추가", showBack: false };
+    return { title: "약속 만들기", showBack: false };
+  }
+
+  // ✅ 약속 상세 화면
+  if (is("/details/:promiseId")) {
+    return { title: "약속 상세", showBack: true };
   }
 
   if (is("/create/:promiseId/participants/new") || is("/participants/new")) {

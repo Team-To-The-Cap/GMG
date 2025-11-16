@@ -1,12 +1,15 @@
-/* src/components/ui/card/style.module.css */
+/* src/components/ui/promise-card/style.module.css */
 .card {
-  position: relative; /* ✅ 카드 기준으로 아바타를 절대 배치 */
+  position: relative;
   background: var(--card, #fff);
   border-radius: 16px;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
   padding: 16px;
   min-height: 150px;
-  /* max-width: 400px; */
+
+  /* 세로 레이아웃: header → body → footer → participantList */
+  display: flex;
+  flex-direction: column;
 }
 
 /* hero 카드: 더 둥글고, 여백 넓고, 은은한 그라데이션 */
@@ -16,7 +19,7 @@
   background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
 }
 
-/* 헤더 레이아웃: 제목 위에 D-day가 오도록 세로 정렬 */
+/* 헤더 레이아웃: 제목 위에 D-day/일정 미정 배지가 오도록 세로 정렬 */
 .header {
   display: flex;
   flex-direction: column;
@@ -41,17 +44,17 @@
 
 /* 본문/푸터 */
 .body {
+  /* flex: 1; // 내용 많을 때만 늘리고 싶으면 주석 해제 */
 }
 .footer {
   margin-top: 12px;
 }
 
-/* D-day 배지 (pill) — 제목 위로 */
+/* D-day / 일정미정 배지 (pill) — 제목 위로 */
 .badge {
-  position: static; /* 흐름에 참여 */
-  order: -1; /* 제목보다 위 */
-  align-self: flex-start; /* 왼쪽 정렬 (필요시 flex-end/center) */
-  z-index: auto;
+  position: static;
+  order: -1;
+  align-self: flex-start;
 
   display: inline-flex;
   align-items: center;
@@ -61,7 +64,7 @@
   letter-spacing: 0.02em;
   line-height: 1;
   white-space: nowrap;
-  padding: 8px 20px; /* 기본 pill */
+  padding: 8px 20px;
   font-size: 16px;
 }
 
@@ -72,7 +75,8 @@
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
-/* 색 규칙: ≤1 red / ≤3 blue / 그 외 gray */
+/* 색 규칙: ≤1 red / ≤3 blue / 그 외 gray
+   + 일정 미정도 muted 색을 재사용 */
 .danger {
   background: #e74c3c;
   color: #fff;
@@ -86,42 +90,28 @@
   color: #fff;
 }
 
-/* ✅ 카드 우측 하단 아바타 고정 포지션 */
-.cardAvatar {
-  position: absolute;
-  right: 16px; /* .card padding과 맞춤 */
-  bottom: 16px;
-}
-
-.cardAvatar--hero {
-  right: 20px; /* .hero padding과 맞춤 */
-  bottom: 16px;
-}
-
 /* 아바타 공통 스타일 (Avatar 컴포넌트의 className과 매칭) */
 .avatar {
   border-radius: 50%;
-  border: 2px solid #fff; /* 카드와 분리감 */
+  border: 2px solid #fff;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
 }
 
-/* 참가자 리스트: 카드 우측 하단 고정 */
+/* 참가자 리스트: 카드 하단에 자연스럽게 붙게 */
 .participantList {
-  position: absolute;
+  margin-top: 12px;
   display: flex;
   align-items: center;
-  right: 16px;
-  bottom: 16px;
+  justify-content: flex-end;
 }
 
 .participantList--hero {
-  right: 20px;
-  bottom: 16px;
+  margin-top: 12px;
 }
 
 /* 각 아바타: 살짝 겹치게 배치 */
 .participantAvatar {
-  margin-left: -8px; /* 겹침 효과 */
+  margin-left: -8px;
 }
 .participantAvatar:first-child {
   margin-left: 0;
@@ -140,4 +130,15 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* 카드 전체 클릭 가능하게 */
+.clickable {
+  cursor: pointer;
+}
+
+.clickable:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
 }

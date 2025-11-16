@@ -1,3 +1,4 @@
+// src/services/promise.service.mock.ts
 import type { PromiseDetail } from "@/types/promise";
 
 export const MOCK_DB: Record<string, PromiseDetail> = {
@@ -28,7 +29,7 @@ export const MOCK_DB: Record<string, PromiseDetail> = {
           id: "v1",
           place: {
             name: "소공동 파스타 하우스",
-            category: "식당",
+            category: "restaurant",
             iconUrl: "/icons/food.png",
           },
           stayMinutes: 90,
@@ -43,7 +44,7 @@ export const MOCK_DB: Record<string, PromiseDetail> = {
           id: "v2",
           place: {
             name: "블루보틀 명동점",
-            category: "카페",
+            category: "cafe",
             iconUrl: "/icons/cafe.png",
           },
           stayMinutes: 60,
@@ -58,7 +59,7 @@ export const MOCK_DB: Record<string, PromiseDetail> = {
           id: "v3",
           place: {
             name: "텐바이텐 명동점",
-            category: "쇼핑",
+            category: "shop",
             iconUrl: "/icons/shop.png",
           },
           stayMinutes: 45,
@@ -69,7 +70,6 @@ export const MOCK_DB: Record<string, PromiseDetail> = {
     },
   },
 
-  // 과거 일정 (D+2 같은 케이스 UI용)
   "demo-2": {
     id: "demo-2",
     title: "지난 주 모임 회고",
@@ -94,7 +94,7 @@ export const MOCK_DB: Record<string, PromiseDetail> = {
           id: "v1",
           place: {
             name: "소공동 파스타 하우스",
-            category: "식당",
+            category: "restaurant",
             iconUrl: "/icons/food.png",
           },
           stayMinutes: 90,
@@ -109,7 +109,7 @@ export const MOCK_DB: Record<string, PromiseDetail> = {
           id: "v2",
           place: {
             name: "블루보틀 명동점",
-            category: "카페",
+            category: "cafe",
             iconUrl: "/icons/cafe.png",
           },
           stayMinutes: 60,
@@ -124,7 +124,7 @@ export const MOCK_DB: Record<string, PromiseDetail> = {
           id: "v3",
           place: {
             name: "텐바이텐 명동점",
-            category: "쇼핑",
+            category: "shop",
             iconUrl: "/icons/shop.png",
           },
           stayMinutes: 45,
@@ -135,7 +135,6 @@ export const MOCK_DB: Record<string, PromiseDetail> = {
     },
   },
 
-  // 오늘 일정 (D-Day)
   "demo-3": {
     id: "demo-3",
     title: "오늘의 보드게임 번개",
@@ -161,7 +160,7 @@ export const MOCK_DB: Record<string, PromiseDetail> = {
           id: "v1",
           place: {
             name: "소공동 파스타 하우스",
-            category: "식당",
+            category: "restaurant",
             iconUrl: "/icons/food.png",
           },
           stayMinutes: 90,
@@ -176,7 +175,7 @@ export const MOCK_DB: Record<string, PromiseDetail> = {
           id: "v2",
           place: {
             name: "블루보틀 명동점",
-            category: "카페",
+            category: "cafe",
             iconUrl: "/icons/cafe.png",
           },
           stayMinutes: 60,
@@ -191,7 +190,7 @@ export const MOCK_DB: Record<string, PromiseDetail> = {
           id: "v3",
           place: {
             name: "텐바이텐 명동점",
-            category: "쇼핑",
+            category: "shop",
             iconUrl: "/icons/shop.png",
           },
           stayMinutes: 45,
@@ -202,7 +201,6 @@ export const MOCK_DB: Record<string, PromiseDetail> = {
     },
   },
 
-  // 미래 일정 (일주일 후) + 긴 제목 + 참가자 많음
   "demo-4": {
     id: "demo-4",
     title: "연말 정산 및 송년회 장소 사전 답사 모임",
@@ -236,7 +234,7 @@ export const MOCK_DB: Record<string, PromiseDetail> = {
           id: "v1",
           place: {
             name: "소공동 파스타 하우스",
-            category: "식당",
+            category: "restaurant",
             iconUrl: "/icons/food.png",
           },
           stayMinutes: 90,
@@ -251,7 +249,7 @@ export const MOCK_DB: Record<string, PromiseDetail> = {
           id: "v2",
           place: {
             name: "블루보틀 명동점",
-            category: "카페",
+            category: "cafe",
             iconUrl: "/icons/cafe.png",
           },
           stayMinutes: 60,
@@ -266,7 +264,7 @@ export const MOCK_DB: Record<string, PromiseDetail> = {
           id: "v3",
           place: {
             name: "텐바이텐 명동점",
-            category: "쇼핑",
+            category: "shop",
             iconUrl: "/icons/shop.png",
           },
           stayMinutes: 45,
@@ -277,7 +275,6 @@ export const MOCK_DB: Record<string, PromiseDetail> = {
     },
   },
 
-  // dday를 계산 로직으로 보정하고 싶다면: 아래처럼 타입 단언으로 의도적으로 비워둘 수도 있음
   "demo-5": {
     id: "demo-5",
     title: "주말 등산 모임",
@@ -303,7 +300,7 @@ export const MOCK_DB: Record<string, PromiseDetail> = {
           id: "v1",
           place: {
             name: "소공동 파스타 하우스",
-            category: "식당",
+            category: "restaurant",
             iconUrl: "/icons/food.png",
           },
           stayMinutes: 90,
@@ -318,7 +315,7 @@ export const MOCK_DB: Record<string, PromiseDetail> = {
           id: "v2",
           place: {
             name: "블루보틀 명동점",
-            category: "카페",
+            category: "cafe",
             iconUrl: "/icons/cafe.png",
           },
           stayMinutes: 60,
@@ -333,7 +330,7 @@ export const MOCK_DB: Record<string, PromiseDetail> = {
           id: "v3",
           place: {
             name: "텐바이텐 명동점",
-            category: "쇼핑",
+            category: "shop",
             iconUrl: "/icons/shop.png",
           },
           stayMinutes: 45,
@@ -344,6 +341,7 @@ export const MOCK_DB: Record<string, PromiseDetail> = {
     },
   },
 };
+
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // dday가 없을 때만 schedule.dateISO 기준으로 보정
@@ -375,4 +373,61 @@ export async function getPromiseDetail(
   const item = MOCK_DB[promiseId];
   if (!item) throw new Error("Mock 데이터에 해당 약속이 없습니다.");
   return item;
+}
+
+/**
+ * ✅ 약속 저장 (Mock 버전)
+ * - 실제로는 메모리 상의 MOCK_DB를 업데이트
+ */
+export async function savePromiseDetail(
+  detail: PromiseDetail
+): Promise<PromiseDetail> {
+  await delay(200);
+  MOCK_DB[detail.id] = {
+    ...detail,
+  };
+  return MOCK_DB[detail.id];
+}
+
+/**
+ * ✅ Test mode용: 메모리 MOCK_DB에 빈 약속 추가하고 ID 반환
+ * - 여기서는 클라이언트에서 id 직접 생성
+ */
+export async function createEmptyPromise(): Promise<PromiseDetail> {
+  await delay(200);
+
+  const id = `mock-${Date.now()}`;
+  const now = new Date().toISOString();
+
+  const detail: PromiseDetail = {
+    id,
+    title: "",
+    // 새로 만든 약속은 일정 미정이니까 dday는 의미 없는 값으로 둔다
+    dday: undefined as unknown as number,
+    participants: [],
+    // 일정 미정
+    schedule: { dateISO: "" },
+    course: {
+      title: "추천 코스",
+      summary: {
+        totalMinutes: 0,
+        activityMinutes: 0,
+        travelMinutes: 0,
+      },
+      items: [],
+      generatedAtISO: now,
+      source: "mock-empty",
+    },
+  };
+
+  MOCK_DB[id] = detail;
+  return detail;
+}
+
+/**
+ * 🔹 약속 삭제 (Mock 버전)
+ */
+export async function deletePromise(promiseId: string): Promise<void> {
+  await delay(100);
+  delete MOCK_DB[promiseId];
 }

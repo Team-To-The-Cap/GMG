@@ -1,17 +1,27 @@
 // src/pages/home/index.view.tsx
+import { useNavigate } from "react-router-dom";
 import PromiseCard from "@/components/ui/promise-card";
+import SwipeableCard from "@/components/ui/swipeable-card";
 import styles from "./style.module.css";
 import type { PromiseDetail } from "@/types/promise";
-import TopBar from "@/components/ui/top-bar";
 
 type Props = {
   loading: boolean;
   error?: string;
-  items: PromiseDetail[]; // ← 여기!
+  items: PromiseDetail[];
   onRetry: () => void;
+  onDelete: (id: string) => void;
 };
 
-export default function HomeView({ loading, error, items, onRetry }: Props) {
+export default function HomeView({
+  loading,
+  error,
+  items,
+  onRetry,
+  onDelete,
+}: Props) {
+  const navigate = useNavigate();
+
   if (loading) return <div className={styles.state}>불러오는 중…</div>;
   if (error)
     return (
@@ -29,13 +39,20 @@ export default function HomeView({ loading, error, items, onRetry }: Props) {
     <div className={styles.wrap}>
       <div className={styles.list}>
         {items.map((item) => (
-          <PromiseCard
+          <SwipeableCard
             key={item.id}
-            title={item.title}
-            dday={item.dday}
-            participants={item.participants}
-            className={styles.card}
-          />
+            onCardClick={() => navigate(`/details/${item.id}`)}
+            onDeleteRequest={() => onDelete(item.id)}
+          >
+            <PromiseCard
+              title={item.title}
+              dday={item.dday}
+              participants={item.participants}
+              className={styles.card}
+              // ✅ 일정이 없으면 일정 미정으로 표시
+              unscheduled={!item.schedule?.dateISO}
+            />
+          </SwipeableCard>
         ))}
       </div>
     </div>

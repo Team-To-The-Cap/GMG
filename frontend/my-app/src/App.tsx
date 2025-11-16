@@ -4,6 +4,7 @@ import { useMemo } from "react";
 
 import Home from "@/pages/home";
 import CreatePromiseMain from "@/pages/create-promise-main";
+import PromiseDetailPage from "@/pages/promise-detail";
 import MyPage from "@/pages/my-page";
 import { Time as Time1 } from "@/pages/promise-time/Time";
 import { TimeResult } from "@/pages/promise-time/TimeResult";
@@ -33,8 +34,10 @@ export default function App() {
       {/* 🔹 여기서 Routes를 컨테이너로 감쌈 */}
       <main className="pageContainer">
         <Routes>
+          {/* 홈 */}
           <Route path="/" element={<Home />} />
 
+          {/* TEST_MODE에서만 /create → /create/:id 로 보정 */}
           {RUNTIME.TEST_MODE && (
             <Route
               path="/create"
@@ -44,8 +47,13 @@ export default function App() {
             />
           )}
 
+          {/* 약속 생성/편집 메인 */}
           <Route path="/create/:promiseId" element={<CreatePromiseMain />} />
 
+          {/* ✅ 약속 상세 페이지 (/details/:promiseId) */}
+          <Route path="/details/:promiseId" element={<PromiseDetailPage />} />
+
+          {/* 참가자 추가 시작 */}
           <Route
             path="/create/:promiseId/participants/new"
             element={<AddParticipantStartPage />}
@@ -55,6 +63,7 @@ export default function App() {
             element={<AddParticipantStartPage />}
           />
 
+          {/* 출발 장소 선택 */}
           <Route
             path="/create/:promiseId/participants/new/origin"
             element={<AddParticipantOriginPage />}
@@ -99,6 +108,7 @@ export default function App() {
         <Route path="/create/:promiseId/promise-time" element={<Time1 />} />
         <Route path="/time/timeresult" element={<TimeResult />} />
 
+          {/* 404 → 홈으로 리다이렉트 */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

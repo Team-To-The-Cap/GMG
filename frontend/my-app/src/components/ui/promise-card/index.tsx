@@ -1,8 +1,8 @@
 // src/components/ui/promise-card/index.tsx
 import type { ReactNode } from "react";
 import styles from "./style.module.css";
-import Avatar from "../avatar"; // 경로는 실제 구조에 맞게
-import type { Participant as PromiseParticipant } from "@/types/promise"; // ✅ 기존 타입 사용
+import Avatar from "../avatar";
+import type { Participant as PromiseParticipant } from "@/types/promise";
 
 type CardProps = {
   className?: string;
@@ -10,19 +10,24 @@ type CardProps = {
   title?: string;
   dday?: number;
   footer?: ReactNode;
-  participants?: PromiseParticipant[]; // ✅ avatarUrl이 있는 타입
+  participants?: PromiseParticipant[];
   variant?: "default" | "hero";
+  onClick?: () => void;
+  /** ✅ 일정 미정 여부: true면 D-Day 대신 "일정 미정" 표시 */
+  unscheduled?: boolean;
 };
 
 function cx(...xs: Array<string | false | undefined>) {
   return xs.filter(Boolean).join(" ");
 }
+
 function formatDday(n: number) {
   if (n === 0) return "D-Day";
   if (n > 0) return `D-${n}`;
   return `D+${Math.abs(n)}`;
 }
 function ddayTone(n: number): "danger" | "primary" | "muted" {
+  if (n < 0) return "muted";
   if (n <= 1) return "danger";
   if (n <= 3) return "primary";
   return "muted";
@@ -34,15 +39,43 @@ export default function PromiseCard({
   title,
   dday,
   footer,
-  participants = [], // ✅ 기본값
+  participants = [],
   variant = "default",
+  onClick,
+  unscheduled,
 }: CardProps) {
-  const hasHeader = title || dday !== undefined;
+  const clickable = !!onClick;
+
+  // ✅ 헤더를 보여줄지 여부: 제목 or D-Day or 일정 미정 배지
+  const hasHeader = !!title || dday !== undefined || unscheduled;
+
   const visibleAvatars = participants.slice(0, 3);
   const hiddenCount = participants.length - visibleAvatars.length;
 
+  // ✅ 배지 텍스트 / 톤 결정
+  let badgeText: string | undefined;
+  let badgeTone: "danger" | "primary" | "muted" | undefined;
+
+  if (unscheduled) {
+    badgeText = "일정 미정";
+    badgeTone = "muted";
+  } else if (dday !== undefined) {
+    badgeText = formatDday(dday);
+    badgeTone = ddayTone(dday);
+  }
+
   return (
-    <section className={cx(styles.card, styles[variant], className)}>
+    <section
+      className={cx(
+        styles.card,
+        styles[variant],
+        clickable && styles.clickable,
+        className
+      )}
+      onClick={onClick}
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+    >
       {hasHeader && (
         <header className={cx(styles.header, styles[`header--${variant}`])}>
           {title && (
@@ -50,24 +83,25 @@ export default function PromiseCard({
               {title}
             </h3>
           )}
-          {dday !== undefined && (
+
+          {badgeText && (
             <span
               className={cx(
                 styles.badge,
                 styles[`badge--${variant}`],
-                styles[ddayTone(dday)]
+                badgeTone ? styles[badgeTone] : undefined // ✅ 여기 수정
               )}
             >
-              {formatDday(dday)}
+              {badgeText}
             </span>
           )}
         </header>
       )}
 
       <div className={styles.body}>{children}</div>
+
       {footer && <footer className={styles.footer}>{footer}</footer>}
 
-      {/* 참가자 아바타 */}
       <div
         className={cx(
           styles.participantList,
@@ -76,7 +110,6 @@ export default function PromiseCard({
       >
         {visibleAvatars.map((p) => (
           <div key={p.id} className={styles.participantAvatar}>
-            {/* ✅ avatarUrl을 그대로 전달 */}
             <Avatar alt={p.name} src={p.avatarUrl} size={28} />
           </div>
         ))}

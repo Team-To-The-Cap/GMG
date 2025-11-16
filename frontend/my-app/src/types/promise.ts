@@ -1,3 +1,4 @@
+// src/types/promise.ts
 export type Participant = {
   id: string;
   name: string;
