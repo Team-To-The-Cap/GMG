@@ -89,9 +89,9 @@ export default function CreatePromiseMain() {
   const onAddParticipant = useCallback(() => {
     if (!promiseId) return; // 혹시 모를 가드
 
-    navigate(`/details/${promiseId}/participants/new`, {
+    navigate(`/create/${promiseId}/participants/new`, {
       state: {
-        from: "details", // 👈 어디서 왔는지 표시
+        from: "create", // 👈 어디서 왔는지 표시
       },
     });
   }, [promiseId, navigate]);

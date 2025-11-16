@@ -50,7 +50,7 @@ export default function App() {
           )}
 
           {/* 약속 생성/편집 메인 */}
-          <Route path="/details/:promiseId" element={<CreatePromiseMain />} />
+          <Route path="/create/:promiseId" element={<CreatePromiseMain />} />
 
           {/* 약속 상세 */}
           <Route path="/details/:promiseId" element={<PromiseDetailPage />} />
@@ -58,6 +58,10 @@ export default function App() {
           {/* 참가자 추가 시작 */}
           <Route
             path="/details/:promiseId/participants/new"
+            element={<AddParticipantStartPage />}
+          />
+          <Route
+            path="/create/:promiseId/participants/new"
             element={<AddParticipantStartPage />}
           />
           <Route

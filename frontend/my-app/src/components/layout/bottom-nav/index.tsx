@@ -20,13 +20,13 @@ export default function BottomNav() {
 
       const savedDraftId = localStorage.getItem(DRAFT_PROMISE_ID_KEY);
       if (savedDraftId) {
-        navigate(`/details/${savedDraftId}`);
+        navigate(`/create/${savedDraftId}`);
         return;
       }
 
       const draft = await createEmptyPromise();
       localStorage.setItem(DRAFT_PROMISE_ID_KEY, draft.id);
-      navigate(`/details/${draft.id}`);
+      navigate(`/create/${draft.id}`);
     } finally {
       setCreating(false);
     }
@@ -34,7 +34,7 @@ export default function BottomNav() {
 
   const isCreateActive = location.pathname.startsWith("/create");
 
-  // 🔹 Home 활성 조건: "/" 또는 "/details/..." 일 때
+  // 🔹 Home 활성 조건: "/" 또는 "/create/..." 일 때
   const isHomeLikePath =
     location.pathname === "/" || location.pathname.startsWith("/details/");
 

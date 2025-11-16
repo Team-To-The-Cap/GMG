@@ -18,7 +18,7 @@ export function getTopBarConfig(pathname: string): TopBarConfig {
     return { title: "마이페이지", showBack: false };
   }
 
-  if (is("/details/:promiseId")) {
+  if (is("/create/:promiseId")) {
     return { title: "약속 만들기", showBack: false };
   }
 

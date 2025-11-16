@@ -92,8 +92,6 @@ export default function AddParticipantStartPage() {
   const submit = async () => {
     if (!promiseId) return alert("약속 ID가 없습니다.");
     if (!name.trim()) return alert("이름을 입력하세요.");
-
-    // ✅ 이미 제출 중이면 더 이상 진행하지 않음
     if (submitting) return;
 
     const payload: any = {
@@ -110,7 +108,7 @@ export default function AddParticipantStartPage() {
     const numericId = promiseId.replace(/\D/g, "");
 
     try {
-      setSubmitting(true); // 🔹 제출 시작
+      setSubmitting(true);
 
       const res = await fetch(
         `http://223.130.152.114:8001/meetings/${numericId}/participants/`,
@@ -130,12 +128,21 @@ export default function AddParticipantStartPage() {
       }
 
       alert("참석자 정보가 성공적으로 저장되었습니다!");
-      navigate(`/details/${promiseId}`);
+
+      // -----------------------------
+      // 🔥 현재 경로에서 create/details 뽑아내기
+      // -----------------------------
+      const segments = location.pathname.split("/");
+      // ['', 'details', '76', 'participants', 'new']
+      const mode = segments[1]; // 'details' 또는 'create'
+      const id = segments[2]; // '76'
+
+      navigate(`/${mode}/${id}`, { replace: true });
     } catch (error) {
       console.error(error);
       alert("참석자 저장 중 오류가 발생했습니다.");
     } finally {
-      setSubmitting(false); // 🔹 성공/실패 상관없이 다시 풀어줌
+      setSubmitting(false);
     }
   };
 
