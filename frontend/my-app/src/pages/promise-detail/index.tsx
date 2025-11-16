@@ -47,8 +47,8 @@ export default function PromiseDetailPage() {
   }, []);
 
   const onEditSchedule = useCallback(() => {
-    navigate("/time/timeresult");
-  }, [navigate]);
+    navigate(`/time/timeresult/${promiseId}`);
+  }, [promiseId, navigate]);
 
   const onEditPlace = useCallback(() => {
     alert("장소 수정 기능 준비 중!");
