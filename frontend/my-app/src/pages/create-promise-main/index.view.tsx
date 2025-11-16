@@ -22,7 +22,6 @@ type Props = {
   loading: boolean;
   error?: string;
   data?: PromiseDetail;
-  onEditParticipants?: () => void;
   onEditSchedule?: () => void;
   onEditPlace?: () => void;
   onEditCourse?: () => void;

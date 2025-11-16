@@ -44,17 +44,13 @@ export default function PromiseDetailPage() {
     };
   }, [promiseId, navigate]);
 
-  const onEditParticipants = useCallback(() => {
-    alert("참여자 수정 기능 준비 중!");
-  }, []);
-
   const onEditSchedule = useCallback(() => {
     navigate("/time/timeresult");
   }, [navigate]);
 
   const onEditPlace = useCallback(() => {
-    alert("장소 수정 기능 준비 중!");
-  }, []);
+    navigate(`/create/${promiseId}/place-calculation`);
+  }, [promiseId, navigate]);
 
   const onEditCourse = useCallback(() => {
     alert("코스 수정 기능 준비 중!");
@@ -150,7 +146,6 @@ export default function PromiseDetailPage() {
       loading={loading}
       error={error}
       data={data}
-      onEditParticipants={onEditParticipants}
       onEditSchedule={onEditSchedule}
       onEditPlace={onEditPlace}
       onEditCourse={onEditCourse}

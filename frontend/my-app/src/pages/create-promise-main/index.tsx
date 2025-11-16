@@ -73,10 +73,6 @@ export default function CreatePromiseMain() {
     [isDraft]
   );
 
-  const onEditParticipants = useCallback(() => {
-    alert("참여자 수정 기능 준비 중!");
-  }, [promiseId]);
-
   const onEditSchedule = useCallback(() => {
     navigate("/time/timeresult");
   }, [promiseId, navigate]);
@@ -210,7 +206,6 @@ export default function CreatePromiseMain() {
       loading={loading}
       error={error}
       data={data}
-      onEditParticipants={onEditParticipants}
       onEditSchedule={onEditSchedule}
       onEditPlace={onEditPlace}
       onEditCourse={onEditCourse}
