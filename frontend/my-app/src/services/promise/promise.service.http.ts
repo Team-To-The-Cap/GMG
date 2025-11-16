@@ -1,4 +1,5 @@
 // src/services/promise.service.http.ts
+import { DRAFT_PROMISE_ID_KEY } from "@/assets/constants/storage";
 import { http } from "@/lib/http";
 import type { PromiseDetail } from "@/types/promise";
 
@@ -126,17 +127,27 @@ export async function createEmptyPromise(): Promise<PromiseDetail> {
 }
 
 /**
- * 🔹 약속 삭제 (HTTP 버전)
+ * 🔹 약속 삭제
  * - FastAPI: DELETE /meetings/{meeting_id}
  * - 성공 시 204 No Content
  */
 export async function deletePromise(promiseId: string): Promise<void> {
   const meetingId = Number(promiseId);
+
   if (Number.isNaN(meetingId)) {
     throw new Error(`잘못된 meeting id: ${promiseId}`);
   }
 
+  // 실제 삭제 요청
   await http.request<void>(`/meetings/${meetingId}`, {
     method: "DELETE",
   });
+
+  // 🔥 삭제된 meeting ID가 draft로 저장된 ID라면 제거
+  const storedDraftId = localStorage.getItem(DRAFT_PROMISE_ID_KEY);
+
+  if (storedDraftId && storedDraftId === String(meetingId)) {
+    console.log("[deletePromise] Draft ID 제거됨:", storedDraftId);
+    localStorage.removeItem(DRAFT_PROMISE_ID_KEY);
+  }
 }

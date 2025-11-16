@@ -30,7 +30,6 @@ export default function CreatePromiseMain() {
 
   useEffect(() => {
     if (!promiseId) {
-      // 기존 fallback 유지
       navigate(`/create/${DEFAULT_PROMISE_ID}`, { replace: true });
       return;
     }
@@ -42,40 +41,10 @@ export default function CreatePromiseMain() {
         setLoading(true);
         setError(undefined);
 
-        // 1️⃣ 새 약속 생성 모드: /create/new
-        if (promiseId === "new") {
-          const draft = await createEmptyPromise();
-          if (!alive) return;
-
-          // draft id 기억
-          localStorage.setItem(DRAFT_PROMISE_ID_KEY, draft.id);
-
-          // URL을 새 id로 교체
-          navigate(`/create/${draft.id}`, { replace: true });
-
-          setData(draft);
-          return;
-        }
-
-        // 2️⃣ 기존 약속 조회 모드
+        // ✅ 이제 여기서 promiseId === "new" 분기 제거
         const res = await getPromiseDetail(promiseId);
         if (alive) setData(res);
       } catch (e: any) {
-        // mock-로 시작하는데 DB에 없으면, 새 초안으로 갈아타기
-        if (promiseId.startsWith("mock-")) {
-          try {
-            const draft = await createEmptyPromise();
-            if (!alive) return;
-
-            localStorage.setItem(DRAFT_PROMISE_ID_KEY, draft.id);
-            navigate(`/create/${draft.id}`, { replace: true });
-            setData(draft);
-            return;
-          } catch (inner) {
-            console.error(inner);
-          }
-        }
-
         if (alive) setError(e?.message ?? "알 수 없는 오류");
       } finally {
         if (alive) setLoading(false);

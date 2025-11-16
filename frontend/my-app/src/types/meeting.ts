@@ -1,4 +1,4 @@
-// src/services/meeting/meeting.types.ts
+// src/types/meeting.ts
 export type Meeting = {
   id: number | string;
   name: string;
