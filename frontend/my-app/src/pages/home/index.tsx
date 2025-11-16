@@ -1,7 +1,10 @@
 // src/pages/home/index.tsx
 import { useEffect, useState, useCallback } from "react";
 import HomeView from "./index.view";
-import { getPromiseList } from "@/services/promise/promise.service";
+import {
+  getPromiseList,
+  deletePromise,
+} from "@/services/promise/promise.service";
 import type { PromiseDetail } from "@/types/promise";
 import { sortPromisesByDday } from "@/utils/sortPromisesByDday"; // ✅ 추가
 
@@ -55,20 +58,21 @@ export default function Home() {
     fetchList();
   }, [fetchList]);
 
-  // ✅ 약속 삭제 핸들러
-  const handleDelete = useCallback(
-    async (id: string) => {
-      const ok = window.confirm("삭제하실까요?");
-      if (!ok) return;
+  const handleDelete = useCallback(async (id: string) => {
+    const ok = window.confirm("삭제하실까요?");
+    if (!ok) return;
 
-      // TODO: 여기서 서버 삭제 API 호출하면 됨.
-      // 예: await deletePromise(id);
+    try {
+      // 1) 서버에서 삭제
+      await deletePromise(id);
 
-      // 일단 UI 상에서만 제거
+      // 2) UI에서 목록 업데이트
       setItems((prev) => prev.filter((item) => item.id !== id));
-    },
-    [setItems]
-  );
+    } catch (e: any) {
+      console.error(e);
+      alert(e?.message ?? "삭제 중 오류가 발생했습니다.");
+    }
+  }, []);
 
   return (
     <HomeView

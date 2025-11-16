@@ -31,3 +31,10 @@ export async function createEmptyPromise(): Promise<PromiseDetail> {
     ? mockImpl.createEmptyPromise()
     : httpImpl.createEmptyPromise();
 }
+
+/** 🔹 약속 삭제 */
+export async function deletePromise(promiseId: string): Promise<void> {
+  return useMock
+    ? mockImpl.deletePromise(promiseId)
+    : httpImpl.deletePromise(promiseId);
+}

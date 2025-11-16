@@ -423,3 +423,11 @@ export async function createEmptyPromise(): Promise<PromiseDetail> {
   MOCK_DB[id] = detail;
   return detail;
 }
+
+/**
+ * 🔹 약속 삭제 (Mock 버전)
+ */
+export async function deletePromise(promiseId: string): Promise<void> {
+  await delay(100);
+  delete MOCK_DB[promiseId];
+}

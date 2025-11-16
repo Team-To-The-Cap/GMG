@@ -26,9 +26,20 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(`HTTP ${res.status} ${res.statusText} ${msg}`);
   }
 
-  // JSON 응답이 아닐 수도 있으므로 try-catch
+  // 204 No Content 는 바로 undefined 반환
+  if (res.status === 204) {
+    return undefined as T;
+  }
+
+  // 그 외에는 text()로 읽어 보고, 비어 있으면 undefined 반환
+  const text = await res.text().catch(() => "");
+  if (!text) {
+    return undefined as T;
+  }
+
+  // JSON 응답 파싱
   try {
-    return (await res.json()) as T;
+    return JSON.parse(text) as T;
   } catch {
     throw new Error(`Invalid JSON response from ${url}`);
   }
