@@ -1,0 +1,17 @@
+.badge {
+  display: inline-block;
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+}
+.danger {
+  background: var(--danger, #ef4444);
+}
+.primary {
+  background: var(--primary, #007aff);
+}
+.muted {
+  background: #94a3b8;
+}

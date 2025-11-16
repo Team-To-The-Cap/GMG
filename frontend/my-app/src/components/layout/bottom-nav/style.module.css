@@ -1,0 +1,43 @@
+.nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 64px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  align-items: center;
+  background: #ffffff;
+  border-top: 1px solid #e5e7eb;
+  padding-bottom: env(safe-area-inset-bottom); /* iOS 홈바 대응 */
+  z-index: 50;
+}
+
+.item,
+.itemActive {
+  height: 100%;
+  display: flex;
+  gap: 6px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280; /* gray-500 */
+  text-decoration: none;
+  font-size: 12px;
+}
+
+.item svg,
+.itemActive svg {
+  display: block;
+}
+
+.itemActive {
+  color: #007aff; /* active color */
+  font-weight: 600;
+}
+
+.item:disabled,
+.itemActive:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

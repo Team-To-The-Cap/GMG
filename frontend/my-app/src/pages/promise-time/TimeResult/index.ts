@@ -1,0 +1,1 @@
+export { TimeResult } from "./TimeResult";
