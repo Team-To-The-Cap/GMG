@@ -159,3 +159,22 @@ export async function deletePromise(promiseId: string): Promise<void> {
     localStorage.removeItem(DRAFT_PROMISE_ID_KEY);
   }
 }
+
+// 🔹 참여자 삭제 (HTTP 버전)
+export async function deleteParticipant(
+  meetingId: string | number,
+  participantId: string | number
+): Promise<void> {
+  const mid = Number(meetingId);
+  const pid = Number(participantId);
+
+  if (Number.isNaN(mid) || Number.isNaN(pid)) {
+    throw new Error(
+      `잘못된 id (meeting: ${meetingId}, participant: ${participantId})`
+    );
+  }
+
+  await http.request<void>(`/meetings/${mid}/participants/${pid}`, {
+    method: "DELETE",
+  });
+}

@@ -5,6 +5,7 @@ import CreatePromiseMainView from "./index.view";
 import {
   getPromiseDetail,
   savePromiseDetail,
+  deleteParticipant,
 } from "@/services/promise/promise.service";
 import type { PromiseDetail } from "@/types/promise";
 import { DEFAULT_PROMISE_ID } from "@/config/runtime";
@@ -75,15 +76,37 @@ export default function PromiseDetailPage() {
     // TODO: API PATCH (부분 저장 필요하면 여기에)
   }, []);
 
-  // 참여자 삭제(낙관적 업데이트 예시)
-  const onRemoveParticipant = useCallback((id: string) => {
-    setData((prev) => {
-      if (!prev) return prev;
-      const next = (prev.participants ?? []).filter((p) => p.id !== id);
-      return { ...prev, participants: next };
-    });
-    // TODO: API DELETE (부분 저장 필요하면 여기에)
-  }, []);
+  // 참여자 삭제(낙관적 업데이트 + 서버 연동)
+  const onRemoveParticipant = useCallback(
+    async (id: string) => {
+      // 1) 먼저 화면에서 제거 (낙관적 업데이트)
+      setData((prev) => {
+        if (!prev) return prev;
+        const next = (prev.participants ?? []).filter((p) => p.id !== id);
+        return { ...prev, participants: next };
+      });
+
+      // meeting id 없으면 여기까지만
+      if (!promiseId) return;
+
+      try {
+        // 2) 서버에 실제 삭제 요청
+        await deleteParticipant(promiseId, id);
+      } catch (e: any) {
+        console.error(e);
+        alert(e?.message ?? "참여자 삭제 중 오류가 발생했습니다.");
+
+        // 3) 실패 시 상태를 서버와 다시 맞춰주고 싶으면 재조회
+        try {
+          const fresh = await getPromiseDetail(promiseId);
+          setData(fresh);
+        } catch (err) {
+          console.error("삭제 실패 후 재조회도 실패:", err);
+        }
+      }
+    },
+    [promiseId]
+  );
 
   // ✅ 계산 버튼 액션
   const onCalculate = useCallback(() => {

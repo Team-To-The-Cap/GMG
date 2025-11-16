@@ -38,3 +38,13 @@ export async function deletePromise(promiseId: string): Promise<void> {
     ? mockImpl.deletePromise(promiseId)
     : httpImpl.deletePromise(promiseId);
 }
+
+/** 🔹 참여자 삭제 */
+export async function deleteParticipant(
+  promiseId: string,
+  participantId: string
+): Promise<void> {
+  return useMock
+    ? mockImpl.deleteParticipant(promiseId, participantId)
+    : httpImpl.deleteParticipant(promiseId, participantId);
+}

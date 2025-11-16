@@ -431,3 +431,19 @@ export async function deletePromise(promiseId: string): Promise<void> {
   await delay(100);
   delete MOCK_DB[promiseId];
 }
+
+/**
+ * 🔹 참여자 삭제 (Mock 버전)
+ */
+export async function deleteParticipant(
+  promiseId: string,
+  participantId: string
+): Promise<void> {
+  await delay(100);
+  const item = MOCK_DB[promiseId];
+  if (!item) return;
+
+  item.participants = (item.participants ?? []).filter(
+    (p) => p.id !== participantId
+  );
+}
