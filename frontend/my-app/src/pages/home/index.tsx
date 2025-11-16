@@ -1,7 +1,7 @@
 // src/pages/home/index.tsx
 import { useEffect, useState, useCallback } from "react";
 import HomeView from "./index.view";
-import { getPromiseList } from "@/services/promise.service";
+import { getPromiseList } from "@/services/promise/promise.service";
 import type { PromiseDetail } from "@/types/promise";
 import { sortPromisesByDday } from "@/utils/sortPromisesByDday"; // ✅ 추가
 

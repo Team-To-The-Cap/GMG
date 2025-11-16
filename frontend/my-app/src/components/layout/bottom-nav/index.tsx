@@ -5,7 +5,7 @@ import styles from "./style.module.css";
 import { HomeIcon, PlusIcon, UserIcon } from "@/assets/icons/icons";
 
 // 🚀 FastAPI용 서비스
-import { createMeeting } from "@/services/meeting.service";
+import { createMeeting } from "@/services/meeting/meeting.service"; // ✅ 경로 수정!
 
 const DRAFT_PROMISE_ID_KEY = "GMG_LAST_DRAFT_PROMISE_ID";
 
@@ -15,27 +15,22 @@ export default function BottomNav() {
   const [creating, setCreating] = useState(false);
 
   const handleCreateClick = useCallback(async () => {
-    if (creating) return; // 중복 방지
+    if (creating) return;
 
-    // 1) 기존 작성 중인 초안이 있으면 그걸로 이동
     const savedDraftId = localStorage.getItem(DRAFT_PROMISE_ID_KEY);
     if (savedDraftId) {
       navigate(`/create/${savedDraftId}`);
       return;
     }
 
-    // 2) 없다면 FastAPI에 새 미팅 생성 요청
     try {
       setCreating(true);
 
-      // FastAPI: POST /api/meetings/
       const meeting = await createMeeting("새 약속");
       const meetingId = String(meeting.id);
 
-      // draft ID 저장
       localStorage.setItem(DRAFT_PROMISE_ID_KEY, meetingId);
 
-      // 생성된 약속 편집 화면으로 이동
       navigate(`/create/${meetingId}`);
     } catch (e: any) {
       console.error(e);
@@ -59,7 +54,6 @@ export default function BottomNav() {
         <span>홈</span>
       </NavLink>
 
-      {/* 생성 버튼 */}
       <button
         type="button"
         className={isCreateActive ? styles.itemActive : styles.item}

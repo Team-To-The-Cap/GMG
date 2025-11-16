@@ -5,7 +5,7 @@ import CreatePromiseMainView from "./index.view";
 import {
   getPromiseDetail,
   savePromiseDetail,
-} from "@/services/promise.service";
+} from "@/services/promise/promise.service";
 import type { PromiseDetail } from "@/types/promise";
 import { DEFAULT_PROMISE_ID } from "@/config/runtime";
 

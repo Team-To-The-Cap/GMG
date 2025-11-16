@@ -6,7 +6,7 @@ import {
   getPromiseDetail,
   savePromiseDetail,
   createEmptyPromise, // ⬅️ 추가
-} from "@/services/promise.service";
+} from "@/services/promise/promise.service";
 import type { PromiseDetail } from "@/types/promise";
 import { DEFAULT_PROMISE_ID } from "@/config/runtime";
 
