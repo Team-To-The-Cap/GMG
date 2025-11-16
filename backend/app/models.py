@@ -9,11 +9,11 @@ from sqlalchemy.orm import relationship
 class Meeting(Base):
     __tablename__ = "meetings"
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(VARCHAR(255), nullable=False)
+    name = Column(VARCHAR(255), nullable=True)
     
     participants = relationship("Participant", back_populates="meeting", cascade="all, delete-orphan")
     participant_times = relationship("ParticipantTime", back_populates="meeting", cascade="all, delete-orphan")
-    plan = relationship("MeetingPlan", back_populates="meeting", cascade="all, delete-orphan")
+    plan = relationship("MeetingPlan", back_populates="meeting", cascade="all, delete-orphan", uselist=False)
     places = relationship("MeetingPlace", back_populates="meeting", cascade="all, delete-orphan")
 
 
@@ -29,6 +29,7 @@ class MeetingPlan(Base):
     id = Column(Integer, primary_key=True, index=True)
     meeting_id = Column(Integer, ForeignKey("meetings.id", ondelete="CASCADE"), nullable=False, index=True)
     meeting_time = Column(DateTime(timezone=True), nullable=False)
+    available_time = Column
     address = Column(VARCHAR(255), nullable=False)
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
@@ -39,6 +40,8 @@ class MeetingPlan(Base):
     # 이 Plan이 어떤 Meeting에 속했는지 역참조
     meeting = relationship("Meeting", back_populates="plan")
 
+class MeetingPlanTime(Base):
+    
 
 # -------------------------------------------------
 class MeetingPlace(Base):
@@ -79,7 +82,8 @@ class Participant(Base):
     start_longitude = Column(Float, nullable=False)
     start_address = Column(String(255), nullable=True)
     transportation = Column(String(255), nullable=True)
-  
+
+    fav_activity = Column(String(255), nullable=True)
   
     # 3. [추가] Participant가 어떤 Meeting에 속했는지 역참조 설정
     meeting = relationship("Meeting", back_populates="participants")

@@ -27,6 +27,7 @@ def on_startup():
 
 origins = [
     "http://localhost:3000",
+    "http://localhost:5173",
     # "http://<서버-공인IP>:3000",
 ]
 app.add_middleware(

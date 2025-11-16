@@ -119,3 +119,43 @@ def get_meeting_point(
 
     # 기본(full)
     return result
+
+
+
+from datetime import date
+from typing import List, Set
+
+# ParticipantResponse 와 ParticipantTimeResponse 를 그대로 사용한다고 가정
+
+def get_common_available_dates(
+    participants: List[ParticipantResponse],
+) -> List[date]:
+    """
+    모든 참가자의 available_times에서 공통으로 존재하는 '날짜(date)'만 반환한다.
+    
+    - 각 ParticipantResponse.available_times 의 start_time 기준으로 날짜를 뽑음
+    - 한 참가자라도 그 날짜에 슬롯이 없으면 결과에서 제외
+    """
+    if not participants:
+        return []
+
+    # 첫 번째 참가자의 날짜 집합을 초기값으로 사용
+    common_dates: Set[date] = {
+        t.start_time.date() for t in participants[0].available_times
+    }
+
+    # 나머지 참가자들과 교집합을 계속 갱신
+    for p in participants[1:]:
+        dates_for_p = {t.start_time.date() for t in p.available_times}
+        common_dates &= dates_for_p
+        if not common_dates:
+            break  # 더 볼 필요 없음
+
+    # 정렬된 리스트로 반환 (프론트 사용 편하게)
+    return sorted(common_dates)
+
+from pydantic import BaseModel
+
+class CommonDatesResponse(BaseModel):
+    meeting_id: int
+    common_dates: List[date]
