@@ -2,7 +2,7 @@
 import { DRAFT_PROMISE_ID_KEY } from "@/assets/constants/storage";
 import { http } from "@/lib/http";
 import type { PromiseDetail } from "@/types/promise";
-import type { MeetingResponse } from "@/types/meeting";
+import type { MeetingPlan, MeetingResponse } from "@/types/meeting";
 
 function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
   const participants = meeting.participants.map((p) => ({
@@ -158,4 +158,44 @@ export async function deletePromise(promiseId: string): Promise<void> {
     console.log("[deletePromise] Draft ID 제거됨:", storedDraftId);
     localStorage.removeItem(DRAFT_PROMISE_ID_KEY);
   }
+}
+
+// 🔹 참여자 삭제 (HTTP 버전)
+export async function deleteParticipant(
+  meetingId: string | number,
+  participantId: string | number
+): Promise<void> {
+  const mid = Number(meetingId);
+  const pid = Number(participantId);
+
+  if (Number.isNaN(mid) || Number.isNaN(pid)) {
+    throw new Error(
+      `잘못된 id (meeting: ${meetingId}, participant: ${participantId})`
+    );
+  }
+
+  await http.request<void>(`/meetings/${mid}/participants/${pid}`, {
+    method: "DELETE",
+  });
+}
+
+// 🔹 자동 일정/장소/코스 계산 (HTTP 버전)
+// FastAPI: POST /meetings/{meeting_id}/plans/calculate
+export async function calculateAutoPlan(
+  promiseId: string
+): Promise<PromiseDetail> {
+  const meetingId = Number(promiseId);
+  if (Number.isNaN(meetingId)) {
+    throw new Error(`잘못된 meeting id: ${promiseId}`);
+  }
+
+  // 1) 계산 트리거 (응답 타입은 MeetingPlan 이지만, 어차피 아래에서 다시 /meetings/{id}를 읽어올 거라
+  //    여기서는 반환값을 직접 쓰지 않아도 된다)
+  await http.request<MeetingPlan>(`/meetings/${meetingId}/plans/calculate`, {
+    method: "POST",
+  });
+
+  // 2) 새로 계산된 plan/places까지 포함해서 다시 조회
+  const meeting = await http.request<MeetingResponse>(`/meetings/${meetingId}`);
+  return mapMeetingToPromiseDetail(meeting);
 }
