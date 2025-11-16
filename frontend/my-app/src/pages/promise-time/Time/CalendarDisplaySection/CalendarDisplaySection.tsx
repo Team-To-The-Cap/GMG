@@ -2,7 +2,8 @@ import { useMemo, useState, type JSX } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Calendar } from "@/components/ui/Calendar"; // 네가 만든 드래그/페인트 캘린더
 import  Button  from "@/components/ui/button";
-import {useNavigate, useParams} from "react-router-dom"
+import {useLocation, useNavigate, useParams} from "react-router-dom"
+
 
 const MONTHS = [
   "January","February","March","April","May","June",
@@ -42,6 +43,7 @@ export const CalendarDisplaySection = (): JSX.Element =>  {
   const [year, setYear] = useState(2025);
   const [month, setMonth] = useState(9); // 0-index (9 = October)
 
+
   // 월별 선택 상태 보존: {"2025-10":[8,31], "2025-11":[3,9], ...}
   const [selByMonth, setSelByMonth] = useState<Record<string, number[]>>({});
 
@@ -74,6 +76,10 @@ export const CalendarDisplaySection = (): JSX.Element =>  {
   return total;
 }, [selByMonth]);
 
+  const location = useLocation();
+  const state = location.state as any;
+  const nameDraft = state?.nameDraft ?? "";
+
   const navigate = useNavigate();
   const {promiseId} = useParams();
   const handleSubmit = async () => {
@@ -82,6 +88,8 @@ export const CalendarDisplaySection = (): JSX.Element =>  {
 
     navigate(`/create/${promiseId}/participants/new`, {
     state: {
+      ...state,
+      nameDraft,
       selectedTimes: availableTimes,
     },
   });

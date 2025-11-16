@@ -18,6 +18,7 @@ export default function AddParticipantOriginPage() {
   const { promiseId } = useParams();
   const location = useLocation();
   const state = (location.state || {}) as LocationState;
+  const nameDraft = state?.nameDraft ?? "";
 
   // ───────────────── 저장된 장소 ─────────────────
   const baseSaved = useMemo<SavedPlace[]>(() => {
@@ -88,6 +89,7 @@ export default function AddParticipantOriginPage() {
     navigate(path, {
     state: {
       ...state,
+      nameDraft,
       selectedOrigin: selectedPlace.address, // 도로명주소만 전달
       selectedTransportation: transportation,
     },
