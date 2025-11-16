@@ -18,7 +18,7 @@ export function getTopBarConfig(pathname: string): TopBarConfig {
     return { title: "마이페이지", showBack: false };
   }
 
-  if (is("/create/:promiseId")) {
+  if (is("/details/:promiseId")) {
     return { title: "약속 만들기", showBack: false };
   }
 
@@ -27,19 +27,19 @@ export function getTopBarConfig(pathname: string): TopBarConfig {
     return { title: "약속 상세", showBack: true };
   }
 
-  if (is("/create/:promiseId/participants/new") || is("/participants/new")) {
+  if (is("/details/:promiseId/participants/new") || is("/participants/new")) {
     return { title: "참가자 추가", showBack: true };
   }
 
   if (
-    is("/create/:promiseId/participants/new/origin") ||
+    is("/details/:promiseId/participants/new/origin") ||
     is("/participants/new/origin")
   ) {
     return { title: "출발 장소 선택", showBack: true };
   }
 
   if (
-    is("/create/:promiseId/participants/new/origin/search") ||
+    is("/details/:promiseId/participants/new/origin/search") ||
     is("/participants/new/origin/search")
   ) {
     return { title: "출발 장소 검색", showBack: true };

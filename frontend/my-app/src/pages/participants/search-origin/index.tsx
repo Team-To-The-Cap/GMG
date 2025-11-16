@@ -84,7 +84,7 @@ export default function SearchOriginPage() {
     };
 
     const originPath = promiseId
-      ? `/create/${promiseId}/participants/new/origin`
+      ? `/details/${promiseId}/participants/new/origin`
       : `/participants/new/origin`;
 
     // 숫자 -1 이 아니라, 출발장소 선택 페이지로 "직접" 이동하면서 state 전달

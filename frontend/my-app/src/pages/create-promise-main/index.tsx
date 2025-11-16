@@ -31,7 +31,7 @@ export default function CreatePromiseMain() {
 
   useEffect(() => {
     if (!promiseId) {
-      navigate(`/create/${DEFAULT_PROMISE_ID}`, { replace: true });
+      navigate(`/details/${DEFAULT_PROMISE_ID}`, { replace: true });
       return;
     }
 
@@ -78,19 +78,23 @@ export default function CreatePromiseMain() {
   }, [promiseId, navigate]);
 
   const onEditPlace = useCallback(() => {
-    navigate(`/create/${promiseId}/place-calculation`);
+    navigate(`/details/${promiseId}/place-calculation`);
   }, [promiseId, navigate]);
 
   const onEditCourse = useCallback(() => {
     alert("코스 수정 기능 준비 중!");
   }, [promiseId]);
 
-  // ✅ 새 인원 추가 버튼
+  // ✅ 새 인원 추가 버튼 핸들러
   const onAddParticipant = useCallback(() => {
-    if (!promiseId) return;
-    navigate(`/create/${promiseId}/participants/new`);
-  }, [promiseId, navigate]);
+    if (!promiseId) return; // 혹시 모를 가드
 
+    navigate(`/details/${promiseId}/participants/new`, {
+      state: {
+        from: "details", // 👈 어디서 왔는지 표시
+      },
+    });
+  }, [promiseId, navigate]);
   const onEditTitle = useCallback(() => {
     alert("약속 이름 수정 기능 준비 중!");
   }, [promiseId, navigate]);

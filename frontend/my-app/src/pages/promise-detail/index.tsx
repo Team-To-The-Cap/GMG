@@ -49,7 +49,7 @@ export default function PromiseDetailPage() {
   }, [navigate]);
 
   const onEditPlace = useCallback(() => {
-    navigate(`/create/${promiseId}/place-calculation`);
+    navigate(`/details/${promiseId}/place-calculation`);
   }, [promiseId, navigate]);
 
   const onEditCourse = useCallback(() => {
@@ -59,7 +59,12 @@ export default function PromiseDetailPage() {
   // ✅ 새 인원 추가 버튼 핸들러
   const onAddParticipant = useCallback(() => {
     if (!promiseId) return; // 혹시 모를 가드
-    navigate(`/create/${promiseId}/participants/new`);
+
+    navigate(`/details/${promiseId}/participants/new`, {
+      state: {
+        from: "details", // 👈 어디서 왔는지 표시
+      },
+    });
   }, [promiseId, navigate]);
 
   // 약속 이름 편집(또는 이동)

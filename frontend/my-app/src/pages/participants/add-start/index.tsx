@@ -50,7 +50,7 @@ export default function AddParticipantStartPage() {
   const openSchedulePicker = () => {
     if (!promiseId) return;
 
-    navigate(`/create/${promiseId}/promise-time`, {
+    navigate(`/details/${promiseId}/promise-time`, {
       state: {
         nameDraft: name,
         selectedOrigin: origin,
@@ -63,7 +63,7 @@ export default function AddParticipantStartPage() {
   /** 출발 장소 입력 페이지로 이동 */
   const openOriginPicker = () => {
     const path = promiseId
-      ? `/create/${promiseId}/participants/new/origin`
+      ? `/details/${promiseId}/participants/new/origin`
       : `/participants/new/origin`;
 
     navigate(path, {
@@ -80,7 +80,7 @@ export default function AddParticipantStartPage() {
   const openPreferencePicker = () => {
     if (!promiseId) return;
 
-    navigate(`/create/${promiseId}/participants/new/preferences`, {
+    navigate(`/details/${promiseId}/participants/new/preferences`, {
       state: {
         nameDraft: name,
         selectedOrigin: origin,
@@ -91,7 +91,6 @@ export default function AddParticipantStartPage() {
     });
   };
 
-  /** 저장 버튼 눌렀을 때 서버로 보내기 */
   const submit = async () => {
     if (!promiseId) return alert("약속 ID가 없습니다.");
     if (!name.trim()) return alert("이름을 입력하세요.");
@@ -99,14 +98,12 @@ export default function AddParticipantStartPage() {
     const payload: any = {
       name,
       member_id: 0, // 서버 필수 필드 (임시 더미값)
-      fav_activity: "카페",    // 기본값 혹은 빈 문자
+      fav_activity: "카페",
     };
 
-    // 값이 있을 때만 추가
     if (origin) payload.start_address = origin;
     if (transportation) payload.transportation = transportation;
-    if (availableTimes.length > 0)
-    payload.available_times = availableTimes;
+    if (availableTimes.length > 0) payload.available_times = availableTimes;
 
     console.log("전송 데이터:", payload);
     const numericId = promiseId?.replace(/\D/g, "");
@@ -130,7 +127,11 @@ export default function AddParticipantStartPage() {
       }
 
       alert("참석자 정보가 성공적으로 저장되었습니다!");
-      navigate(`/create/${promiseId}/participants`);
+
+      // 🔽 어디서 왔는지 보고 이동 결정
+      const from = (location.state as any)?.from;
+
+      navigate(`/details/${promiseId}`);
     } catch (error) {
       console.error(error);
       alert("참석자 저장 중 오류가 발생했습니다.");
@@ -185,9 +186,7 @@ export default function AddParticipantStartPage() {
         </span>
         <span className={styles.rowText}>
           선호 입력하기
-          {preferredCats.length > 0
-            ? ` · ${preferredCats.join(", ")}`
-            : ""}
+          {preferredCats.length > 0 ? ` · ${preferredCats.join(", ")}` : ""}
         </span>
       </button>
 

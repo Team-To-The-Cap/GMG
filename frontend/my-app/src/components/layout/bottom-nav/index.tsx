@@ -20,13 +20,13 @@ export default function BottomNav() {
 
       const savedDraftId = localStorage.getItem(DRAFT_PROMISE_ID_KEY);
       if (savedDraftId) {
-        navigate(`/create/${savedDraftId}`);
+        navigate(`/details/${savedDraftId}`);
         return;
       }
 
       const draft = await createEmptyPromise();
       localStorage.setItem(DRAFT_PROMISE_ID_KEY, draft.id);
-      navigate(`/create/${draft.id}`);
+      navigate(`/details/${draft.id}`);
     } finally {
       setCreating(false);
     }

@@ -64,7 +64,7 @@ export default function AddParticipantPreferencesPage() {
   const handleConfirm = () => {
     if (!promiseId) return;
 
-    navigate(`/create/${promiseId}/participants/new`, {
+    navigate(`/details/${promiseId}/participants/new`, {
       state: {
         nameDraft,
         selectedOrigin,
@@ -116,8 +116,8 @@ export default function AddParticipantPreferencesPage() {
           className={styles.myPrefBtn}
           onClick={loadMyPreferences}
         >
-            <span className={styles.myPrefIcon}>⭐</span>
-            <span>내 선호 불러오기</span>
+          <span className={styles.myPrefIcon}>⭐</span>
+          <span>내 선호 불러오기</span>
         </button>
       </div>
 
