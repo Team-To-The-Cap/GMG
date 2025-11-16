@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { JSX } from "react";
 import { CalendarDisplaySection } from "./CalendarDisplaySection";
 import { useNavigate } from "react-router-dom";

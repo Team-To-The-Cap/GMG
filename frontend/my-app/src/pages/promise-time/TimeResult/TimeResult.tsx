@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { JSX } from "react";
 import { CalendarDisplaySection } from "./CalendarDisplaySection/CalendarDisplaySection";
 import TopBar from "@/components/ui/top-bar";

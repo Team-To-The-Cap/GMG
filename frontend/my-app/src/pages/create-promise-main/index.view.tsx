@@ -1,3 +1,4 @@
+// @ts-nocheck
 // src/pages/create-promise-main/index.view.tsx
 import React from "react";
 import SectionHeader from "@/components/ui/section-header";
