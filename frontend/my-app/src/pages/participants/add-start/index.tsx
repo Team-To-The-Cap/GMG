@@ -24,6 +24,10 @@ export default function AddParticipantStartPage() {
   useEffect(() => {
     const state = location.state as any;
 
+    if (state?.nameDraft !== undefined) {
+      setName(state.nameDraft);
+    }
+
     if (state?.selectedOrigin) {
       setOrigin(state.selectedOrigin);
       //navigate(location.pathname, { replace: true });
@@ -76,14 +80,17 @@ export default function AddParticipantStartPage() {
     if (!promiseId) return alert("약속 ID가 없습니다.");
     if (!name.trim()) return alert("이름을 입력하세요.");
 
-    const payload = {
+    const payload: any = {
       name,
       member_id: 0, // 서버 필수 필드 (임시 더미값)
-      start_address: origin ?? "",
-      transportation: transportation ?? "",
-      fav_activity: "카페",    // 기본값 혹은 빈 문자열
-      available_times: availableTimes,
+      fav_activity: "카페",    // 기본값 혹은 빈 문자
     };
+
+    // 값이 있을 때만 추가
+    if (origin) payload.start_address = origin;
+    if (transportation) payload.transportation = transportation;
+    if (availableTimes.length > 0)
+    payload.available_times = availableTimes;
 
     console.log("전송 데이터:", payload);
     const numericId = promiseId?.replace(/\D/g, "")
