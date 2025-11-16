@@ -11,6 +11,7 @@ import { TimeResult } from "@/pages/promise-time/TimeResult";
 import AddParticipantStartPage from "@/pages/participants/add-start";
 import AddParticipantOriginPage from "@/pages/participants/add-origin";
 import SearchOriginPage from "@/pages/participants/search-origin";
+import { PlaceCalculationScreen } from "@/pages/participants/place-calculation";
 
 import BottomNav from "@/components/layout/bottom-nav";
 import TopBar from "@/components/ui/top-bar";
@@ -72,20 +73,40 @@ export default function App() {
             element={<AddParticipantOriginPage />}
           />
 
-          {/* 출발 장소 검색 */}
-          <Route
-            path="/create/:promiseId/participants/new/origin/search"
-            element={<SearchOriginPage />}
-          />
-          <Route
-            path="/participants/new/origin/search"
-            element={<SearchOriginPage />}
-          />
+        {/* 참가자 추가 (컨텍스트 포함 / 단독 접근 둘 다 지원) */}
+        <Route
+          path="/create/:promiseId/participants/new"
+          element={<AddParticipantStartPage />}
+        />
+        <Route path="/participants/new" element={<AddParticipantStartPage />} />
+        
+        
+        {/* ⬇️ 출발장소 선택 페이지 라우트 추가 */}
+        <Route
+          path="/create/:promiseId/participants/new/origin"
+          element={<AddParticipantOriginPage />}
+        />
 
-          {/* 마이페이지 & 시간 관련 */}
-          <Route path="/me" element={<MyPage />} />
-          <Route path="/time/time1" element={<Time1 />} />
-          <Route path="/time/timeresult" element={<TimeResult />} />
+        <Route
+          path="/participants/new/origin"
+          element={<AddParticipantOriginPage />}
+        />
+
+        <Route
+          path="/create/:promiseId/participants/new/origin/search"
+          element={<SearchOriginPage />}
+        />
+
+        <Route path="/create/:promiseId/place-calculation" element={<PlaceCalculationScreen />} />
+        
+        <Route
+          path="/participants/new/origin/search"
+          element={<SearchOriginPage />}
+        />
+
+        <Route path="/me" element={<MyPage />} />
+        <Route path="/create/:promiseId/promise-time" element={<Time1 />} />
+        <Route path="/time/timeresult" element={<TimeResult />} />
 
           {/* 404 → 홈으로 리다이렉트 */}
           <Route path="*" element={<Navigate to="/" replace />} />
