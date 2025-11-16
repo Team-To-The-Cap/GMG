@@ -3,7 +3,7 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useCallback, useState } from "react";
 import styles from "./style.module.css";
 import { HomeIcon, PlusIcon, UserIcon } from "@/assets/icons/icons";
-import { createEmptyPromise } from "@/services/promise/promise.service"; // ⬅️ 추가 import
+import { createEmptyPromise } from "@/services/promise/promise.service";
 
 const DRAFT_PROMISE_ID_KEY = "GMG_LAST_DRAFT_PROMISE_ID";
 
@@ -18,14 +18,12 @@ export default function BottomNav() {
     try {
       setCreating(true);
 
-      // 1) 기존 draft id 있으면 그대로 사용
       const savedDraftId = localStorage.getItem(DRAFT_PROMISE_ID_KEY);
       if (savedDraftId) {
         navigate(`/create/${savedDraftId}`);
         return;
       }
 
-      // 2) 없으면 여기서 바로 서버에 새 약속 생성
       const draft = await createEmptyPromise();
       localStorage.setItem(DRAFT_PROMISE_ID_KEY, draft.id);
       navigate(`/create/${draft.id}`);
@@ -36,12 +34,16 @@ export default function BottomNav() {
 
   const isCreateActive = location.pathname.startsWith("/create");
 
+  // 🔹 Home 활성 조건: "/" 또는 "/details/..." 일 때
+  const isHomeLikePath =
+    location.pathname === "/" || location.pathname.startsWith("/details/");
+
   return (
     <nav className={styles.nav} aria-label="Bottom Navigation">
       <NavLink
         to="/"
         className={({ isActive }) =>
-          isActive ? styles.itemActive : styles.item
+          isActive || isHomeLikePath ? styles.itemActive : styles.item
         }
       >
         <HomeIcon />
