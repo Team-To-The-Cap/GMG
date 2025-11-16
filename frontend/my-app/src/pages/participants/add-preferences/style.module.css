@@ -1,0 +1,142 @@
+/* src/pages/participants/add-preferences/style.module.css */
+
+/* ===== 전체 컨테이너 ===== */
+.container {
+  padding: 0 16px 32px;
+}
+
+/* ===== 제목 ===== */
+.title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 20px 0 16px;
+}
+
+/* ===== 상단 설명 영역 ===== */
+.headerRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.subtitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.helper {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+/* ===== 카테고리 카드 전체 박스 (rowBtn 느낌 카드) ===== */
+.prefCard {
+  border-radius: 16px;
+  border: 1px solid #eef1f4;
+  background: #f9fafb;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+/* ===== 카테고리 버튼 그리드 ===== */
+.catGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+/* ===== 개별 카테고리 버튼 ===== */
+.catBtn {
+  height: 72px;
+  border-radius: 16px;
+  border: 1px solid #eef1f4;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: transform 0.02s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.02);
+}
+
+.catBtn:hover {
+  border-color: #e5e7eb;
+  box-shadow: 0 4px 18px rgba(17, 24, 39, 0.06);
+}
+
+.catBtn:active {
+  transform: translateY(1px);
+}
+
+.catBtnActive {
+  background: #eef1ff;
+  border-color: #6d7bff;
+  color: #4b57d8;
+}
+
+.catEmoji {
+  font-size: 20px;
+}
+
+.catLabel {
+  font-size: 13px;
+}
+
+/* ===== 내 선호 불러오기 버튼 ===== */
+/* ===== 내 선호 불러오기 버튼 ===== */
+.myPrefWrapper {
+  display: flex;
+  justify-content: center;
+  margin: 8px 0 24px;
+}
+
+.myPrefBtn {
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  border-radius: 999px;
+  padding: 8px 16px;
+
+  font-size: 13px;
+  color: #4f46e5;
+  cursor: pointer;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.02);
+  transition: background 0.15s ease, border-color 0.15s ease,
+    box-shadow 0.15s ease, transform 0.02s ease;
+}
+
+.myPrefBtn:hover {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  box-shadow: 0 4px 18px rgba(17, 24, 39, 0.06);
+}
+
+.myPrefBtn:active {
+  transform: translateY(1px);
+}
+
+.myPrefIcon {
+  font-size: 14px;
+}
+
+/* ===== 하단 취소 / 선택 버튼 영역 ===== */
+.footer {
+  margin-top: 24px;
+  display: flex;
+  gap: 8px;
+}
+
+.footerBtn {
+  flex: 1;
+  display: inline-flex;
+  justify-content: center;
+}
