@@ -447,3 +447,52 @@ export async function deleteParticipant(
     (p) => p.id !== participantId
   );
 }
+
+/**
+ * 🔹 자동 일정/장소/코스 계산 (Mock 버전)
+ * - 실제 서버처럼 "계산 후 다시 조회된 결과"라고 생각하고
+ *   MOCK_DB 안의 해당 약속을 적당히 업데이트한 뒤 반환
+ */
+export async function calculateAutoPlan(
+  promiseId: string
+): Promise<PromiseDetail> {
+  await delay(300);
+
+  const item = MOCK_DB[promiseId];
+  if (!item) {
+    throw new Error("Mock 데이터에 해당 약속이 없습니다.");
+  }
+
+  // 👉 1) 일정: 일주일 뒤로 맞춰주는 예시
+  const now = new Date();
+  const nextWeek = new Date(
+    now.getTime() + 7 * 24 * 60 * 60 * 1000
+  ).toISOString();
+
+  // 👉 2) 장소: 없으면 임시 장소 하나 넣어줌
+  const place =
+    item.place ??
+    ({
+      name: "모임 장소 (mock 계산)",
+      address: "서울 어딘가",
+    } as PromiseDetail["place"]);
+
+  // 👉 3) 코스 요약: 그냥 예시 값으로 채우기
+  const updated: PromiseDetail = {
+    ...item,
+    schedule: { dateISO: nextWeek },
+    place,
+    course: {
+      ...item.course,
+      summary: {
+        totalMinutes: 180,
+        activityMinutes: 120,
+        travelMinutes: 60,
+      },
+      source: "mock-calculate",
+    },
+  };
+
+  MOCK_DB[promiseId] = updated;
+  return updated;
+}

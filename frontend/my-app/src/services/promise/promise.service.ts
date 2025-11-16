@@ -48,3 +48,11 @@ export async function deleteParticipant(
     ? mockImpl.deleteParticipant(promiseId, participantId)
     : httpImpl.deleteParticipant(promiseId, participantId);
 }
+
+export async function calculateAutoPlan(
+  promiseId: string
+): Promise<PromiseDetail> {
+  return useMock
+    ? mockImpl.calculateAutoPlan(promiseId)
+    : httpImpl.calculateAutoPlan(promiseId);
+}

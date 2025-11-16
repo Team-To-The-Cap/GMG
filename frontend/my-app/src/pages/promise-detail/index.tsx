@@ -6,6 +6,7 @@ import {
   getPromiseDetail,
   savePromiseDetail,
   deleteParticipant,
+  calculateAutoPlan,
 } from "@/services/promise/promise.service";
 import type { PromiseDetail } from "@/types/promise";
 import { DEFAULT_PROMISE_ID } from "@/config/runtime";
@@ -108,12 +109,24 @@ export default function PromiseDetailPage() {
     [promiseId]
   );
 
-  // ✅ 계산 버튼 액션
-  const onCalculate = useCallback(() => {
-    console.log("calculate with", data);
-    alert("일정/장소/코스 계산 로직을 연결하세요!");
-  }, [data]);
+  // 계산 버튼
+  const onCalculate = useCallback(async () => {
+    if (!promiseId) return;
 
+    try {
+      setSaving(true); // 별도 calculating 상태 만들기 귀찮으면 이거 재사용
+
+      const updated = await calculateAutoPlan(promiseId);
+      setData(updated);
+
+      alert("일정/장소/코스가 계산되었습니다!");
+    } catch (e: any) {
+      console.error(e);
+      alert(e?.message ?? "계산 중 오류가 발생했습니다.");
+    } finally {
+      setSaving(false);
+    }
+  }, [promiseId]);
   // ✅ 저장 버튼 액션 (실제 서비스 호출)
   const onSave = useCallback(async () => {
     if (!data) return;
