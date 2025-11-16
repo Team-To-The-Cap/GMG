@@ -18,6 +18,7 @@ export default function AddParticipantStartPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { promiseId } = useParams();
+  const [transportation, setTransportation] = useState<string | null>(null);
 
   // 새 페이지에서 돌아올 때 state로 전달된 선택값을 반영
   useEffect(() => {
@@ -26,6 +27,10 @@ export default function AddParticipantStartPage() {
     if (state?.selectedOrigin) {
       setOrigin(state.selectedOrigin);
       //navigate(location.pathname, { replace: true });
+    }
+
+    if (state?.selectedTransportation) {
+      setTransportation(state.selectedTransportation);
     }
     if (state?.selectedTimes) {
       setAvailableTimes(state.selectedTimes);
@@ -75,7 +80,7 @@ export default function AddParticipantStartPage() {
       name,
       member_id: 0, // 서버 필수 필드 (임시 더미값)
       start_address: origin ?? "",
-      transportation: "지하철", // 기본값 혹은 빈 문자열
+      transportation: transportation ?? "",
       fav_activity: "카페",    // 기본값 혹은 빈 문자열
       available_times: availableTimes,
     };
