@@ -18,10 +18,11 @@ export default function AddParticipantStartPage() {
   >([]);
   const [transportation, setTransportation] = useState<string | null>(null);
 
-  // ✅ 이번에 추가: 선호 카테고리 (최대 4개 선택한다고 가정)
   const [preferredCats, setPreferredCats] = useState<PlaceCategory[]>([]);
 
-  // 새 페이지에서 돌아올 때 state로 전달된 선택값을 반영
+  // ✅ 추가: 제출 중인지 여부
+  const [submitting, setSubmitting] = useState(false);
+
   useEffect(() => {
     const state = location.state as any;
 
@@ -46,11 +47,13 @@ export default function AddParticipantStartPage() {
     }
   }, [location.state]);
 
-  /** 일정 입력 페이지로 이동 */
   const openSchedulePicker = () => {
     if (!promiseId) return;
 
-    navigate(`/create/${promiseId}/promise-time`, {
+    const segments = location.pathname.split("/");
+    const mode = segments[1]; // 'details' 또는 'create'
+
+    navigate(`/${mode}/${promiseId}/promise-time`, {
       state: {
         nameDraft: name,
         selectedOrigin: origin,
@@ -60,10 +63,12 @@ export default function AddParticipantStartPage() {
     });
   };
 
-  /** 출발 장소 입력 페이지로 이동 */
   const openOriginPicker = () => {
+    const segments = location.pathname.split("/");
+    const mode = segments[1]; // 'details' 또는 'create'
+
     const path = promiseId
-      ? `/create/${promiseId}/participants/new/origin`
+      ? `/${mode}/${promiseId}/participants/new/origin`
       : `/participants/new/origin`;
 
     navigate(path, {
@@ -76,11 +81,12 @@ export default function AddParticipantStartPage() {
     });
   };
 
-  /** 선호 입력 페이지로 이동 */
   const openPreferencePicker = () => {
     if (!promiseId) return;
 
-    navigate(`/create/${promiseId}/participants/new/preferences`, {
+    const segments = location.pathname.split("/");
+    const mode = segments[1]; // 'details' 또는 'create'
+    navigate(`/${mode}/${promiseId}/participants/new/preferences`, {
       state: {
         nameDraft: name,
         selectedOrigin: origin,
@@ -91,10 +97,10 @@ export default function AddParticipantStartPage() {
     });
   };
 
-  /** 저장 버튼 눌렀을 때 서버로 보내기 */
   const submit = async () => {
     if (!promiseId) return alert("약속 ID가 없습니다.");
     if (!name.trim()) return alert("이름을 입력하세요.");
+    if (submitting) return;
 
     const payload: any = {
       name,
@@ -107,16 +113,16 @@ export default function AddParticipantStartPage() {
       available_times: availableTimes,
     };
 
-    // 값이 있을 때만 추가
     if (origin) payload.start_address = origin;
     if (transportation) payload.transportation = transportation;
-    if (availableTimes.length > 0)
-    payload.available_times = availableTimes;
+    if (availableTimes.length > 0) payload.available_times = availableTimes;
 
     console.log("전송 데이터:", payload);
-    const numericId = promiseId?.replace(/\D/g, "");
+    const numericId = promiseId.replace(/\D/g, "");
 
     try {
+      setSubmitting(true);
+
       const res = await fetch(
         `http://223.130.152.114:8001/meetings/${numericId}/participants/`,
         {
@@ -135,10 +141,24 @@ export default function AddParticipantStartPage() {
       }
 
       alert("참석자 정보가 성공적으로 저장되었습니다!");
-      navigate(`/create/${promiseId}/participants`);
+
+      // -----------------------------
+      // 🔥 현재 경로에서 create/details 뽑아내기
+      // -----------------------------
+      const segments = location.pathname.split("/");
+      console.log(segments);
+      // ['', 'details', '76', 'participants', 'new']
+      const mode = segments[1]; // 'details' 또는 'create'
+      const id = segments[2]; // '76'
+
+      console.log(mode, id);
+
+      navigate(`/${mode}/${id}`, { replace: true });
     } catch (error) {
       console.error(error);
       alert("참석자 저장 중 오류가 발생했습니다.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -190,9 +210,7 @@ export default function AddParticipantStartPage() {
         </span>
         <span className={styles.rowText}>
           선호 입력하기
-          {preferredCats.length > 0
-            ? ` · ${preferredCats.join(", ")}`
-            : ""}
+          {preferredCats.length > 0 ? ` · ${preferredCats.join(", ")}` : ""}
         </span>
       </button>
 
@@ -201,10 +219,10 @@ export default function AddParticipantStartPage() {
           variant="primary"
           size="lg"
           className={styles.saveBtn}
-          disabled={!name.trim()}
+          disabled={!name.trim() || submitting} // ✅ 제출 중이면 버튼 비활성화
           onClick={submit}
         >
-          저장하기
+          {submitting ? "저장 중..." : "저장하기"}
         </Button>
       </div>
     </div>

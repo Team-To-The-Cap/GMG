@@ -83,8 +83,10 @@ export default function SearchOriginPage() {
       address: addr,
     };
 
+    const segments = location.pathname.split("/");
+    const mode = segments[1]; // 'details' 또는 'create'
     const originPath = promiseId
-      ? `/create/${promiseId}/participants/new/origin`
+      ? `/${mode}/${promiseId}/participants/new/origin`
       : `/participants/new/origin`;
 
     // 숫자 -1 이 아니라, 출발장소 선택 페이지로 "직접" 이동하면서 state 전달

@@ -39,12 +39,12 @@ export default function App() {
           {/* 홈 */}
           <Route path="/" element={<Home />} />
 
-          {/* TEST_MODE에서만 /create → /create/:id 로 보정 */}
+          {/* TEST_MODE에서만 /create → /details/:id 로 보정 */}
           {RUNTIME.TEST_MODE && (
             <Route
               path="/create"
               element={
-                <Navigate to={`/create/${DEFAULT_PROMISE_ID}`} replace />
+                <Navigate to={`/details/${DEFAULT_PROMISE_ID}`} replace />
               }
             />
           )}
@@ -57,6 +57,10 @@ export default function App() {
 
           {/* 참가자 추가 시작 */}
           <Route
+            path="/details/:promiseId/participants/new"
+            element={<AddParticipantStartPage />}
+          />
+          <Route
             path="/create/:promiseId/participants/new"
             element={<AddParticipantStartPage />}
           />
@@ -66,6 +70,10 @@ export default function App() {
           />
 
           {/* 출발 장소 선택 */}
+          <Route
+            path="/details/:promiseId/participants/new/origin"
+            element={<AddParticipantOriginPage />}
+          />
           <Route
             path="/create/:promiseId/participants/new/origin"
             element={<AddParticipantOriginPage />}
@@ -77,6 +85,10 @@ export default function App() {
 
           {/* 출발 장소 검색 */}
           <Route
+            path="/details/:promiseId/participants/new/origin/search"
+            element={<SearchOriginPage />}
+          />
+          <Route
             path="/create/:promiseId/participants/new/origin/search"
             element={<SearchOriginPage />}
           />
@@ -87,11 +99,19 @@ export default function App() {
 
           {/* ✅ 선호 선택 페이지 */}
           <Route
+            path="/details/:promiseId/participants/new/preferences"
+            element={<AddParticipantPreferencesPage />}
+          />
+          <Route
             path="/create/:promiseId/participants/new/preferences"
             element={<AddParticipantPreferencesPage />}
           />
 
           {/* 장소 계산 화면 */}
+          <Route
+            path="/details/:promiseId/place-calculation"
+            element={<PlaceCalculationScreen />}
+          />
           <Route
             path="/create/:promiseId/place-calculation"
             element={<PlaceCalculationScreen />}
@@ -101,10 +121,8 @@ export default function App() {
           <Route path="/me" element={<MyPage />} />
 
           {/* 시간 선택/결과 */}
-          <Route
-            path="/create/:promiseId/promise-time"
-            element={<Time1 />}
-          />
+          <Route path="/create/:promiseId/promise-time" element={<Time1 />} />
+          <Route path="/details/:promiseId/promise-time" element={<Time1 />} />
           <Route path="/time/timeresult" element={<TimeResult />} />
 
           {/* 404 → 홈으로 */}

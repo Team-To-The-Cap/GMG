@@ -34,7 +34,7 @@ export default function BottomNav() {
 
   const isCreateActive = location.pathname.startsWith("/create");
 
-  // 🔹 Home 활성 조건: "/" 또는 "/details/..." 일 때
+  // 🔹 Home 활성 조건: "/" 또는 "/create/..." 일 때
   const isHomeLikePath =
     location.pathname === "/" || location.pathname.startsWith("/details/");
 
