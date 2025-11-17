@@ -51,6 +51,21 @@ export function getTopBarConfig(pathname: string): TopBarConfig {
     return { title: "출발 장소 검색", showBack: true };
   }
 
+  // ✅ 날짜 선택 화면 (/details/:promiseId/promise-time, /create/:promiseId/promise-time)
+  if (
+    is("/create/:promiseId/promise-time") ||
+    is("/details/:promiseId/promise-time")
+  ) {
+    return { title: "만날 날짜 선택", showBack: true };
+  }
+
+  if (
+    is("/create/:promiseId/participants/new/preferences") ||
+    is("/details/:promiseId/participants/new/preferences")
+  ) {
+    return { title: "만나서 할 일 선택", showBack: true };
+  }
+
   if (is("/time/time1")) {
     return { title: "시간 선택", showBack: true };
   }
