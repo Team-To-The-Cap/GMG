@@ -99,7 +99,12 @@ export default function AddParticipantStartPage() {
     const payload: any = {
       name,
       member_id: 0, // 서버 필수 필드 (임시 더미값)
-      fav_activity: "카페",    // 기본값 혹은 빈 문자
+      start_address: origin ?? "",
+      transportation: transportation ?? "",
+      // ✅ 선호 카테고리는 일단 문자열로 합쳐서 전송 (백엔드 스펙에 맞춰 조정 가능)
+      fav_activity:
+        preferredCats.length > 0 ? preferredCats.join(",") : "카페",
+      available_times: availableTimes,
     };
 
     // 값이 있을 때만 추가
