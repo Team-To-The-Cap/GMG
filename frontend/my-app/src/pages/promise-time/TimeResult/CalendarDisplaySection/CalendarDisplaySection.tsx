@@ -1,28 +1,15 @@
 import { CheckSquare, ChevronLeftIcon, ChevronRightIcon, Square } from "lucide-react";
-import { useMemo, type JSX } from "react";
+import { useEffect, useMemo, type JSX } from "react";
 import Button from "@/components/ui/button";
 import { Calendar } from "@/components/ui/Calendar"; 
 import { useState } from "react";
+import { useParams } from "react-router-dom";
 
 const MONTHS = [
   "January","February","March","April","May","June",
   "July","August","September","October","November","December"
 ];
 
-const fullAvailability: Record<string, number> = {
-  "2025-10-11": 5,
-  "2025-10-12": 4,
-  "2025-10-14": 3,
-  "2025-10-15": 3,
-  "2025-10-22": 3,
-  "2025-10-27": 1,
-  "2025-10-28": 2,
-  "2025-10-29": 2,
-  "2025-10-30": 4, 
-  "2025-10-31": 5, 
-  "2025-11-05": 5,
-  "2025-11-10": 4,
-};
 
 // 🚨 사용자가 클릭한 날짜에 표시될 세부 정보 (목업 데이터)
 // 실제로는 clickedDay에 따라 API를 통해 이 데이터를 동적으로 가져와야 합니다.
@@ -51,33 +38,68 @@ const initialDateSelections = [
 ];
 
 export const CalendarDisplaySection = (): JSX.Element => {
+  const { promiseId } = useParams();
+
   const [year, setYear] = useState(2025);
   const [month, setMonth] = useState(9);
 
   const [clickedDay, setClickedDay] = useState<number | null>(null);
   const [selections, setSelections] = useState(initialDateSelections);
 
+  const [participants, setParticipants] = useState<any[]>([]);
+  const participantCount = participants.length;
+
+  
+
+  useEffect(() => {
+    const fetchParticipants = async () => {
+      const res = await fetch(
+        `http://223.130.152.114:8001/meetings/${promiseId}/participants`
+      );
+      const data = await res.json();
+      setParticipants(data);
+    };
+
+    fetchParticipants();
+  }, [promiseId]);
+
+  const [meetingPlan, setMeetingPlan] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchPlan = async () => {
+      const res = await fetch(
+        `http://223.130.152.114:8001/meetings/${promiseId}/plans`
+      );
+      const data = await res.json();
+      setMeetingPlan(data);
+    };
+
+    fetchPlan();
+  }, [promiseId]);
+
   const ymKey = useMemo(
     () => `${year}-${String(month + 1).padStart(2, "0")}`,
     [year, month]
   );
 
-  // 현재 달력에 표시할 수 있는 날짜별 인원 수 필터링 (day number만 사용)
   const currentMonthAvailability = useMemo(() => {
-    const currentMonthData: Record<number, number> = {};
+    if (!meetingPlan) return {};
 
-    for (const fullDate in fullAvailability) {
-      if (fullDate.startsWith(ymKey)) {
-        const dayPart = fullDate.substring(8); // 'DD' 부분
-        const day = parseInt(dayPart, 10);
-        currentMonthData[day] = fullAvailability[fullDate];
+    const result: Record<number, number> = {};
+
+    meetingPlan.available_dates.forEach((d: any) => {
+      const [y, m, day] = d.date.split("-");
+
+      if (parseInt(y) === year && parseInt(m) === month + 1) {
+        result[parseInt(day)] = participantCount; // 전원 가능
       }
-    }
-    return currentMonthData;
-  }, [ymKey]);
+    });
+
+    return result;
+  }, [meetingPlan, year, month, participantCount]);
   
-  // maxAvailability는 참여자 수(5명)로 상수로 유지합니다.
-  const maxAvailability = 5;
+  // maxAvailability는최대참여자수
+  const maxAvailability = participantCount;
   
   const prevMonth = () => {
     if (month === 0) { setYear(y => y - 1); setMonth(11); }
