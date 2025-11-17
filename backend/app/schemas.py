@@ -1,10 +1,23 @@
 from pydantic import BaseModel
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, date
 
 
 
+class MeetingPlanAvailableDateBase(BaseModel):
+    date: date
 
+
+class MeetingPlanAvailableDateCreate(MeetingPlanAvailableDateBase):
+    pass
+    
+
+class MeetingPlanAvailableDateResponse(MeetingPlanAvailableDateBase):
+    id: int
+    meeting_plan_id: int
+
+    class Config:
+        from_attributes = True
 
 
 
@@ -104,6 +117,8 @@ class MeetingPlanResponse(BaseModel):
     longitude: float
     total_time: Optional[int] = None
     
+    available_dates: List[MeetingPlanAvailableDateResponse] = []
+
     class Config:
         from_attributes = True 
 
@@ -165,3 +180,6 @@ class MeetingResponse(MeetingBase):
     class Config:
         # SQLAlchemy 모델 객체를 Pydantic 모델로 자동 변환
         from_attributes = True
+
+
+
