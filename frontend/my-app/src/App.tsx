@@ -75,6 +75,10 @@ export default function App() {
             element={<AddParticipantOriginPage />}
           />
           <Route
+            path="/create/:promiseId/participants/new/origin"
+            element={<AddParticipantOriginPage />}
+          />
+          <Route
             path="/participants/new/origin"
             element={<AddParticipantOriginPage />}
           />
@@ -82,6 +86,10 @@ export default function App() {
           {/* 출발 장소 검색 */}
           <Route
             path="/details/:promiseId/participants/new/origin/search"
+            element={<SearchOriginPage />}
+          />
+          <Route
+            path="/create/:promiseId/participants/new/origin/search"
             element={<SearchOriginPage />}
           />
           <Route
@@ -94,10 +102,18 @@ export default function App() {
             path="/details/:promiseId/participants/new/preferences"
             element={<AddParticipantPreferencesPage />}
           />
+          <Route
+            path="/create/:promiseId/participants/new/preferences"
+            element={<AddParticipantPreferencesPage />}
+          />
 
           {/* 장소 계산 화면 */}
           <Route
             path="/details/:promiseId/place-calculation"
+            element={<PlaceCalculationScreen />}
+          />
+          <Route
+            path="/create/:promiseId/place-calculation"
             element={<PlaceCalculationScreen />}
           />
 
@@ -105,6 +121,7 @@ export default function App() {
           <Route path="/me" element={<MyPage />} />
 
           {/* 시간 선택/결과 */}
+          <Route path="/create/:promiseId/promise-time" element={<Time1 />} />
           <Route path="/details/:promiseId/promise-time" element={<Time1 />} />
           <Route path="/time/timeresult" element={<TimeResult />} />
 

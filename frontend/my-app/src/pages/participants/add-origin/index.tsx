@@ -59,8 +59,11 @@ export default function AddParticipantOriginPage() {
 
   // ───────────────── “장소 선택하기” → 검색 페이지 ─────────────────
   const openSearch = () => {
+    const segments = location.pathname.split("/");
+    const mode = segments[1]; // 'details' 또는 'create'
+
     const path = promiseId
-      ? `/details/${promiseId}/participants/new/origin/search`
+      ? `/${mode}/${promiseId}/participants/new/origin/search`
       : `/participants/new/origin/search`;
 
     navigate(path, {
@@ -82,8 +85,11 @@ export default function AddParticipantOriginPage() {
   const onConfirm = () => {
     if (!selectedPlace) return;
 
+    const segments = location.pathname.split("/");
+    const mode = segments[1]; // 'details' 또는 'create'
+
     const path = promiseId
-      ? `/details/${promiseId}/participants/new`
+      ? `/${mode}/${promiseId}/participants/new`
       : `/participants/new`;
 
     navigate(path, {

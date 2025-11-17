@@ -50,7 +50,10 @@ export default function AddParticipantStartPage() {
   const openSchedulePicker = () => {
     if (!promiseId) return;
 
-    navigate(`/details/${promiseId}/promise-time`, {
+    const segments = location.pathname.split("/");
+    const mode = segments[1]; // 'details' 또는 'create'
+
+    navigate(`/${mode}/${promiseId}/promise-time`, {
       state: {
         nameDraft: name,
         selectedOrigin: origin,
@@ -61,8 +64,11 @@ export default function AddParticipantStartPage() {
   };
 
   const openOriginPicker = () => {
+    const segments = location.pathname.split("/");
+    const mode = segments[1]; // 'details' 또는 'create'
+
     const path = promiseId
-      ? `/details/${promiseId}/participants/new/origin`
+      ? `/${mode}/${promiseId}/participants/new/origin`
       : `/participants/new/origin`;
 
     navigate(path, {
@@ -78,7 +84,9 @@ export default function AddParticipantStartPage() {
   const openPreferencePicker = () => {
     if (!promiseId) return;
 
-    navigate(`/details/${promiseId}/participants/new/preferences`, {
+    const segments = location.pathname.split("/");
+    const mode = segments[1]; // 'details' 또는 'create'
+    navigate(`/${mode}/${promiseId}/participants/new/preferences`, {
       state: {
         nameDraft: name,
         selectedOrigin: origin,
@@ -133,9 +141,12 @@ export default function AddParticipantStartPage() {
       // 🔥 현재 경로에서 create/details 뽑아내기
       // -----------------------------
       const segments = location.pathname.split("/");
+      console.log(segments);
       // ['', 'details', '76', 'participants', 'new']
       const mode = segments[1]; // 'details' 또는 'create'
       const id = segments[2]; // '76'
+
+      console.log(mode, id);
 
       navigate(`/${mode}/${id}`, { replace: true });
     } catch (error) {

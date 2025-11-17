@@ -100,7 +100,10 @@ export const CalendarDisplaySection = (): JSX.Element => {
     const datesToSend = compileSelectedDates(selByMonth);
     const availableTimes = makeFullDayTimes(datesToSend);
 
-    navigate(`/details/${promiseId}/participants/new`, {
+    const segments = location.pathname.split("/");
+    const mode = segments[1]; // 'details' 또는 'create'
+
+    navigate(`/${mode}/${promiseId}/participants/new`, {
       state: {
         ...state,
         nameDraft,

@@ -27,11 +27,16 @@ export function getTopBarConfig(pathname: string): TopBarConfig {
     return { title: "약속 상세", showBack: true };
   }
 
-  if (is("/details/:promiseId/participants/new") || is("/participants/new")) {
+  if (
+    is("/create/:promiseId/participants/new") ||
+    is("/details/:promiseId/participants/new") ||
+    is("/participants/new")
+  ) {
     return { title: "참가자 추가", showBack: true };
   }
 
   if (
+    is("/create/:promiseId/participants/new/origin") ||
     is("/details/:promiseId/participants/new/origin") ||
     is("/participants/new/origin")
   ) {
@@ -39,6 +44,7 @@ export function getTopBarConfig(pathname: string): TopBarConfig {
   }
 
   if (
+    is("/create/:promiseId/participants/new/origin/search") ||
     is("/details/:promiseId/participants/new/origin/search") ||
     is("/participants/new/origin/search")
   ) {
