@@ -90,10 +90,10 @@ export const CalendarDisplaySection = (): JSX.Element => {
     fetchPlan();
   }, [promiseId]);
 
-  const ymKey = useMemo(
-    () => `${year}-${String(month + 1).padStart(2, "0")}`,
-    [year, month]
-  );
+  //   const ymKey = useMemo(
+  //     () => `${year}-${String(month + 1).padStart(2, "0")}`,
+  //     [year, month]
+  //   );
   // ymKey는 필요하면 캐싱 key로 사용 가능 (지금은 로그/debug 용)
 
   // ✅ 현재 월의 날짜별 "가능 인원 수" 맵 생성

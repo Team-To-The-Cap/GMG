@@ -1,11 +1,11 @@
 .topbar {
-  /* 기본(sm) 변수값 */
-  --h: 48px;
-  --icon: 36px;
-  --pad-y: 8px;
+  /* 기본(sm) 변수값 (조금 줄임) */
+  --h: 44px;
+  --icon: 32px;
+  --pad-y: 6px;
   --pad-x: 4px;
-  --gap: 8px;
-  --title-size: 18px;
+  --gap: 6px;
+  --title-size: 17px;
 
   position: sticky;
   top: 0;
@@ -18,11 +18,23 @@
   grid-template-columns: var(--icon) 1fr var(--icon);
   align-items: center;
   gap: var(--gap);
-  padding: var(--pad-y) var(--pad-x);
-  width: 100%;
-  height: var(--h);
 
-  margin-bottom: 20px;
+  /* ✅ iOS safe-area 반영 (구형/신형 둘 다) */
+  padding-right: var(--pad-x);
+  padding-bottom: var(--pad-y);
+  padding-left: var(--pad-x);
+
+  /* 먼저 constant(옛날 iOS), 그다음 env(신규) */
+  padding-top: calc(var(--pad-y) + constant(safe-area-inset-top, 0px));
+  padding-top: calc(var(--pad-y) + env(safe-area-inset-top, 0px));
+
+  width: 100%;
+
+  /* 높이를 고정하지 말고 safe-area 포함 최소 높이로 */
+  min-height: calc(var(--h) + constant(safe-area-inset-top, 0px));
+  min-height: calc(var(--h) + env(safe-area-inset-top, 0px));
+
+  margin-bottom: 16px; /* 살짝 줄임 */
 }
 
 /* ===== Size variants ===== */
@@ -31,21 +43,22 @@
 }
 
 .size-md {
-  --h: 56px;
-  --icon: 40px;
-  --pad-y: 10px;
+  /* md도 전체적으로 한 단계 줄이기 */
+  --h: 50px;
+  --icon: 34px;
+  --pad-y: 7px;
   --pad-x: 8px;
-  --gap: 10px;
-  --title-size: 20px;
+  --gap: 8px;
+  --title-size: 18px;
 }
 
 .size-lg {
-  --h: 64px;
-  --icon: 44px;
-  --pad-y: 12px;
+  --h: 56px;
+  --icon: 38px;
+  --pad-y: 8px;
   --pad-x: 12px;
-  --gap: 12px;
-  --title-size: 22px;
+  --gap: 10px;
+  --title-size: 20px;
 }
 
 /* ===== Tone variants ===== */
