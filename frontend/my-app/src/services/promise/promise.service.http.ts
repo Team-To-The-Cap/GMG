@@ -1,20 +1,101 @@
-// src/services/promise.service.http.ts
+// src/services/promise/promise.service.http.ts
 import { DRAFT_PROMISE_ID_KEY } from "@/assets/constants/storage";
 import { http } from "@/lib/http";
-import type { PromiseDetail } from "@/types/promise";
+import type {
+  PromiseDetail,
+  CourseVisit,
+  CourseTransfer,
+  Course,
+} from "@/types/promise";
 import type { MeetingPlan, MeetingResponse } from "@/types/meeting";
 
+/**
+ * 🔹 백엔드에서 내려주는 MeetingResponse.places 배열을
+ *     PromiseDetail.course 구조로 변환해 주는 헬퍼
+ */
+function buildCourseFromPlaces(meeting: MeetingResponse): Course {
+  const places = meeting.places ?? [];
+
+  // 장소가 하나도 없으면 기본(빈) 코스 반환
+  if (!places.length) {
+    return {
+      title: "코스 미정",
+      summary: {
+        totalMinutes: 0,
+        activityMinutes: 0,
+        travelMinutes: 0,
+      },
+      items: [],
+      source: "from-meeting-http",
+    };
+  }
+
+  const items: Array<CourseVisit | CourseTransfer> = [];
+  let activityMinutes = 0;
+  let travelMinutes = 0;
+
+  places.forEach((pl, idx) => {
+    // 🔹 (1) 이전 장소 → 현재 장소로의 이동 단계
+    if (idx > 0) {
+      const transferMinutes = 10; // TODO: 나중에 실제 이동시간 계산으로 교체 가능
+
+      items.push({
+        type: "transfer",
+        mode: "subway", // 기본값 (walk/subway 등 마음대로 조정 가능)
+        minutes: transferMinutes,
+        note: "이동",
+      });
+
+      travelMinutes += transferMinutes;
+    }
+
+    // 🔹 (2) 현재 장소 방문 단계
+    const stay = pl.duration ?? 60; // duration을 체류시간으로 사용
+
+    items.push({
+      type: "visit",
+      id: String(pl.id),
+      place: {
+        name: pl.name,
+        address: pl.address,
+        lat: pl.latitude,
+        lng: pl.longitude,
+        category: (pl as any).category ?? "activity",
+      },
+      stayMinutes: stay,
+      note: pl.address,
+    });
+
+    activityMinutes += stay;
+  });
+
+  return {
+    title: meeting.name || "추천 코스",
+    summary: {
+      totalMinutes: activityMinutes + travelMinutes,
+      activityMinutes,
+      travelMinutes,
+    },
+    items,
+    generatedAtISO: new Date().toISOString(),
+    source: "auto-from-backend-places",
+  };
+}
+
+/**
+ * 🔹 MeetingResponse -> PromiseDetail 매핑
+ */
 function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
   const participants = meeting.participants.map((p) => ({
     id: String(p.id),
     name: p.name,
-    avatarUrl: p.avatar_url || `https://i.pravatar.cc/40?u=${p.id}`,
+    avatarUrl: (p as any).avatar_url || `https://i.pravatar.cc/40?u=${p.id}`,
   }));
 
-  // 🔹 1) 일정: plan.meeting_time이 있으면 그걸 우선 사용
+  // 1) 일정: plan.meeting_time이 있으면 우선 사용
   const scheduleISO = meeting.plan?.meeting_time ?? new Date().toISOString();
 
-  // 🔹 2) D-day 계산 (scheduleISO 기준)
+  // 2) D-day 계산
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const target = new Date(scheduleISO);
@@ -22,7 +103,7 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
   const diffMs = target.getTime() - today.getTime();
   const dday = Math.round(diffMs / (1000 * 60 * 60 * 24));
 
-  // 🔹 3) 장소: 우선 plan.address 사용, 없으면 places[0] 사용
+  // 3) 장소: plan.address 우선, 없으면 places[0] 사용
   const primaryPlace =
     meeting.plan?.address && meeting.plan.address.trim()
       ? {
@@ -40,26 +121,17 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
         }
       : undefined;
 
+  // 4) 코스: 서버 places → Course 구조로 변환
+  const course = buildCourseFromPlaces(meeting);
+
   return {
     id: String(meeting.id),
     title: meeting.name,
     dday,
     participants,
     schedule: { dateISO: scheduleISO },
-
-    // ✅ 이제 PromiseDetail.place에 실제 장소가 들어간다
     place: primaryPlace,
-
-    course: {
-      title: "임시 코스",
-      summary: {
-        totalMinutes: 0,
-        activityMinutes: 0,
-        travelMinutes: 0,
-      },
-      items: [],
-      source: "from-meeting-http",
-    },
+    course, // ✅ 실제 코스 데이터
   };
 }
 
@@ -111,7 +183,7 @@ export async function savePromiseDetail(
     body: JSON.stringify({ name: detail.title }),
   });
 
-  // 서버에서 업데이트된 Meeting을 다시 받아서 매핑하는 게 베스트지만,
+  // 실제론 서버에서 다시 조회하는 게 best지만,
   // 지금은 detail 그대로 돌려줘도 UI 입장에서는 충분함
   return detail;
 }
@@ -189,8 +261,7 @@ export async function calculateAutoPlan(
     throw new Error(`잘못된 meeting id: ${promiseId}`);
   }
 
-  // 1) 계산 트리거 (응답 타입은 MeetingPlan 이지만, 어차피 아래에서 다시 /meetings/{id}를 읽어올 거라
-  //    여기서는 반환값을 직접 쓰지 않아도 된다)
+  // 1) 계산 트리거
   await http.request<MeetingPlan>(`/meetings/${meetingId}/plans/calculate`, {
     method: "POST",
   });

@@ -1,5 +1,5 @@
 // src/pages/participants/add-preferences/index.tsx
-import { useEffect, useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import Button from "@/components/ui/button";
 import styles from "./style.module.css";
