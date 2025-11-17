@@ -6,6 +6,8 @@ import { Search, MapPin } from "lucide-react";
 import styles from "./style.module.css";
 import type { SavedPlace } from "@/lib/user-storage";
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL; // 🔹 공통 base URL
+
 type Item = {
   title: string;
   name: string;
@@ -52,8 +54,10 @@ export default function SearchOriginPage() {
         setLoading(true);
         setErr(null);
 
+        // 🔽 dev: http://localhost:8001/search/places
+        //    prod: http://223.130.152.114:8001/search/places
         const res = await fetch(
-          `/api/search/places?q=${encodeURIComponent(q)}`,
+          `${API_BASE}/search/places?q=${encodeURIComponent(q)}`,
           {
             signal: abortRef.current.signal,
           }
@@ -77,7 +81,6 @@ export default function SearchOriginPage() {
     const addr = it.roadAddress || it.address || "";
 
     const place: SavedPlace = {
-      // TODO: 실제 서비스에서는 고유 id 로 바꾸기
       id: `${label}-${addr}`,
       name: label,
       address: addr,
@@ -89,7 +92,6 @@ export default function SearchOriginPage() {
       ? `/${mode}/${promiseId}/participants/new/origin`
       : `/participants/new/origin`;
 
-    // 숫자 -1 이 아니라, 출발장소 선택 페이지로 "직접" 이동하면서 state 전달
     navigate(originPath, {
       replace: true,
       state: {
@@ -101,7 +103,7 @@ export default function SearchOriginPage() {
 
   return (
     <div className={styles.page}>
-      {/* 검색 인풋 (pill) */}
+      {/* 검색 인풋 */}
       <div className={styles.searchWrap}>
         <div className={styles.searchField}>
           <Search className={styles.searchIcon} size={18} />
