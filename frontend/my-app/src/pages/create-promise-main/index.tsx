@@ -78,7 +78,7 @@ export default function CreatePromiseMain() {
   }, [promiseId, navigate]);
 
   const onEditPlace = useCallback(() => {
-    navigate(`/details/${promiseId}/place-calculation`);
+    navigate(`/create/${promiseId}/place-calculation`);
   }, [promiseId, navigate]);
 
   const onEditCourse = useCallback(() => {

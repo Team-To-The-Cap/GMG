@@ -51,7 +51,6 @@ export function getTopBarConfig(pathname: string): TopBarConfig {
     return { title: "출발 장소 검색", showBack: true };
   }
 
-  // ✅ 날짜 선택 화면 (/details/:promiseId/promise-time, /create/:promiseId/promise-time)
   if (
     is("/create/:promiseId/promise-time") ||
     is("/details/:promiseId/promise-time")
@@ -70,8 +69,14 @@ export function getTopBarConfig(pathname: string): TopBarConfig {
     return { title: "시간 선택", showBack: true };
   }
 
-  if (is("/time/timeresult")) {
-    return { title: "시간 추천 결과", showBack: true };
+  if (is("/time/timeresult/:promiseId")) {
+    return { title: "최종 시간 선택", showBack: true };
+  }
+  if (
+    is("/create/:promiseId/place-calculation") ||
+    is("/details/:promiseId/place-calculation")
+  ) {
+    return { title: "최종 장소 선택", showBack: true };
   }
 
   // 매칭 안될 때 기본값

@@ -123,7 +123,7 @@ export default function App() {
           {/* 시간 선택/결과 */}
           <Route path="/create/:promiseId/promise-time" element={<Time1 />} />
           <Route path="/details/:promiseId/promise-time" element={<Time1 />} />
-          <Route path="/time/timeresult" element={<TimeResult />} />
+          <Route path="/time/timeresult/:promiseId" element={<TimeResult />} />
 
           {/* 404 → 홈으로 */}
           <Route path="*" element={<Navigate to="/" replace />} />
