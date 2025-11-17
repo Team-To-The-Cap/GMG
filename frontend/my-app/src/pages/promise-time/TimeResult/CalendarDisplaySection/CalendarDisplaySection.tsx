@@ -8,7 +8,7 @@ import {
 import { useEffect, useMemo, useState, type JSX } from "react";
 import Button from "@/components/ui/button";
 import { Calendar } from "@/components/ui/Calendar";
-import { useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 const MONTHS = [
   "January",
@@ -52,6 +52,9 @@ const initialDateSelections = [
 
 export const CalendarDisplaySection = (): JSX.Element => {
   const { promiseId } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const prevState = (location.state as any) ?? {};
 
   // ✅ 오늘 날짜 기준으로 초기 year/month 세팅
   const today = useMemo(() => new Date(), []);
@@ -67,7 +70,7 @@ export const CalendarDisplaySection = (): JSX.Element => {
   useEffect(() => {
     const fetchParticipants = async () => {
       const res = await fetch(
-        `http://223.130.152.114:8001/meetings/${promiseId}/participants`
+        `http://223.130.152.114:8001/meetings/${promiseId}/participants`,
       );
       const data = await res.json();
       setParticipants(data);
@@ -81,7 +84,7 @@ export const CalendarDisplaySection = (): JSX.Element => {
   useEffect(() => {
     const fetchPlan = async () => {
       const res = await fetch(
-        `http://223.130.152.114:8001/meetings/${promiseId}/plans`
+        `http://223.130.152.114:8001/meetings/${promiseId}/plans`,
       );
       const data = await res.json();
       setMeetingPlan(data);
@@ -92,7 +95,7 @@ export const CalendarDisplaySection = (): JSX.Element => {
 
   const ymKey = useMemo(
     () => `${year}-${String(month + 1).padStart(2, "0")}`,
-    [year, month]
+    [year, month],
   );
   // ymKey는 필요하면 캐싱 key로 사용 가능 (지금은 로그/debug 용)
 
@@ -132,12 +135,6 @@ export const CalendarDisplaySection = (): JSX.Element => {
     return result;
   }, [meetingPlan, year, month, participantCount]);
 
-  // ✅ 색상 스케일의 기준이 될 최대 인원 수
-  //   const maxAvailability = useMemo(() => {
-  //     const values = Object.values(currentMonthAvailability);
-  //     if (values.length === 0) return 0;
-  //     return Math.max(...values);
-  //   }, [currentMonthAvailability]);
   const maxAvailability = participantCount;
 
   const prevMonth = () => {
@@ -155,7 +152,6 @@ export const CalendarDisplaySection = (): JSX.Element => {
   };
 
   const handleDayClick = (day: number) => {
-    console.log("✅ Clicked:", day);
     if (currentMonthAvailability[day] == null) {
       setClickedDay(null);
       return;
@@ -167,8 +163,8 @@ export const CalendarDisplaySection = (): JSX.Element => {
     if (index < 0) return;
     setSelections((prevSelections) =>
       prevSelections.map((item, idx) =>
-        idx === index ? { ...item, isSelected: !item.isSelected } : item
-      )
+        idx === index ? { ...item, isSelected: !item.isSelected } : item,
+      ),
     );
   };
 
@@ -177,11 +173,45 @@ export const CalendarDisplaySection = (): JSX.Element => {
 
     const dateString = `${year}. ${String(month + 1).padStart(
       2,
-      "0"
+      "0",
     )}. ${String(clickedDay).padStart(2, "0")}`;
 
     return selections.filter((item) => item.date === dateString);
   }, [clickedDay, year, month, selections]);
+
+  // ✅ 선택된 날짜를 두 가지 포맷으로 준비
+  const selectedDateISO = useMemo(() => {
+    if (clickedDay === null) return null;
+    const y = year;
+    const m = String(month + 1).padStart(2, "0");
+    const d = String(clickedDay).padStart(2, "0");
+    return `${y}-${m}-${d}`; // 예: 2025-11-14
+  }, [year, month, clickedDay]);
+
+  const selectedDateDisplay = useMemo(() => {
+    if (clickedDay === null) return null;
+    return `${year}. ${String(month + 1).padStart(2, "0")}. ${String(
+      clickedDay,
+    ).padStart(2, "0")}`; // 예: 2025. 11. 14
+  }, [year, month, clickedDay]);
+
+  // ✅ 선택 완료 → 이전(상세) 페이지로 돌아가면서 날짜 전달
+  // ✅ 선택 완료 → /details/:promiseId 로 돌아가기
+  const handleConfirm = () => {
+    if (!selectedDateISO || !selectedDateDisplay) {
+      alert("날짜를 먼저 선택해주세요.");
+      return;
+    }
+
+    navigate(`/details/${promiseId}`, {
+      replace: true,
+      state: {
+        finalDate: selectedDateISO,          // "2025-11-14"
+        finalDateDisplay: selectedDateDisplay, // "2025. 11. 14"
+      },
+    });
+  };
+
 
   return (
     <section className="flex z-1 w-full relative flex-col items-end gap-[17px] pt-[17px] pb-[13px] px-5 bg-[#f7f7f7]">
@@ -256,7 +286,7 @@ export const CalendarDisplaySection = (): JSX.Element => {
               className={`w-full h-[51px] bg-white rounded-[13px] overflow-hidden border-2 border-solid ${selection.borderColor} flex items-center justify-between px-4 cursor-pointer`}
               onClick={() =>
                 toggleSelection(
-                  selections.findIndex((item) => item.date === selection.date)
+                  selections.findIndex((item) => item.date === selection.date),
                 )
               }
             >
@@ -293,7 +323,12 @@ export const CalendarDisplaySection = (): JSX.Element => {
         </div>
       )}
 
-      <Button variant="primary" size="lg" style={{ width: "100%" }}>
+      <Button
+        variant="primary"
+        size="lg"
+        style={{ width: "100%" }}
+        onClick={handleConfirm}
+      >
         선택 완료
       </Button>
     </section>
