@@ -42,10 +42,25 @@ export default function CreatePromiseMain() {
         setLoading(true);
         setError(undefined);
 
-        // ✅ 이제 여기서 promiseId === "new" 분기 제거
         const res = await getPromiseDetail(promiseId);
         if (alive) setData(res);
       } catch (e: any) {
+        // 🔥 여기부터 추가 로직
+        const draftId = localStorage.getItem(DRAFT_PROMISE_ID_KEY);
+
+        // (선택) 404 같은 "존재하지 않는 약속"만 체크하고 싶다면
+        // const status = e?.response?.status ?? e?.status;
+        // const isNotFound = status === 404;
+
+        if (draftId && draftId === promiseId) {
+          // draft로 기억해둔 약속인데 더 이상 불러올 수 없으면
+          // 👉 draft 키 제거 + 새로고침
+          localStorage.removeItem(DRAFT_PROMISE_ID_KEY);
+          window.location.reload();
+          return; // 이후 setError 실행 방지
+        }
+
+        // 기본 에러 처리
         if (alive) setError(e?.message ?? "알 수 없는 오류");
       } finally {
         if (alive) setLoading(false);
