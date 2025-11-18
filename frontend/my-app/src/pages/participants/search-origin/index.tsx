@@ -57,7 +57,7 @@ export default function SearchOriginPage() {
         // 🔽 dev: http://localhost:8001/search/places
         //    prod: http://223.130.152.114:8001/search/places
         const res = await fetch(
-          `${API_BASE}/search/places?q=${encodeURIComponent(q)}`,
+          `${API_BASE}/api/search/places?q=${encodeURIComponent(q)}`,
           {
             signal: abortRef.current.signal,
           }
