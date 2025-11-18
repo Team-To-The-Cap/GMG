@@ -44,10 +44,24 @@
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
 
+    <!-- 🔐 App Transport Security: 223.130.152.114 에 대해서만 HTTP 허용 -->
     <key>NSAppTransportSecurity</key>
     <dict>
-        <key>NSAllowsArbitraryLoads</key>
-        <true/>
+        <key>NSExceptionDomains</key>
+        <dict>
+            <key>223.130.152.114</key>
+            <dict>
+                <!-- 서브도메인까지 포함 (필요없긴 하지만 관성적으로 true) -->
+                <key>NSIncludesSubdomains</key>
+                <true/>
+                <!-- 이 도메인에 대해서만 HTTP 허용 -->
+                <key>NSExceptionAllowsInsecureHTTPLoads</key>
+                <true/>
+                <!-- Forward Secrecy 강제 안 함 (http라 의미는 거의 없지만 관용적으로 설정) -->
+                <key>NSExceptionRequiresForwardSecrecy</key>
+                <false/>
+            </dict>
+        </dict>
     </dict>
 
     <key>UIViewControllerBasedStatusBarAppearance</key>
