@@ -22,7 +22,8 @@ export default function CreatePromiseMain() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [calculating, setCalculating] = useState(false);
+  const [calculatingPlan, setCalculatingPlan] = useState(false);
+  const [calculatingCourse, setCalculatingCourse] = useState(false);
   const [error, setError] = useState<string>();
   const [data, setData] = useState<PromiseDetail>();
 
@@ -198,12 +199,14 @@ export default function CreatePromiseMain() {
     [promiseId, persistDraft]
   );
 
-  // 계산 버튼
-  const onCalculate = useCallback(async () => {
+  // 기존 onCalculate
+  // const onCalculate = useCallback(async () => {
+  const onCalculatePlan = useCallback(async () => {
+    // ✅ 이름 변경
     if (!promiseId) return;
 
     try {
-      setCalculating(true); // ✅ 변경: setSaving → setCalculating
+      setCalculatingPlan(true); // ✅ 변경
 
       const updated = await calculateAutoPlan(promiseId);
       setData(updated);
@@ -211,14 +214,28 @@ export default function CreatePromiseMain() {
       // 🔥 계산 결과도 draft로 저장
       persistDraft(updated);
 
-      alert("일정/장소/코스가 계산되었습니다!");
+      alert("일정/장소가 계산되었습니다!"); // ✅ 문구도 일정/장소 중심으로
     } catch (e: any) {
       console.error(e);
       alert(e?.message ?? "계산 중 오류가 발생했습니다.");
     } finally {
-      setCalculating(false); // ✅ 변경
+      setCalculatingPlan(false); // ✅ 변경
     }
   }, [promiseId, persistDraft]);
+
+  const onCalculateCourse = useCallback(async () => {
+    if (!data) return;
+
+    try {
+      setCalculatingCourse(true);
+      // TODO: 나중에 실제 코스 계산 API 연동
+      alert("코스 계산 기능은 아직 준비 중이에요.");
+    } catch (e: any) {
+      console.error(e);
+    } finally {
+      setCalculatingCourse(false);
+    }
+  }, [data]);
 
   // ✅ 저장 버튼: 실제로 서버에 저장 + draft 정리
   const onSave = useCallback(async () => {
@@ -274,12 +291,14 @@ export default function CreatePromiseMain() {
       onEditTitle={onEditTitle}
       onChangeTitle={onChangeTitle}
       onRemoveParticipant={onRemoveParticipant}
-      onCalculate={onCalculate}
+      onCalculatePlan={onCalculatePlan}
+      onCalculateCourse={onCalculateCourse}
       onSave={onSave}
       saving={saving}
       isDraft={isDraft}
       onReset={onReset}
-      calculating={calculating} // ✅ 추가
+      calculatingPlan={calculatingPlan}
+      calculatingCourse={calculatingCourse}
     />
   );
 }

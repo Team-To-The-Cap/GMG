@@ -36,12 +36,14 @@ type Props = {
   onRemoveParticipant?: (id: string) => void;
 
   /** 하단 버튼 액션 */
-  onCalculate?: () => void;
+  onCalculatePlan?: () => void; // ✅ 일정/장소 계산
+  onCalculateCourse?: () => void; // ✅ 코스 계산
   onSave?: () => void;
 
   /** 추가: 저장 로딩 + 초안 여부 + 초기화 */
   saving?: boolean;
-  calculating?: boolean;
+  calculatingPlan?: boolean; // ✅ 일정/장소 계산중
+  calculatingCourse?: boolean; // ✅ 코스 계산중
   isDraft?: boolean;
   onReset?: () => void;
 };
@@ -337,6 +339,40 @@ export default class CreatePromiseMainView extends React.PureComponent<
     );
   }
 
+  // 일정/장소 계산 버튼
+  private renderPlanCalculateButton() {
+    const { onCalculatePlan, calculatingPlan } = this.props;
+
+    return (
+      <Button
+        variant="primary"
+        size="sm"
+        style={{ width: "95%", justifySelf: "center", marginTop: 8 }}
+        onClick={onCalculatePlan}
+        disabled={calculatingPlan}
+      >
+        {calculatingPlan ? "일정/장소 계산 중..." : "일정/장소 계산하기"}
+      </Button>
+    );
+  }
+
+  // 코스 계산 버튼
+  private renderCourseCalculateButton() {
+    const { onCalculateCourse, calculatingCourse } = this.props;
+
+    return (
+      <Button
+        variant="primary"
+        size="sm"
+        style={{ width: "95%", justifySelf: "center", marginTop: 8 }}
+        onClick={onCalculateCourse}
+        disabled={calculatingCourse}
+      >
+        {calculatingCourse ? "코스 계산 중..." : "코스 계산하기"}
+      </Button>
+    );
+  }
+
   private renderCourseSection(course: PromiseDetail["course"]) {
     const { onEditCourse } = this.props;
 
@@ -374,18 +410,19 @@ export default class CreatePromiseMainView extends React.PureComponent<
     );
   }
 
-  private renderCalculateButton() {
-    const { onCalculate, calculating } = this.props; // ✅ calculating 사용
+  // 코스 계산 버튼
+  private renderCourseCalculateButton() {
+    const { onCalculateCourse, calculatingCourse } = this.props;
 
     return (
       <Button
         variant="primary"
         size="sm"
-        style={{ width: "95%", justifySelf: "center" }}
-        onClick={onCalculate}
-        disabled={calculating} // 계산 중일 땐 비활성화
+        style={{ width: "95%", justifySelf: "center", marginTop: 8 }}
+        onClick={onCalculateCourse}
+        disabled={calculatingCourse}
       >
-        {calculating ? "계산 중..." : "일정, 장소, 코스 계산하기"} {/* ✅ */}
+        {calculatingCourse ? "코스 계산 중..." : "코스 계산하기"}
       </Button>
     );
   }
@@ -462,8 +499,9 @@ export default class CreatePromiseMainView extends React.PureComponent<
           <div className={styles.sectionInner}>
             {this.renderScheduleSection(dateLabel)}
             {this.renderPlaceSection(placeLabel)}
+            {this.renderPlanCalculateButton()} {/* ✅ 일정/장소 계산 버튼 */}
             {this.renderCourseSection(data.course)}
-            {this.renderCalculateButton()}
+            {this.renderCourseCalculateButton()} {/* ✅ 코스 계산 버튼 */}
             {this.renderFinalSaveArea()}
           </div>
         </section>
