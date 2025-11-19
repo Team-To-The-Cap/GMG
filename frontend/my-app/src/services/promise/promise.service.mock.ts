@@ -496,3 +496,18 @@ export async function calculateAutoPlan(
   MOCK_DB[promiseId] = updated;
   return updated;
 }
+
+/**
+ * 🔹 약속 이름 수정 (Mock 버전)
+ */
+export async function updateMeetingName(
+  promiseId: string,
+  name: string
+): Promise<void> {
+  await delay(100);
+  const item = MOCK_DB[promiseId];
+  if (!item) {
+    throw new Error("Mock 데이터에 해당 약속이 없습니다.");
+  }
+  item.title = name;
+}

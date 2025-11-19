@@ -56,3 +56,12 @@ export async function calculateAutoPlan(
     ? mockImpl.calculateAutoPlan(promiseId)
     : httpImpl.calculateAutoPlan(promiseId);
 }
+
+export async function updateMeetingName(
+  promiseId: string,
+  name: string
+): Promise<void> {
+  return useMock
+    ? mockImpl.updateMeetingName(promiseId, name)
+    : httpImpl.updateMeetingName(promiseId, name);
+}

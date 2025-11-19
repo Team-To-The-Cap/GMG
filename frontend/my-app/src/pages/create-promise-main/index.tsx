@@ -7,12 +7,14 @@ import {
   savePromiseDetail,
   deleteParticipant,
   calculateAutoPlan,
+  updateMeetingName,
 } from "@/services/promise/promise.service";
 import type { PromiseDetail } from "@/types/promise";
 import { DEFAULT_PROMISE_ID } from "@/config/runtime";
-
-const DRAFT_PROMISE_ID_KEY = "GMG_LAST_DRAFT_PROMISE_ID";
-const DRAFT_PROMISE_DATA_PREFIX = "GMG_DRAFT_PROMISE_DATA_";
+import {
+  DRAFT_PROMISE_DATA_PREFIX,
+  DRAFT_PROMISE_ID_KEY,
+} from "@/assets/constants/storage";
 
 export default function CreatePromiseMain() {
   const { promiseId } = useParams();
@@ -100,17 +102,35 @@ export default function CreatePromiseMain() {
     };
   }, [promiseId, navigate]);
 
-  // 약속 이름 편집: data 갱신 + draft 전체 저장
+  // 약속 이름 편집(낙관적 업데이트 + 서버에 바로 저장)
   const onChangeTitle = useCallback(
-    (value: string) => {
+    async (value: string) => {
+      const trimmed = value.trim();
+
+      // 1) UI 먼저 업데이트
       setData((prev) => {
         if (!prev) return prev;
-        const next: PromiseDetail = { ...prev, title: value };
-        persistDraft(next);
-        return next;
+        return { ...prev, title: trimmed };
       });
+
+      // 2) 서버 PATCH
+      if (!promiseId) return;
+      try {
+        await updateMeetingName(promiseId, trimmed);
+      } catch (e: any) {
+        console.error(e);
+        alert(e?.message ?? "약속 이름 저장 중 오류가 발생했습니다.");
+
+        // (선택) 실패 시 서버 상태로 되돌리고 싶으면 재조회
+        try {
+          const fresh = await getPromiseDetail(promiseId);
+          setData(fresh);
+        } catch (err) {
+          console.error("이름 저장 실패 후 재조회도 실패:", err);
+        }
+      }
     },
-    [persistDraft]
+    [promiseId]
   );
 
   const onEditSchedule = useCallback(() => {

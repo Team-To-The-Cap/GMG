@@ -270,3 +270,23 @@ export async function calculateAutoPlan(
   const meeting = await http.request<MeetingResponse>(`/meetings/${meetingId}`);
   return mapMeetingToPromiseDetail(meeting);
 }
+
+// 🔹 약속 이름만 수정 (HTTP 버전)
+// FastAPI: PATCH /meetings/{meeting_id}  { "name": "..." }
+export async function updateMeetingName(
+  meetingId: string | number,
+  name: string
+): Promise<void> {
+  const mid = Number(meetingId);
+  if (Number.isNaN(mid)) {
+    throw new Error(`잘못된 meeting id: ${meetingId}`);
+  }
+
+  await http.request(`/meetings/${mid}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ name }),
+  });
+}
