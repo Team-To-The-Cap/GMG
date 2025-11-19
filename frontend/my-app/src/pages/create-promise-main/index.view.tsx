@@ -41,6 +41,7 @@ type Props = {
 
   /** 추가: 저장 로딩 + 초안 여부 + 초기화 */
   saving?: boolean;
+  calculating?: boolean;
   isDraft?: boolean;
   onReset?: () => void;
 };
@@ -374,15 +375,17 @@ export default class CreatePromiseMainView extends React.PureComponent<
   }
 
   private renderCalculateButton() {
-    const { onCalculate } = this.props;
+    const { onCalculate, calculating } = this.props; // ✅ calculating 사용
+
     return (
       <Button
         variant="primary"
         size="sm"
         style={{ width: "95%", justifySelf: "center" }}
         onClick={onCalculate}
+        disabled={calculating} // 계산 중일 땐 비활성화
       >
-        일정, 장소, 코스 계산하기
+        {calculating ? "계산 중..." : "일정, 장소, 코스 계산하기"} {/* ✅ */}
       </Button>
     );
   }

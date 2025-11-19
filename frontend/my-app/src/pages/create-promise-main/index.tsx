@@ -22,6 +22,7 @@ export default function CreatePromiseMain() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [calculating, setCalculating] = useState(false);
   const [error, setError] = useState<string>();
   const [data, setData] = useState<PromiseDetail>();
 
@@ -202,7 +203,7 @@ export default function CreatePromiseMain() {
     if (!promiseId) return;
 
     try {
-      setSaving(true);
+      setCalculating(true); // ✅ 변경: setSaving → setCalculating
 
       const updated = await calculateAutoPlan(promiseId);
       setData(updated);
@@ -215,7 +216,7 @@ export default function CreatePromiseMain() {
       console.error(e);
       alert(e?.message ?? "계산 중 오류가 발생했습니다.");
     } finally {
-      setSaving(false);
+      setCalculating(false); // ✅ 변경
     }
   }, [promiseId, persistDraft]);
 
@@ -278,6 +279,7 @@ export default function CreatePromiseMain() {
       saving={saving}
       isDraft={isDraft}
       onReset={onReset}
+      calculating={calculating} // ✅ 추가
     />
   );
 }
