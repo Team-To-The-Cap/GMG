@@ -65,3 +65,12 @@ export async function updateMeetingName(
     ? mockImpl.updateMeetingName(promiseId, name)
     : httpImpl.updateMeetingName(promiseId, name);
 }
+
+/** 🔹 약속 전체 초기화 (서버/모킹 공통 인터페이스) */
+export async function resetPromiseOnServer(
+  detail: PromiseDetail
+): Promise<PromiseDetail> {
+  return useMock
+    ? mockImpl.resetPromiseOnServer(detail)
+    : httpImpl.resetPromiseOnServer(detail);
+}

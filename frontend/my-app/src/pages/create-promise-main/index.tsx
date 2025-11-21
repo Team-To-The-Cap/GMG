@@ -8,6 +8,7 @@ import {
   deleteParticipant,
   calculateAutoPlan,
   updateMeetingName,
+  resetPromiseOnServer,
 } from "@/services/promise/promise.service";
 import type { PromiseDetail } from "@/types/promise";
 import { DEFAULT_PROMISE_ID } from "@/config/runtime";
@@ -261,27 +262,34 @@ export default function CreatePromiseMain() {
     }
   }, [data]);
 
-  // ✅ 초기화 버튼: ID는 유지, 내용만 비우고 draft 덮어쓰기
-  const onReset = useCallback(() => {
+  // ✅ 초기화 버튼: 서버까지 초기화 + draft 덮어쓰기
+  const onReset = useCallback(async () => {
     if (!data) return;
 
     const ok = window.confirm(
-      "정말 초기화하시겠습니까?\n입력하신 내용이 모두 사라집니다."
+      "정말 초기화하시겠습니까?\n입력하신 이름, 참가자, 일정, 장소 등이 모두 삭제됩니다."
     );
-    if (!ok) return; // 취소 누르면 종료
+    if (!ok) return;
 
-    const cleared: PromiseDetail = {
-      ...data,
-      title: "",
-      participants: [],
-      place: undefined,
-      // 필요에 따라 schedule, course도 초기화 가능
-      // schedule: { dateISO: new Date().toISOString() },
-      // course: { ...data.course, items: [], summary: { totalMinutes: 0, ... } }
-    };
+    try {
+      // 저장 스피너 재사용
+      setSaving(true);
 
-    setData(cleared);
-    persistDraft(cleared);
+      // 1) 서버에 전체 초기화 요청 (참여자/플랜/장소/이름 등 제거)
+      const cleared = await resetPromiseOnServer(data);
+
+      // 2) 프론트 상태 동기화
+      setData(cleared);
+
+      // 3) 이 화면은 '작성 중 초안' 개념이 있으니까
+      //    초기화된 상태를 draft로 다시 저장
+      persistDraft(cleared);
+    } catch (e: any) {
+      console.error(e);
+      alert(e?.message ?? "초기화 중 오류가 발생했습니다.");
+    } finally {
+      setSaving(false);
+    }
   }, [data, persistDraft]);
 
   return (

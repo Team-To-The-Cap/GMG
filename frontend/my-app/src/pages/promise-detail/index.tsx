@@ -7,7 +7,8 @@ import {
   savePromiseDetail,
   deleteParticipant,
   calculateAutoPlan,
-  updateMeetingName, // ✅ 추가
+  updateMeetingName,
+  resetPromiseOnServer,
 } from "@/services/promise/promise.service";
 import type { PromiseDetail } from "@/types/promise";
 import { DEFAULT_PROMISE_ID } from "@/config/runtime";
@@ -200,28 +201,32 @@ export default function PromiseDetailPage() {
     }
   }, [data]);
 
-  // ✅ 초기화 버튼: 서버 상태로 되돌리기
+  // ✅ 초기화 버튼: 이름/참가자/일정/장소/코스 모두 비우고 서버에 반영
   const onReset = useCallback(async () => {
-    if (!promiseId) return;
+    if (!data) return;
 
     const ok = window.confirm(
-      "정말 초기화하시겠습니까?\n저장되지 않은 변경 내용은 모두 사라집니다."
+      "정말 이 약속의 모든 데이터를 초기화하시겠습니까?\n\n" +
+        "약속 이름, 참석자, 일정, 장소, 코스 정보가 모두 삭제되고 서버에 저장됩니다."
     );
     if (!ok) return;
 
     try {
+      setSaving(true);
       setLoading(true);
-      setError(undefined);
 
-      const res = await getPromiseDetail(promiseId);
-      setData(res);
+      const cleared = await resetPromiseOnServer(data);
+      setData(cleared);
+
+      alert("약속 내용이 모두 초기화되었습니다.");
     } catch (e: any) {
       console.error(e);
-      setError(e?.message ?? "초기화 중 오류가 발생했습니다.");
+      alert(e?.message ?? "초기화 중 오류가 발생했습니다.");
     } finally {
+      setSaving(false);
       setLoading(false);
     }
-  }, [promiseId]);
+  }, [data]);
 
   return (
     <PromiseMainView
@@ -241,8 +246,7 @@ export default function PromiseDetailPage() {
       saving={saving}
       calculatingPlan={calculatingPlan}
       calculatingCourse={calculatingCourse}
-      onReset={onReset} // ⬅️ 추가
-      // isDraft 안 넘기면, View 쪽 로직에 따라 “기존 약속 모드”로 쓸 수 있음
+      onReset={onReset} // ⬅️ 여기 추가
     />
   );
 }

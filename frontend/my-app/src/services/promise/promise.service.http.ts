@@ -290,3 +290,67 @@ export async function updateMeetingName(
     body: JSON.stringify({ name }),
   });
 }
+
+// 🔹 약속 전체 초기화: 이름 / 참가자 / 일정 / 장소 / 코스 모두 비움
+export async function resetPromiseOnServer(
+  detail: PromiseDetail
+): Promise<PromiseDetail> {
+  const meetingId = Number(detail.id);
+  if (Number.isNaN(meetingId)) {
+    throw new Error(`잘못된 meeting id: ${detail.id}`);
+  }
+
+  // 1) 모든 참가자 삭제
+  const participants = detail.participants ?? [];
+  if (participants.length) {
+    await Promise.all(
+      participants.map(
+        (p) => deleteParticipant(meetingId, p.id) // 이미 있는 함수 재사용
+      )
+    );
+  }
+
+  // 2) 플랜(일정/장소) 비우기
+  // plan 자체가 null인 경우에는 PATCH에서 404 나올 수도 있으니 try/catch로 감싸고,
+  // 404 정도는 무시해도 됨.
+  try {
+    await http.request(`/meetings/${meetingId}/plans`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        meeting_time: null,
+        address: "",
+        latitude: null,
+        longitude: null,
+        total_time: null,
+        available_dates: [] as any[],
+      }),
+    });
+  } catch (e) {
+    console.warn("resetPromiseOnServer: plan reset 실패 (무시 가능)", e);
+  }
+
+  // 3) 장소(코스) 비우기
+  await http.request(`/meetings/${meetingId}/places`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify([]), // 장소 0개로 교체
+  });
+
+  // 4) 약속 이름 비우기
+  await http.request(`/meetings/${meetingId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ name: "" }),
+  });
+
+  // 5) 최종 상태 다시 조회해서 PromiseDetail로 변환
+  const meeting = await http.request<MeetingResponse>(`/meetings/${meetingId}`);
+  return mapMeetingToPromiseDetail(meeting);
+}
