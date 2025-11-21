@@ -1,5 +1,5 @@
+// src/pages/promise-main/index.view.tsx
 // @ts-nocheck
-// src/pages/promise-detail/index.view.tsx
 import React from "react";
 import SectionHeader from "@/components/ui/section-header";
 import Button from "@/components/ui/button";
@@ -13,13 +13,8 @@ import {
   ResultIcon,
   EditIcon,
 } from "@/assets/icons/icons";
-import styles from "./style.module.css";
-import type {
-  Participant,
-  PromiseDetail,
-  CourseVisit,
-  CourseTransfer,
-} from "@/types/promise";
+import styles from "./style.module.css"; // 기존 style 경로 유지 or 조정
+import type { Participant, PromiseDetail } from "@/types/promise";
 import CourseSummaryCard from "@/components/ui/course-summary-card";
 import CourseDetailList from "@/components/ui/course-detail-list";
 
@@ -27,6 +22,7 @@ type Props = {
   loading: boolean;
   error?: string;
   data?: PromiseDetail;
+
   onEditSchedule?: () => void;
   onEditPlace?: () => void;
   onEditCourse?: () => void;
@@ -40,15 +36,17 @@ type Props = {
 
   onRemoveParticipant?: (id: string) => void;
 
-  /** 하단 버튼 액션 */
-  onCalculatePlan?: () => void; // ✅ 일정/장소 계산
-  onCalculateCourse?: () => void; // ✅ 코스 계산
+  onCalculatePlan?: () => void;
+  onCalculateCourse?: () => void;
   onSave?: () => void;
 
-  /** 로딩 상태 */
   saving?: boolean;
   calculatingPlan?: boolean;
   calculatingCourse?: boolean;
+
+  // create 화면에서만 쓰는 옵션
+  isDraft?: boolean;
+  onReset?: () => void;
 };
 
 type State = {
@@ -57,12 +55,10 @@ type State = {
   placeDraft: string;
 };
 
-type VisitItem = CourseVisit;
-type TransferItem = CourseTransfer;
+type VisitItem = { type: "visit"; stayMinutes: number };
+type TransferItem = { type: "transfer"; minutes: number };
 
-function summarizeFromItems(
-  items: Array<VisitItem | TransferItem> = []
-): PromiseDetail["course"]["summary"] {
+function summarizeFromItems(items: Array<VisitItem | TransferItem> = []) {
   let activity = 0,
     travel = 0;
   for (const it of items) {
@@ -76,6 +72,14 @@ function summarizeFromItems(
   };
 }
 
+function isCourseWithItems(
+  course: PromiseDetail["course"] | { text: string }
+): course is PromiseDetail["course"] & {
+  items: Array<VisitItem | TransferItem>;
+} {
+  return Array.isArray((course as any)?.items);
+}
+
 function toYMD(iso?: string): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -86,10 +90,7 @@ function toYMD(iso?: string): string {
   return `${y}-${m}-${day}`;
 }
 
-export default class CreatePromiseMainView extends React.PureComponent<
-  Props,
-  State
-> {
+export default class PromiseMainView extends React.PureComponent<Props, State> {
   state: State = {
     titleDraft: this.props.data?.title ?? "",
     scheduleDraft: toYMD(this.props.data?.schedule?.dateISO),
@@ -112,6 +113,7 @@ export default class CreatePromiseMainView extends React.PureComponent<
     }
   }
 
+  // ===== 제목 =====
   private commitTitle = () => {
     const { onChangeTitle } = this.props;
     const value = this.state.titleDraft.trim();
@@ -132,6 +134,7 @@ export default class CreatePromiseMainView extends React.PureComponent<
     }
   };
 
+  // ===== 일정 =====
   private commitSchedule = () => {
     const { onChangeScheduleDate } = this.props;
     const value = this.state.scheduleDraft;
@@ -156,6 +159,7 @@ export default class CreatePromiseMainView extends React.PureComponent<
     }
   };
 
+  // ===== 장소 =====
   private commitPlace = () => {
     const { onChangePlaceName } = this.props;
     const value = this.state.placeDraft.trim();
@@ -176,6 +180,7 @@ export default class CreatePromiseMainView extends React.PureComponent<
     }
   };
 
+  // ===== 공통 섹션들 =====
   private renderSkeleton() {
     return (
       <div className={styles.container}>
@@ -192,26 +197,8 @@ export default class CreatePromiseMainView extends React.PureComponent<
     );
   }
 
-  private renderHeroCard(
-    title: string,
-    dday: number,
-    participants: Participant[]
-  ) {
-    return (
-      <PromiseCard
-        title={title}
-        dday={dday}
-        participants={participants}
-        className={styles.heroCard}
-      >
-        {/* 카드 본문 */}
-      </PromiseCard>
-    );
-  }
-
-  private renderTitleSection(nameFromData: string) {
+  private renderTitleSection() {
     const { titleDraft } = this.state;
-
     return (
       <section className={styles.section}>
         <SectionHeader icon={<ResultIcon />} title="약속 이름" size="sm" />
@@ -268,7 +255,7 @@ export default class CreatePromiseMainView extends React.PureComponent<
     );
   }
 
-  private renderScheduleSection(dateLabel: string) {
+  private renderScheduleSection() {
     const { onEditSchedule } = this.props;
     const { scheduleDraft } = this.state;
 
@@ -306,7 +293,7 @@ export default class CreatePromiseMainView extends React.PureComponent<
     );
   }
 
-  private renderPlaceSection(placeLabel: string) {
+  private renderPlaceSection() {
     const { onEditPlace } = this.props;
     const { placeDraft } = this.state;
 
@@ -339,8 +326,10 @@ export default class CreatePromiseMainView extends React.PureComponent<
   private renderCourseSection(course: PromiseDetail["course"]) {
     const { onEditCourse } = this.props;
 
-    const items = course.items ?? [];
-    const summary = course.summary ?? summarizeFromItems(items);
+    const items = isCourseWithItems(course) ? course.items : [];
+    const summary = isCourseWithItems(course)
+      ? course.summary ?? summarizeFromItems(items)
+      : { totalMinutes: 0, activityMinutes: 0, travelMinutes: 0 };
 
     return (
       <section className={styles.section}>
@@ -371,7 +360,6 @@ export default class CreatePromiseMainView extends React.PureComponent<
     );
   }
 
-  // ✅ 일정/장소 계산 버튼
   private renderPlanCalculateButton() {
     const { onCalculatePlan, calculatingPlan } = this.props;
 
@@ -388,7 +376,6 @@ export default class CreatePromiseMainView extends React.PureComponent<
     );
   }
 
-  // ✅ 코스 계산 버튼
   private renderCourseCalculateButton() {
     const { onCalculateCourse, calculatingCourse } = this.props;
 
@@ -405,8 +392,43 @@ export default class CreatePromiseMainView extends React.PureComponent<
     );
   }
 
-  private renderFinalSaveButton() {
-    const { onSave, saving } = this.props;
+  private renderFinalSaveArea() {
+    const { onSave, saving, isDraft, onReset } = this.props;
+
+    // ✅ onReset이 넘어오면: 두 개 버튼 (초기화 + 저장)
+    if (onReset) {
+      return (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr", // 두 버튼 같은 너비
+            gap: 8,
+            width: "100%",
+          }}
+        >
+          <Button
+            variant="ghost"
+            size="lg"
+            style={{ width: "100%" }}
+            onClick={onReset}
+            disabled={saving}
+          >
+            초기화
+          </Button>
+          <Button
+            variant="primary"
+            size="lg"
+            style={{ width: "100%" }}
+            onClick={onSave}
+            disabled={saving}
+          >
+            {saving ? "저장 중..." : "저장하기"}
+          </Button>
+        </div>
+      );
+    }
+
+    // ✅ onReset 없으면: 저장 버튼만
     return (
       <Button
         variant="primary"
@@ -427,25 +449,19 @@ export default class CreatePromiseMainView extends React.PureComponent<
     if (error) return this.renderError(error);
     if (!data) return this.renderError("데이터가 없습니다.");
 
-    const dateLabel = new Date(data.schedule.dateISO).toLocaleDateString(
-      "ko-KR",
-      { year: "numeric", month: "long", day: "numeric" }
-    );
-    const placeLabel = data.place?.name ?? "장소 미정";
-
     return (
       <div className={styles.container}>
-        {this.renderTitleSection(data.title)}
+        {this.renderTitleSection()}
         {this.renderParticipantsSection(data.participants)}
         <section className={styles.section}>
           <SectionHeader icon={<ResultIcon />} title="결과" size="md" />
           <div className={styles.sectionInner}>
-            {this.renderScheduleSection(dateLabel)}
-            {this.renderPlaceSection(placeLabel)}
-            {this.renderPlanCalculateButton()} {/* 일정/장소 계산 */}
+            {this.renderScheduleSection()}
+            {this.renderPlaceSection()}
+            {this.renderPlanCalculateButton()}
             {this.renderCourseSection(data.course)}
-            {this.renderCourseCalculateButton()} {/* 코스 계산 */}
-            {this.renderFinalSaveButton()}
+            {this.renderCourseCalculateButton()}
+            {this.renderFinalSaveArea()}
           </div>
         </section>
         <div className={styles.bottomSpacer} />

@@ -1,7 +1,7 @@
 // src/pages/create-promise-main/index.tsx
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useState, useCallback, useMemo } from "react";
-import CreatePromiseMainView from "./index.view";
+import PromiseMainView from "@/pages/promise-main/index.view";
 import {
   getPromiseDetail,
   savePromiseDetail,
@@ -264,6 +264,12 @@ export default function CreatePromiseMain() {
   // ✅ 초기화 버튼: ID는 유지, 내용만 비우고 draft 덮어쓰기
   const onReset = useCallback(() => {
     if (!data) return;
+
+    const ok = window.confirm(
+      "정말 초기화하시겠습니까?\n입력하신 내용이 모두 사라집니다."
+    );
+    if (!ok) return; // 취소 누르면 종료
+
     const cleared: PromiseDetail = {
       ...data,
       title: "",
@@ -273,14 +279,13 @@ export default function CreatePromiseMain() {
       // schedule: { dateISO: new Date().toISOString() },
       // course: { ...data.course, items: [], summary: { totalMinutes: 0, ... } }
     };
-    setData(cleared);
 
-    // 🔥 초기화된 상태를 draft로 저장
+    setData(cleared);
     persistDraft(cleared);
   }, [data, persistDraft]);
 
   return (
-    <CreatePromiseMainView
+    <PromiseMainView
       loading={loading}
       error={error}
       data={data}

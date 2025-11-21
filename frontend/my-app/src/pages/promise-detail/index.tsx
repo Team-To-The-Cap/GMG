@@ -1,7 +1,7 @@
 // src/pages/promise-detail/index.tsx
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState, useCallback } from "react";
-import CreatePromiseMainView from "./index.view";
+import PromiseMainView from "@/pages/promise-main/index.view";
 import {
   getPromiseDetail,
   savePromiseDetail,
@@ -200,8 +200,31 @@ export default function PromiseDetailPage() {
     }
   }, [data]);
 
+  // ✅ 초기화 버튼: 서버 상태로 되돌리기
+  const onReset = useCallback(async () => {
+    if (!promiseId) return;
+
+    const ok = window.confirm(
+      "정말 초기화하시겠습니까?\n저장되지 않은 변경 내용은 모두 사라집니다."
+    );
+    if (!ok) return;
+
+    try {
+      setLoading(true);
+      setError(undefined);
+
+      const res = await getPromiseDetail(promiseId);
+      setData(res);
+    } catch (e: any) {
+      console.error(e);
+      setError(e?.message ?? "초기화 중 오류가 발생했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  }, [promiseId]);
+
   return (
-    <CreatePromiseMainView
+    <PromiseMainView
       loading={loading}
       error={error}
       data={data}
@@ -212,13 +235,14 @@ export default function PromiseDetailPage() {
       onEditTitle={onEditTitle}
       onChangeTitle={onChangeTitle}
       onRemoveParticipant={onRemoveParticipant}
-      // 🔽 계산 버튼 분리
       onCalculatePlan={onCalculatePlan}
       onCalculateCourse={onCalculateCourse}
       onSave={onSave}
       saving={saving}
       calculatingPlan={calculatingPlan}
       calculatingCourse={calculatingCourse}
+      onReset={onReset} // ⬅️ 추가
+      // isDraft 안 넘기면, View 쪽 로직에 따라 “기존 약속 모드”로 쓸 수 있음
     />
   );
 }
