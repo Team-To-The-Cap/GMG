@@ -1,3 +1,4 @@
+// src/pages/participants/add-origin/index.tsx
 import { useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { MapPin, ChevronRight, CheckCircle2 } from "lucide-react";
@@ -14,24 +15,7 @@ export default function AddParticipantOriginPage() {
   const state = (location.state || {}) as ParticipantLocationState;
   const nameDraft = state.nameDraft ?? "";
 
-  // 🔹 selectedOrigin: string | SavedPlace | null → SavedPlace | null 로 정규화
-  const normalizedSelected = useMemo<SavedPlace | null>(() => {
-    const raw = state.selectedOrigin;
-    if (!raw) return null;
-
-    if (typeof raw === "string") {
-      return {
-        id: raw,
-        name: raw,
-        address: raw,
-      };
-    }
-
-    // 이미 SavedPlace인 경우
-    return raw;
-  }, [state.selectedOrigin]);
-
-  // ───────────────── 저장된 장소 목록 ─────────────────
+  // ───────────────── 저장된 장소 목록 (localStorage or state) ─────────────────
   const baseSaved = useMemo<SavedPlace[]>(() => {
     if (state.savedPlaces && state.savedPlaces.length) {
       return state.savedPlaces;
@@ -39,16 +23,65 @@ export default function AddParticipantOriginPage() {
     return loadSavedPlaces();
   }, [state.savedPlaces]);
 
-  // 🔹 실제로 화면에 쓸 saved 리스트
-  //    - normalizedSelected 가 baseSaved 안에 없으면 맨 위에 추가
+  // 🔹 selectedOrigin: string | SavedPlace | null → SavedPlace | null 로 정규화
+  //    - string 이면 baseSaved 안에서 먼저 "같은 장소"를 찾고
+  //      (주소나 이름이 포함 관계인 경우까지 허용)
+  //    - 없을 때만 새 SavedPlace 를 만들어서 사용
+  const normalizedSelected = useMemo<SavedPlace | null>(() => {
+    const raw = state.selectedOrigin;
+    if (!raw) return null;
+
+    // 문자열로 넘어온 경우 (서버에서 온 start_address)
+    if (typeof raw === "string") {
+      const norm = raw.trim();
+
+      const found = baseSaved.find((p) => {
+        const name = (p.name ?? "").trim();
+        const addr = (p.address ?? "").trim();
+        return (
+          name === norm ||
+          addr === norm ||
+          name.includes(norm) ||
+          norm.includes(name) ||
+          addr.includes(norm) ||
+          norm.includes(addr)
+        );
+      });
+
+      if (found) return found;
+
+      // 완전히 새로운 장소면 임시 SavedPlace 객체 생성
+      return {
+        id: norm,
+        name: norm,
+        address: norm,
+      };
+    }
+
+    // 이미 SavedPlace 로 넘어온 경우
+    return raw;
+  }, [state.selectedOrigin, baseSaved]);
+
+  // ───────────────── 화면에 보여줄 saved 리스트 ─────────────────
   const saved = useMemo<SavedPlace[]>(() => {
     if (!normalizedSelected) return baseSaved;
 
-    const exists = baseSaved.some((p) => p.id === normalizedSelected.id);
+    // id 가 다르더라도 같은 주소면 같은 장소로 본다
+    const exists = baseSaved.some(
+      (p) =>
+        p.id === normalizedSelected.id ||
+        (p.address &&
+          normalizedSelected.address &&
+          p.address.trim() === normalizedSelected.address.trim())
+    );
+
     if (exists) return baseSaved;
 
+    // 정말 새 장소일 때만 맨 위에 추가
     return [normalizedSelected, ...baseSaved];
   }, [baseSaved, normalizedSelected]);
+
+  // ...
 
   // 🔹 선택 상태
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -70,7 +103,7 @@ export default function AddParticipantOriginPage() {
     setSelectedId((cur) => (cur === p.id ? null : p.id));
   };
 
-  // ───────────────── “장소 선택하기” → 검색 페이지 ─────────────────
+  // ───────────────── “새로운 장소 검색하기” → 검색 페이지 ─────────────────
   const openSearch = () => {
     const segments = location.pathname.split("/");
     const mode = segments[1]; // 'details' 또는 'create'
@@ -80,11 +113,10 @@ export default function AddParticipantOriginPage() {
       : `/participants/new/origin/search`;
 
     navigate(path, {
-      replace: true,
+      // 🔹 replace: true 빼야 뒤로가기 시 /origin 으로 돌아감
       state: {
         ...state,
-        savedPlaces: baseSaved,
-        // 현재까지 선택된 값 유지해서 넘겨주기
+        savedPlaces: saved, // 최신 목록 넘기기
         selectedOrigin: selectedPlace ?? normalizedSelected ?? null,
       },
     });
@@ -99,7 +131,7 @@ export default function AddParticipantOriginPage() {
     if (!selectedPlace) return;
 
     const segments = location.pathname.split("/");
-    const mode = segments[1]; // 'details' 또는 'create'
+    const mode = segments[1];
 
     const path = promiseId
       ? `/${mode}/${promiseId}/participants/new`
@@ -109,7 +141,7 @@ export default function AddParticipantOriginPage() {
       state: {
         ...state,
         nameDraft,
-        selectedOrigin: selectedPlace.address, // 도로명 주소만 전달
+        selectedOrigin: selectedPlace.address, // start 페이지에는 주소 문자열만 넘김
         selectedTransportation: transportation,
       },
     });
@@ -132,7 +164,28 @@ export default function AddParticipantOriginPage() {
           </button>
         </div>
 
-        {/* 리스트 */}
+        {/* 새로운 장소 검색하기 카드 */}
+        <button
+          onClick={openSearch}
+          className="w-full flex items-start gap-2 px-4 py-3.5 rounded-2xl shadow-md bg-white active:scale-[0.99] transition mb-6"
+        >
+          <div className="w-9 h-9 flex items-center justify-center rounded-full bg-indigo-50 text-indigo-500 mt-0.5">
+            <MapPin size={24} />
+          </div>
+
+          <div className="flex flex-col flex-1 text-left">
+            <div className="text-[15px] font-semibold text-gray-900">
+              새로운 장소 검색하기
+            </div>
+            <div className="text-[12px] text-gray-500">
+              지정된 장소 또는 검색으로 선택
+            </div>
+          </div>
+
+          <ChevronRight size={18} className="text-slate-400" />
+        </button>
+
+        {/* 저장된 장소 리스트 */}
         <ul className="space-y-2">
           {saved.map((p) => {
             const active = selectedId === p.id;
@@ -182,30 +235,9 @@ export default function AddParticipantOriginPage() {
           })}
         </ul>
 
+        {/* 이동수단 선택 + 하단 버튼은 그대로 */}
         <div className="h-4" />
 
-        {/* 장소 선택 카드 */}
-        <button
-          onClick={openSearch}
-          className="w-full flex items-start gap-2 px-4 py-3.5 rounded-2xl shadow-md bg-white active:scale-[0.99] transition mb-6"
-        >
-          <div className="w-9 h-9 flex items-center justify-center rounded-full bg-indigo-50 text-indigo-500 mt-0.5">
-            <MapPin size={24} />
-          </div>
-
-          <div className="flex flex-col flex-1 text-left">
-            <div className="text-[15px] font-semibold text-gray-900">
-              새로운 장소 검색하기
-            </div>
-            <div className="text-[12px] text-gray-500">
-              지정된 장소 또는 검색으로 선택
-            </div>
-          </div>
-
-          <ChevronRight size={18} className="text-slate-400" />
-        </button>
-
-        {/* 이동수단 선택 */}
         <div className="mt-4">
           <div className="text-sm font-semibold text-gray-800 mb-2 px-1">
             이동수단
@@ -232,7 +264,6 @@ export default function AddParticipantOriginPage() {
           </div>
         </div>
 
-        {/* 취소 / 확인 버튼 */}
         <div className="mt-6 grid grid-cols-2 gap-3 px-1 pb-10">
           <Button variant="ghost" size="md" onClick={onBack}>
             취소

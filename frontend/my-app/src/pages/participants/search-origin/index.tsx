@@ -4,10 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Search, MapPin } from "lucide-react";
 import styles from "./style.module.css";
-import type { SavedPlace } from "@/lib/user-storage";
+import {
+  loadSavedPlaces,
+  savePlaces,
+  type SavedPlace,
+  MAX_SAVED_PLACES,
+} from "@/lib/user-storage";
 import type { ParticipantLocationState } from "@/types/participant";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL; // 🔹 공통 base URL
+const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
 type Item = {
   title: string;
@@ -22,7 +27,7 @@ export default function SearchOriginPage() {
   const navigate = useNavigate();
   const { promiseId } = useParams();
   const location = useLocation();
-  const baseState = (location.state || {}) as LocationState;
+  const baseState = (location.state || {}) as ParticipantLocationState;
 
   const [q, setQ] = useState("");
   const [items, setItems] = useState<Item[]>([]);
@@ -49,8 +54,6 @@ export default function SearchOriginPage() {
         setLoading(true);
         setErr(null);
 
-        // 🔽 dev: http://localhost:8001/search/places
-        //    prod: http://223.130.152.114:8001/search/places
         const res = await fetch(
           `${API_BASE}/api/search/places?q=${encodeURIComponent(q)}`,
           {
@@ -87,18 +90,36 @@ export default function SearchOriginPage() {
       ? `/${mode}/${promiseId}/participants/new/origin`
       : `/participants/new/origin`;
 
+    // 🔹 이전 목록: state 우선, 없으면 localStorage
+    const prevSaved: SavedPlace[] =
+      baseState.savedPlaces && baseState.savedPlaces.length
+        ? baseState.savedPlaces
+        : loadSavedPlaces();
+
+    // 🔹 중복 제거 후 맨 앞에 새 place 추가
+    let nextSaved = prevSaved.filter((p) => p.id !== place.id);
+    nextSaved.unshift(place);
+
+    // 🔹 최대 MAX_SAVED_PLACES 까지만 유지
+    if (nextSaved.length > MAX_SAVED_PLACES) {
+      nextSaved = nextSaved.slice(0, MAX_SAVED_PLACES);
+    }
+
+    // 🔹 localStorage 에도 반영 (선택)
+    savePlaces(nextSaved);
+
     navigate(originPath, {
       replace: true,
       state: {
         ...baseState,
         selectedOrigin: place,
+        savedPlaces: nextSaved, // ✅ 이제 항상 MAX_SAVED_PLACES 이하
       },
     });
   };
 
   return (
     <div className={styles.page}>
-      {/* 검색 인풋 */}
       <div className={styles.searchWrap}>
         <div className={styles.searchField}>
           <Search className={styles.searchIcon} size={18} />

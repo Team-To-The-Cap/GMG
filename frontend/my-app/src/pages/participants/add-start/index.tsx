@@ -76,24 +76,16 @@ export default function AddParticipantStartPage() {
       ? `/${mode}/${promiseId}/participants/new/origin`
       : `/participants/new/origin`;
 
-    // origin 이 문자열(start_address)이라서, SavedPlace 모양으로 감싸줌
-    const originPlace =
-      origin != null
-        ? {
-            id: origin,
-            name: origin,
-            address: origin,
-          }
-        : null;
-
     navigate(path, {
       state: {
         nameDraft: name,
-        selectedOrigin: originPlace, // 🔥 이거 추가
+        // ✅ 지금 화면에 보이는 출발 장소를 그대로 넘겨줘야
+        // add-origin에서 기본 선택값으로 체크할 수 있음
+        selectedOrigin: origin,
         selectedTimes: availableTimes,
         selectedTransportation: transportation,
         selectedPreferences: preferredCats,
-        editParticipantId, // 수정 모드 유지
+        editParticipantId, // (수정 모드 유지)
       },
     });
   };
