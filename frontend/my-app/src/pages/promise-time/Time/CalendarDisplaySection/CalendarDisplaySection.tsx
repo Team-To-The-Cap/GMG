@@ -1,3 +1,4 @@
+// src/pages/promise-time/CalendarDisplaySection.tsx
 import { useMemo, useState, type JSX } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Calendar } from "@/components/ui/Calendar";
@@ -19,6 +20,7 @@ const MONTHS = [
   "December",
 ];
 
+// 🔹 선택된 날짜들을 "YYYY-MM-DD" string 배열로 변환
 const compileSelectedDates = (
   selByMonth: Record<string, number[]>
 ): string[] => {
@@ -45,14 +47,77 @@ const makeFullDayTimes = (dates: string[]) => {
   }));
 };
 
-export const CalendarDisplaySection = (): JSX.Element => {
-  // ✅ 오늘 날짜 기준으로 초기 year/month 세팅
-  const today = useMemo(() => new Date(), []);
-  const [year, setYear] = useState(() => today.getFullYear());
-  const [month, setMonth] = useState(() => today.getMonth()); // 0-index (11월이면 10)
+// 🔹 selectedTimes (start_time/end_time) → selByMonth 초기값으로 파싱
+function buildSelByMonthFromSelectedTimes(
+  selectedTimes: { start_time: string; end_time: string }[] | undefined
+): Record<string, number[]> {
+  const result: Record<string, number[]> = {};
 
-  // 월별 선택 상태 보존: {"2025-10":[8,31], "2025-11":[3,9], ...}
-  const [selByMonth, setSelByMonth] = useState<Record<string, number[]>>({});
+  if (!selectedTimes || selectedTimes.length === 0) {
+    return result;
+  }
+
+  for (const t of selectedTimes) {
+    if (!t?.start_time) continue;
+    const d = new Date(t.start_time);
+    if (Number.isNaN(d.getTime())) continue;
+
+    const y = d.getFullYear();
+    const m = d.getMonth() + 1; // 1~12
+    const day = d.getDate();
+
+    const ymKey = `${y}-${String(m).padStart(2, "0")}`;
+    if (!result[ymKey]) result[ymKey] = [];
+    if (!result[ymKey].includes(day)) {
+      result[ymKey].push(day);
+    }
+  }
+
+  // 각 월별로 날짜 정렬
+  for (const k in result) {
+    result[k].sort((a, b) => a - b);
+  }
+
+  return result;
+}
+
+// 🔹 selectedTimes 중 첫 날짜로 초기 년/월 맞추기
+function getFirstSelectedDate(
+  selectedTimes: { start_time: string; end_time: string }[] | undefined
+): Date | null {
+  if (!selectedTimes || selectedTimes.length === 0) return null;
+  const d = new Date(selectedTimes[0].start_time);
+  if (Number.isNaN(d.getTime())) return null;
+  return d;
+}
+
+export const CalendarDisplaySection = (): JSX.Element => {
+  const location = useLocation();
+  const state = location.state as any;
+
+  // 기존 참가자 수정일 때 들어오는 값들
+  const selectedTimesFromState =
+    (state?.selectedTimes as { start_time: string; end_time: string }[]) ?? [];
+
+  const nameDraft = state?.nameDraft ?? "";
+
+  const firstSelectedDate = useMemo(
+    () => getFirstSelectedDate(selectedTimesFromState),
+    [selectedTimesFromState]
+  );
+
+  // ✅ 초기 year/month: 이전에 선택된 날짜가 있으면 그 달 기준, 없으면 오늘
+  const [year, setYear] = useState(
+    () => firstSelectedDate?.getFullYear() ?? new Date().getFullYear()
+  );
+  const [month, setMonth] = useState(
+    () => firstSelectedDate?.getMonth() ?? new Date().getMonth()
+  ); // 0~11
+
+  // ✅ selByMonth도 selectedTimes로 초기화
+  const [selByMonth, setSelByMonth] = useState<Record<string, number[]>>(() =>
+    buildSelByMonthFromSelectedTimes(selectedTimesFromState)
+  );
 
   const ymKey = useMemo(
     () => `${year}-${String(month + 1).padStart(2, "0")}`,
@@ -86,10 +151,6 @@ export const CalendarDisplaySection = (): JSX.Element => {
     return total;
   }, [selByMonth]);
 
-  const location = useLocation();
-  const state = location.state as any;
-  const nameDraft = state?.nameDraft ?? "";
-
   const navigate = useNavigate();
   const { promiseId } = useParams();
 
@@ -102,7 +163,7 @@ export const CalendarDisplaySection = (): JSX.Element => {
 
     navigate(`/${mode}/${promiseId}/participants/new`, {
       state: {
-        ...state,
+        ...state, // ✅ editParticipantId, origin, transportation 등 유지
         nameDraft,
         selectedTimes: availableTimes,
       },
@@ -154,7 +215,6 @@ export const CalendarDisplaySection = (): JSX.Element => {
               month={month}
               initialSelected={currentSelectedDays}
               onSelect={handleSelect}
-              // apiDays={{ 7: { disabled: true } }}  // 필요 시 예시
             />
           </div>
         </div>

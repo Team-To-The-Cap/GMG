@@ -62,7 +62,8 @@ export default function AddParticipantStartPage() {
         selectedOrigin: origin,
         selectedTransportation: transportation,
         selectedPreferences: preferredCats,
-        editParticipantId, // ✅ state에서 가져온 값 유지
+        selectedTimes: availableTimes, // 🔹 기존 날짜들도 같이 넘기기
+        editParticipantId: (location.state as any)?.editParticipantId,
       },
     });
   };
@@ -75,13 +76,24 @@ export default function AddParticipantStartPage() {
       ? `/${mode}/${promiseId}/participants/new/origin`
       : `/participants/new/origin`;
 
+    // origin 이 문자열(start_address)이라서, SavedPlace 모양으로 감싸줌
+    const originPlace =
+      origin != null
+        ? {
+            id: origin,
+            name: origin,
+            address: origin,
+          }
+        : null;
+
     navigate(path, {
       state: {
         nameDraft: name,
+        selectedOrigin: originPlace, // 🔥 이거 추가
         selectedTimes: availableTimes,
         selectedTransportation: transportation,
         selectedPreferences: preferredCats,
-        editParticipantId, // ✅ 유지
+        editParticipantId, // 수정 모드 유지
       },
     });
   };

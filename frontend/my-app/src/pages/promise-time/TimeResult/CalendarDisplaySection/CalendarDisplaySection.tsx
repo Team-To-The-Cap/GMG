@@ -70,7 +70,7 @@ export const CalendarDisplaySection = (): JSX.Element => {
   useEffect(() => {
     const fetchParticipants = async () => {
       const res = await fetch(
-        `http://223.130.152.114:8001/meetings/${promiseId}/participants`,
+        `http://223.130.152.114:8001/meetings/${promiseId}/participants`
       );
       const data = await res.json();
       setParticipants(data);
@@ -84,7 +84,7 @@ export const CalendarDisplaySection = (): JSX.Element => {
   useEffect(() => {
     const fetchPlan = async () => {
       const res = await fetch(
-        `http://223.130.152.114:8001/meetings/${promiseId}/plans`,
+        `http://223.130.152.114:8001/meetings/${promiseId}/plans`
       );
       const data = await res.json();
       setMeetingPlan(data);
@@ -163,8 +163,8 @@ export const CalendarDisplaySection = (): JSX.Element => {
     if (index < 0) return;
     setSelections((prevSelections) =>
       prevSelections.map((item, idx) =>
-        idx === index ? { ...item, isSelected: !item.isSelected } : item,
-      ),
+        idx === index ? { ...item, isSelected: !item.isSelected } : item
+      )
     );
   };
 
@@ -173,7 +173,7 @@ export const CalendarDisplaySection = (): JSX.Element => {
 
     const dateString = `${year}. ${String(month + 1).padStart(
       2,
-      "0",
+      "0"
     )}. ${String(clickedDay).padStart(2, "0")}`;
 
     return selections.filter((item) => item.date === dateString);
@@ -191,7 +191,7 @@ export const CalendarDisplaySection = (): JSX.Element => {
   const selectedDateDisplay = useMemo(() => {
     if (clickedDay === null) return null;
     return `${year}. ${String(month + 1).padStart(2, "0")}. ${String(
-      clickedDay,
+      clickedDay
     ).padStart(2, "0")}`; // 예: 2025. 11. 14
   }, [year, month, clickedDay]);
 
@@ -206,12 +206,11 @@ export const CalendarDisplaySection = (): JSX.Element => {
     navigate(`/details/${promiseId}`, {
       replace: true,
       state: {
-        finalDate: selectedDateISO,          // "2025-11-14"
+        finalDate: selectedDateISO, // "2025-11-14"
         finalDateDisplay: selectedDateDisplay, // "2025. 11. 14"
       },
     });
   };
-
 
   return (
     <section className="flex z-1 w-full relative flex-col items-end gap-[17px] pt-[17px] pb-[13px] px-5 bg-[#f7f7f7]">
@@ -286,7 +285,7 @@ export const CalendarDisplaySection = (): JSX.Element => {
               className={`w-full h-[51px] bg-white rounded-[13px] overflow-hidden border-2 border-solid ${selection.borderColor} flex items-center justify-between px-4 cursor-pointer`}
               onClick={() =>
                 toggleSelection(
-                  selections.findIndex((item) => item.date === selection.date),
+                  selections.findIndex((item) => item.date === selection.date)
                 )
               }
             >
