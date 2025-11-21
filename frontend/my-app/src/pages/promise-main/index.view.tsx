@@ -13,8 +13,9 @@ import {
   ResultIcon,
   EditIcon,
 } from "@/assets/icons/icons";
-import styles from "./style.module.css"; // 기존 style 경로 유지 or 조정
-import type { Participant, PromiseDetail } from "@/types/promise";
+import styles from "./style.module.css";
+import type { PromiseDetail } from "@/types/promise";
+import type { Participant } from "@/types/participant"; // ⬅️ 여기서 가져오기
 import CourseSummaryCard from "@/components/ui/course-summary-card";
 import CourseDetailList from "@/components/ui/course-detail-list";
 
@@ -29,12 +30,12 @@ type Props = {
   onAddParticipant?: () => void;
 
   onChangeTitle?: (value: string) => void;
-  onEditTitle?: () => void;
 
   onChangeScheduleDate?: (valueISO: string) => void;
   onChangePlaceName?: (value: string) => void;
 
   onRemoveParticipant?: (id: string) => void;
+  onEditParticipant?: (participant: Participant) => void; // ⬅️ 추가
 
   onCalculatePlan?: () => void;
   onCalculateCourse?: () => void;
@@ -44,7 +45,6 @@ type Props = {
   calculatingPlan?: boolean;
   calculatingCourse?: boolean;
 
-  // create 화면에서만 쓰는 옵션
   isDraft?: boolean;
   onReset?: () => void;
 };
@@ -217,7 +217,9 @@ export default class PromiseMainView extends React.PureComponent<Props, State> {
   }
 
   private renderParticipantsSection(participants: Participant[]) {
-    const { onAddParticipant, onRemoveParticipant } = this.props;
+    const { onAddParticipant, onRemoveParticipant, onEditParticipant } =
+      this.props;
+
     return (
       <section className={styles.section}>
         <SectionHeader icon={<UserIcon />} title="참석자 명단" size="sm" />
@@ -232,13 +234,25 @@ export default class PromiseMainView extends React.PureComponent<Props, State> {
                   aria-label={`${p.name} 삭제`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    onRemoveParticipant?.(p.id);
+                    onRemoveParticipant?.(String(p.id));
                   }}
                 >
                   ×
                 </button>
               </div>
               <span className={styles.participantItemName}>{p.name}</span>
+
+              {/* ⬇️ 수정 버튼 */}
+              <button
+                type="button"
+                className={styles.editParticipantBtn}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEditParticipant?.(p);
+                }}
+              >
+                수정
+              </button>
             </li>
           ))}
         </ul>

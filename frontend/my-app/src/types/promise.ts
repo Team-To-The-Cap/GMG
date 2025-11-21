@@ -1,9 +1,5 @@
 // src/types/promise.ts
-export type Participant = {
-  id: string;
-  name: string;
-  avatarUrl: string;
-};
+import type { Participant } from "./participant";
 
 export type Schedule = {
   dateISO: string; // "2025-10-27T00:00:00+09:00"
@@ -59,12 +55,11 @@ export type Course = {
     activityMinutes: number; // 방문(stay) 합
     travelMinutes: number; // 이동 합
   };
-  items: Array<CourseVisit | CourseTransfer>; // visit/transfer 교차
+  items: Array<CourseVisit | CourseTransfer>;
   generatedAtISO?: string;
-  source?: "auto" | "manual" | string; // 생성 출처 표기용
+  source?: "auto" | "manual" | string;
 };
 
-// PromiseDetail에 적용(하위호환을 원하면 union으로)
 export type PromiseDetail = {
   id: string;
   title: string;
@@ -72,6 +67,5 @@ export type PromiseDetail = {
   participants: Participant[];
   schedule: Schedule;
   place?: Place;
-  course: Course; // 기존 CourseList{text} 대신
-  // course: Course | { text: string }; // ← 하위호환 필요시 이렇게
+  course: Course;
 };

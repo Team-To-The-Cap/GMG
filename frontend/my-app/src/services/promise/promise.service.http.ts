@@ -1,12 +1,14 @@
 // src/services/promise/promise.service.http.ts
 import { DRAFT_PROMISE_ID_KEY } from "@/assets/constants/storage";
 import { http } from "@/lib/http";
+// src/services/promise/promise.service.http.ts
 import type {
   PromiseDetail,
   CourseVisit,
   CourseTransfer,
   Course,
 } from "@/types/promise";
+import type { Participant, ParticipantTime } from "@/types/participant";
 import type { MeetingPlan, MeetingResponse } from "@/types/meeting";
 
 /**
@@ -86,11 +88,40 @@ function buildCourseFromPlaces(meeting: MeetingResponse): Course {
  * 🔹 MeetingResponse -> PromiseDetail 매핑
  */
 function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
-  const participants = meeting.participants.map((p) => ({
-    id: String(p.id),
-    name: p.name,
-    avatarUrl: (p as any).avatar_url || `https://i.pravatar.cc/40?u=${p.id}`,
-  }));
+  const participants: Participant[] = meeting.participants.map((raw) => {
+    // MeetingParticipant 타입에는 없는 필드들(fav_activity, available_times 등)을
+    // 실제 응답에는 있다고 가정하고 any로 한 번 풀어줌
+    const p: any = raw;
+
+    const fav: string = p.fav_activity ?? "";
+    const preferredCategories =
+      fav.length > 0
+        ? fav
+            .split(",")
+            .map((s: string) => s.trim())
+            .filter((s: string) => !!s)
+        : [];
+
+    const availableTimes: ParticipantTime[] = (p.available_times ?? []).map(
+      (t: any) => ({
+        start_time: t.start_time as string,
+        end_time: t.end_time as string,
+      })
+    );
+
+    return {
+      id: String(p.id),
+      name: p.name,
+      avatarUrl: p.avatar_url || `https://i.pravatar.cc/40?u=${p.id}`,
+
+      // ⬇️ 확장 필드들
+      startAddress: p.start_address as string | undefined,
+      transportation: p.transportation as string | undefined,
+      favActivityRaw: fav,
+      preferredCategories,
+      availableTimes,
+    };
+  });
 
   // 1) 일정: plan.meeting_time이 있으면 우선 사용
   const scheduleISO = meeting.plan?.meeting_time ?? new Date().toISOString();
@@ -131,7 +162,7 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
     participants,
     schedule: { dateISO: scheduleISO },
     place: primaryPlace,
-    course, // ✅ 실제 코스 데이터
+    course,
   };
 }
 

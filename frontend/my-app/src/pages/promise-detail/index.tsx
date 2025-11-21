@@ -6,6 +6,7 @@ import { getPromiseDetail } from "@/services/promise/promise.service";
 import type { PromiseDetail } from "@/types/promise";
 import { DEFAULT_PROMISE_ID } from "@/config/runtime";
 import { usePromiseMainController } from "@/pages/promise-main/index";
+import type { Participant } from "@/types/participant";
 
 export default function PromiseDetailPage() {
   const { promiseId } = useParams();
@@ -110,9 +111,23 @@ export default function PromiseDetailPage() {
     });
   }, [promiseId, navigate]);
 
-  const onEditTitle = useCallback(() => {
-    alert("약속 이름 수정 기능 준비 중!");
-  }, []);
+  const onEditParticipant = useCallback(
+    (participant: Participant) => {
+      if (!promiseId) return;
+
+      navigate(`/details/${promiseId}/participants/new`, {
+        state: {
+          nameDraft: participant.name,
+          selectedOrigin: participant.startAddress ?? null,
+          selectedTransportation: participant.transportation ?? null,
+          selectedTimes: participant.availableTimes ?? [],
+          selectedPreferences: participant.preferredCategories ?? [],
+          editParticipantId: participant.id,
+        },
+      });
+    },
+    [promiseId, navigate]
+  );
 
   return (
     <PromiseMainView
@@ -123,16 +138,16 @@ export default function PromiseDetailPage() {
       onEditPlace={onEditPlace}
       onEditCourse={onEditCourse}
       onAddParticipant={onAddParticipant}
-      onEditTitle={onEditTitle}
-      onChangeTitle={onChangeTitle} // ✅ 기본 핸들러 래핑 버전
+      onChangeTitle={onChangeTitle}
       onRemoveParticipant={onRemoveParticipant}
+      onEditParticipant={onEditParticipant} // ⬅️ 전달
       onCalculatePlan={onCalculatePlan}
       onCalculateCourse={onCalculateCourse}
       onSave={onSave}
       saving={saving}
       calculatingPlan={calculatingPlan}
       calculatingCourse={calculatingCourse}
-      onReset={onReset} // ✅ 기본 서버 초기화 사용
+      onReset={onReset}
     />
   );
 }

@@ -14,6 +14,7 @@ import {
   DRAFT_PROMISE_ID_KEY,
 } from "@/assets/constants/storage";
 import { usePromiseMainController } from "@/pages/promise-main/index";
+import type { Participant } from "@/types/participant";
 
 export default function CreatePromiseMain() {
   const { promiseId } = useParams();
@@ -202,9 +203,23 @@ export default function CreatePromiseMain() {
     });
   }, [promiseId, navigate]);
 
-  const onEditTitle = useCallback(() => {
-    alert("약속 이름 수정 기능 준비 중!");
-  }, []);
+  const onEditParticipant = useCallback(
+    (participant: Participant) => {
+      if (!promiseId) return;
+
+      navigate(`/create/${promiseId}/participants/new`, {
+        state: {
+          nameDraft: participant.name,
+          selectedOrigin: participant.startAddress ?? null,
+          selectedTransportation: participant.transportation ?? null,
+          selectedTimes: participant.availableTimes ?? [],
+          selectedPreferences: participant.preferredCategories ?? [],
+          editParticipantId: participant.id, // 수정 모드 표시
+        },
+      });
+    },
+    [promiseId, navigate]
+  );
 
   return (
     <PromiseMainView
@@ -215,11 +230,11 @@ export default function CreatePromiseMain() {
       onEditPlace={onEditPlace}
       onEditCourse={onEditCourse}
       onAddParticipant={onAddParticipant}
-      onEditTitle={onEditTitle}
       onChangeTitle={onChangeTitle}
       onRemoveParticipant={onRemoveParticipant}
+      onEditParticipant={onEditParticipant} // ⬅️ 전달
       onCalculatePlan={onCalculatePlan}
-      onCalculateCourse={onCalculateCourse} // 기본 핸들러 그대로 사용
+      onCalculateCourse={onCalculateCourse}
       onSave={onSave}
       saving={saving}
       isDraft={isDraft}
