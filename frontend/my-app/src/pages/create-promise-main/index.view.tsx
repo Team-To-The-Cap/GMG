@@ -356,23 +356,6 @@ export default class CreatePromiseMainView extends React.PureComponent<
     );
   }
 
-  // 코스 계산 버튼
-  private renderCourseCalculateButton() {
-    const { onCalculateCourse, calculatingCourse } = this.props;
-
-    return (
-      <Button
-        variant="primary"
-        size="sm"
-        style={{ width: "95%", justifySelf: "center", marginTop: 8 }}
-        onClick={onCalculateCourse}
-        disabled={calculatingCourse}
-      >
-        {calculatingCourse ? "코스 계산 중..." : "코스 계산하기"}
-      </Button>
-    );
-  }
-
   private renderCourseSection(course: PromiseDetail["course"]) {
     const { onEditCourse } = this.props;
 
