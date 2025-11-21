@@ -17,11 +17,13 @@ export default function AddParticipantStartPage() {
     { start_time: string; end_time: string }[]
   >([]);
   const [transportation, setTransportation] = useState<string | null>(null);
-
   const [preferredCats, setPreferredCats] = useState<PlaceCategory[]>([]);
-
-  // ✅ 추가: 제출 중인지 여부
   const [submitting, setSubmitting] = useState(false);
+
+  // ✅ 수정 모드인지 구분하기 위한 id (null이면 신규 생성)
+  const [editParticipantId, setEditParticipantId] = useState<
+    string | number | null
+  >(null);
 
   useEffect(() => {
     const state = location.state as any;
@@ -29,21 +31,22 @@ export default function AddParticipantStartPage() {
     if (state?.nameDraft !== undefined) {
       setName(state.nameDraft);
     }
-
     if (state?.selectedOrigin) {
       setOrigin(state.selectedOrigin);
     }
-
     if (state?.selectedTransportation) {
       setTransportation(state.selectedTransportation);
     }
-
     if (state?.selectedTimes) {
       setAvailableTimes(state.selectedTimes);
     }
-
     if (state?.selectedPreferences) {
       setPreferredCats(state.selectedPreferences as PlaceCategory[]);
+    }
+
+    // 🔥 여기서 한 번만 editParticipantId를 고정
+    if (state?.editParticipantId !== undefined) {
+      setEditParticipantId(state.editParticipantId);
     }
   }, [location.state]);
 
@@ -59,6 +62,7 @@ export default function AddParticipantStartPage() {
         selectedOrigin: origin,
         selectedTransportation: transportation,
         selectedPreferences: preferredCats,
+        editParticipantId, // ✅ state에서 가져온 값 유지
       },
     });
   };
@@ -77,6 +81,7 @@ export default function AddParticipantStartPage() {
         selectedTimes: availableTimes,
         selectedTransportation: transportation,
         selectedPreferences: preferredCats,
+        editParticipantId, // ✅ 유지
       },
     });
   };
@@ -93,6 +98,7 @@ export default function AddParticipantStartPage() {
         selectedTimes: availableTimes,
         selectedTransportation: transportation,
         selectedPreferences: preferredCats,
+        editParticipantId, // ✅ 유지
       },
     });
   };
@@ -104,53 +110,62 @@ export default function AddParticipantStartPage() {
 
     const payload: any = {
       name,
-      member_id: 0, // 서버 필수 필드 (임시 더미값)
+      member_id: 0,
       start_address: origin ?? "",
       transportation: transportation ?? "",
-      // ✅ 선호 카테고리는 일단 문자열로 합쳐서 전송 (백엔드 스펙에 맞춰 조정 가능)
       fav_activity: preferredCats.length > 0 ? preferredCats.join(",") : "카페",
       available_times: availableTimes,
     };
 
-    if (origin) payload.start_address = origin;
-    if (transportation) payload.transportation = transportation;
-    if (availableTimes.length > 0) payload.available_times = availableTimes;
-
-    console.log("전송 데이터:", payload);
-    const numericId = promiseId.replace(/\D/g, "");
+    const numericMeetingId = promiseId.replace(/\D/g, "");
 
     try {
       setSubmitting(true);
 
-      const res = await fetch(
-        `http://223.130.152.114:8001/meetings/${numericId}/participants/`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            accept: "application/json",
-          },
-          body: JSON.stringify(payload),
-        }
-      );
+      let res: Response;
+
+      if (editParticipantId !== null && editParticipantId !== undefined) {
+        // ✅ 수정 모드 → PATCH /meetings/{meeting_id}/participants/{participant_id}
+        const numericParticipantId = String(editParticipantId).replace(
+          /\D/g,
+          ""
+        );
+
+        res = await fetch(
+          `http://223.130.152.114:8001/meetings/${numericMeetingId}/participants/${numericParticipantId}`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              accept: "application/json",
+            },
+            body: JSON.stringify(payload),
+          }
+        );
+      } else {
+        // ✅ 신규 생성 모드 → POST /meetings/{meeting_id}/participants/
+        res = await fetch(
+          `http://223.130.152.114:8001/meetings/${numericMeetingId}/participants/`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              accept: "application/json",
+            },
+            body: JSON.stringify(payload),
+          }
+        );
+      }
 
       if (!res.ok) {
         const err = await res.text();
         throw new Error(err || "저장 실패");
       }
 
-      //   alert("참석자 정보가 성공적으로 저장되었습니다!");
-
-      // -----------------------------
-      // 🔥 현재 경로에서 create/details 뽑아내기
-      // -----------------------------
+      // 현재 경로에서 create / details 뽑아서 원래 약속 페이지로 복귀
       const segments = location.pathname.split("/");
-      console.log(segments);
-      // ['', 'details', '76', 'participants', 'new']
-      const mode = segments[1]; // 'details' 또는 'create'
-      const id = segments[2]; // '76'
-
-      console.log(mode, id);
+      const mode = segments[1];
+      const id = segments[2];
 
       navigate(`/${mode}/${id}`, { replace: true });
     } catch (error) {
@@ -218,7 +233,7 @@ export default function AddParticipantStartPage() {
           variant="primary"
           size="lg"
           className={styles.saveBtn}
-          disabled={!name.trim() || submitting} // ✅ 제출 중이면 버튼 비활성화
+          disabled={!name.trim() || submitting}
           onClick={submit}
         >
           {submitting ? "저장 중..." : "저장하기"}
