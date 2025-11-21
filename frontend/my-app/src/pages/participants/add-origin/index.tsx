@@ -1,45 +1,58 @@
-// src/pages/participants/add-origin/index.tsx
 import { useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { MapPin, ChevronRight, CheckCircle2 } from "lucide-react"; // ⬅️ 체크 아이콘 추가
+import { MapPin, ChevronRight, CheckCircle2 } from "lucide-react";
 import Button from "@/components/ui/button";
 
 import { loadSavedPlaces, type SavedPlace } from "@/lib/user-storage";
-
-type LocationState = {
-  savedPlaces?: SavedPlace[];
-  nameDraft?: string;
-  selectedOrigin?: SavedPlace | null;
-  selectedTransportation?: string | null;
-};
+import type { ParticipantLocationState } from "@/types/participant";
 
 export default function AddParticipantOriginPage() {
   const navigate = useNavigate();
   const { promiseId } = useParams();
   const location = useLocation();
-  const state = (location.state || {}) as LocationState;
-  const nameDraft = state?.nameDraft ?? "";
 
-  // ───────────────── 저장된 장소 ─────────────────
+  const state = (location.state || {}) as ParticipantLocationState;
+  const nameDraft = state.nameDraft ?? "";
+
+  // 🔹 selectedOrigin: string | SavedPlace | null → SavedPlace | null 로 정규화
+  const normalizedSelected = useMemo<SavedPlace | null>(() => {
+    const raw = state.selectedOrigin;
+    if (!raw) return null;
+
+    if (typeof raw === "string") {
+      return {
+        id: raw,
+        name: raw,
+        address: raw,
+      };
+    }
+
+    // 이미 SavedPlace인 경우
+    return raw;
+  }, [state.selectedOrigin]);
+
+  // ───────────────── 저장된 장소 목록 ─────────────────
   const baseSaved = useMemo<SavedPlace[]>(() => {
-    if (state.savedPlaces && state.savedPlaces.length) return state.savedPlaces;
+    if (state.savedPlaces && state.savedPlaces.length) {
+      return state.savedPlaces;
+    }
     return loadSavedPlaces();
   }, [state.savedPlaces]);
 
-  // 검색 화면 등에서 돌아온 선택 결과
-  const externalSelected = state.selectedOrigin ?? null;
-
-  // 최종 리스트: externalSelected 가 saved 에 없으면 맨 위에 추가
+  // 🔹 실제로 화면에 쓸 saved 리스트
+  //    - normalizedSelected 가 baseSaved 안에 없으면 맨 위에 추가
   const saved = useMemo<SavedPlace[]>(() => {
-    if (!externalSelected) return baseSaved;
-    const exists = baseSaved.some((p) => p.id === externalSelected.id);
-    if (exists) return baseSaved;
-    return [externalSelected, ...baseSaved];
-  }, [baseSaved, externalSelected]);
+    if (!normalizedSelected) return baseSaved;
 
-  // 선택 상태 (초기값: 외부에서 넘어온 selectedOrigin)
+    const exists = baseSaved.some((p) => p.id === normalizedSelected.id);
+    if (exists) return baseSaved;
+
+    return [normalizedSelected, ...baseSaved];
+  }, [baseSaved, normalizedSelected]);
+
+  // 🔹 선택 상태
   const [selectedId, setSelectedId] = useState<string | null>(
-    externalSelected?.id ?? null
+    normalizedSelected?.id ?? null
   );
 
   const selectedPlace = useMemo(
@@ -72,7 +85,7 @@ export default function AddParticipantOriginPage() {
         ...state,
         savedPlaces: baseSaved,
         // 현재까지 선택된 값 유지해서 넘겨주기
-        selectedOrigin: selectedPlace ?? externalSelected ?? null,
+        selectedOrigin: selectedPlace ?? normalizedSelected ?? null,
       },
     });
   };
@@ -96,7 +109,7 @@ export default function AddParticipantOriginPage() {
       state: {
         ...state,
         nameDraft,
-        selectedOrigin: selectedPlace.address, // 도로명주소만 전달
+        selectedOrigin: selectedPlace.address, // 도로명 주소만 전달
         selectedTransportation: transportation,
       },
     });
@@ -167,12 +180,6 @@ export default function AddParticipantOriginPage() {
               </li>
             );
           })}
-
-          {/* {!saved.length && (
-            <li className="p-3.5 rounded-xl bg-white border text-sm text-slate-500">
-              저장된 장소가 없어요.
-            </li>
-          )} */}
         </ul>
 
         <div className="h-4" />
@@ -182,22 +189,19 @@ export default function AddParticipantOriginPage() {
           onClick={openSearch}
           className="w-full flex items-start gap-2 px-4 py-3.5 rounded-2xl shadow-md bg-white active:scale-[0.99] transition mb-6"
         >
-          {/* 아이콘 */}
           <div className="w-9 h-9 flex items-center justify-center rounded-full bg-indigo-50 text-indigo-500 mt-0.5">
             <MapPin size={24} />
           </div>
 
-          {/* 텍스트 묶음: 왼쪽 정렬 */}
           <div className="flex flex-col flex-1 text-left">
             <div className="text-[15px] font-semibold text-gray-900">
-              장소 선택하기
+              새로운 장소 검색하기
             </div>
             <div className="text-[12px] text-gray-500">
-              저장된 장소 또는 검색으로 선택
+              지정된 장소 또는 검색으로 선택
             </div>
           </div>
 
-          {/* 오른쪽 화살표 */}
           <ChevronRight size={18} className="text-slate-400" />
         </button>
 

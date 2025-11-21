@@ -5,6 +5,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Search, MapPin } from "lucide-react";
 import styles from "./style.module.css";
 import type { SavedPlace } from "@/lib/user-storage";
+import type { ParticipantLocationState } from "@/types/participant";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL; // 🔹 공통 base URL
 
@@ -15,12 +16,6 @@ type Item = {
   roadAddress?: string | null;
   category?: string | null;
   telephone?: string | null;
-};
-
-type LocationState = {
-  savedPlaces?: SavedPlace[];
-  nameDraft?: string;
-  selectedOrigin?: SavedPlace | null;
 };
 
 export default function SearchOriginPage() {
