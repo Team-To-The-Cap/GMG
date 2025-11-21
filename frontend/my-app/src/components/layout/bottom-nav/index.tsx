@@ -4,8 +4,7 @@ import { useCallback, useState } from "react";
 import styles from "./style.module.css";
 import { HomeIcon, PlusIcon, UserIcon } from "@/assets/icons/icons";
 import { createEmptyPromise } from "@/services/promise/promise.service";
-
-const DRAFT_PROMISE_ID_KEY = "GMG_LAST_DRAFT_PROMISE_ID";
+import { DRAFT_PROMISE_ID_KEY } from "@/assets/constants/storage";
 
 export default function BottomNav() {
   const navigate = useNavigate();

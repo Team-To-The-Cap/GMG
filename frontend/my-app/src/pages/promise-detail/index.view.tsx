@@ -41,11 +41,14 @@ type Props = {
   onRemoveParticipant?: (id: string) => void;
 
   /** 하단 버튼 액션 */
-  onCalculate?: () => void;
+  onCalculatePlan?: () => void; // ✅ 일정/장소 계산
+  onCalculateCourse?: () => void; // ✅ 코스 계산
   onSave?: () => void;
 
-  /** 저장 로딩 상태 */
+  /** 로딩 상태 */
   saving?: boolean;
+  calculatingPlan?: boolean;
+  calculatingCourse?: boolean;
 };
 
 type State = {
@@ -368,16 +371,36 @@ export default class CreatePromiseMainView extends React.PureComponent<
     );
   }
 
-  private renderCalculateButton() {
-    const { onCalculate } = this.props;
+  // ✅ 일정/장소 계산 버튼
+  private renderPlanCalculateButton() {
+    const { onCalculatePlan, calculatingPlan } = this.props;
+
     return (
       <Button
         variant="primary"
         size="sm"
-        style={{ width: "95%", justifySelf: "center" }}
-        onClick={onCalculate}
+        style={{ width: "95%", justifySelf: "center", marginTop: 8 }}
+        onClick={onCalculatePlan}
+        disabled={calculatingPlan}
       >
-        일정, 장소, 코스 계산하기
+        {calculatingPlan ? "일정/장소 계산 중..." : "일정/장소 계산하기"}
+      </Button>
+    );
+  }
+
+  // ✅ 코스 계산 버튼
+  private renderCourseCalculateButton() {
+    const { onCalculateCourse, calculatingCourse } = this.props;
+
+    return (
+      <Button
+        variant="primary"
+        size="sm"
+        style={{ width: "95%", justifySelf: "center", marginTop: 8 }}
+        onClick={onCalculateCourse}
+        disabled={calculatingCourse}
+      >
+        {calculatingCourse ? "코스 계산 중..." : "코스 계산하기"}
       </Button>
     );
   }
@@ -419,8 +442,9 @@ export default class CreatePromiseMainView extends React.PureComponent<
           <div className={styles.sectionInner}>
             {this.renderScheduleSection(dateLabel)}
             {this.renderPlaceSection(placeLabel)}
+            {this.renderPlanCalculateButton()} {/* 일정/장소 계산 */}
             {this.renderCourseSection(data.course)}
-            {this.renderCalculateButton()}
+            {this.renderCourseCalculateButton()} {/* 코스 계산 */}
             {this.renderFinalSaveButton()}
           </div>
         </section>
