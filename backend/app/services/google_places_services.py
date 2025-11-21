@@ -1,10 +1,12 @@
 # app/services/google_places_service.py
 from typing import Any, Dict, List, Optional
 
+import logging
 import requests
 from core.config import GOOGLE_MAPS_API_KEY
 
-# 역세권 판단용 타입 집합
+log = logging.getLogger(__name__)
+
 STATION_TYPES = {
     "subway_station",
     "train_station",
@@ -20,11 +22,6 @@ def fetch_nearby_places(
     keyword: Optional[str] = None,
     type: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
-    """
-    Google Places Nearby Search API 호출해서
-    raw results 리스트를 그대로 반환.
-    (필터링/정제는 사용하는 쪽에서)
-    """
     url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
     params: Dict[str, Any] = {
         "location": f"{lat},{lng}",
@@ -38,7 +35,20 @@ def fetch_nearby_places(
     if type:
         params["type"] = type
 
-    res = requests.get(url, params=params, timeout=5)
+    try:
+        res = requests.get(url, params=params, timeout=5)
+    except requests.RequestException as e:
+        log.warning(f"[GGL] request error: {e}")
+        return []
+
+    if res.status_code != 200:
+        log.warning(
+            "[GGL] non-200 response: status=%s, body=%s",
+            res.status_code,
+            res.text[:200],
+        )
+        return []
+
     data = res.json()
     return data.get("results", [])
 
@@ -50,11 +60,30 @@ def fetch_nearby_stations(
 ) -> List[Dict[str, Any]]:
     """
     주변 역(지하철/기차/버스) 후보들만 필터링해서 반환.
+    -> 너무 많은 로그 안 찍게 요약만 출력
     """
-    places = fetch_nearby_places(lat=lat, lng=lng, radius=radius)
+    # 1) transit_station 기준으로만 한 번 호출 (심플하게)
+    places = fetch_nearby_places(
+        lat=lat,
+        lng=lng,
+        radius=radius,
+        type="transit_station",  # ★ 핵심: 역/환승 관련 장소만 가져오기
+    )
+
+    # 2) 역 타입만 필터링
     stations = [
         p
         for p in places
         if any(t in STATION_TYPES for t in (p.get("types") or []))
     ]
+
+    # 3) 로그는 한 줄만 (몇 개 나왔는지만)
+    log.info(
+        "[GGL] stations search lat=%.6f, lng=%.6f, radius=%d -> %d stations",
+        lat,
+        lng,
+        radius,
+        len(stations),
+    )
+
     return stations

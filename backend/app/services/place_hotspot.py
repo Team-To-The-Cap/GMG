@@ -11,7 +11,7 @@ from core.place_category import (
 )
 
 # Google Places API 호출 함수 + STATION_TYPES
-from app.services.google_places_service import (
+from .google_places_services import (
     fetch_nearby_places,
     fetch_nearby_stations,
     STATION_TYPES,
@@ -85,7 +85,7 @@ def adjust_to_busy_station_area(
     lat: float,
     lng: float,
     base_radius: int = 400,            # 번화가 판정 반경
-    station_search_radius: int = 1500, # 주변 역 탐색 반경
+    station_search_radius: int = 1000, # 주변 역 탐색 반경
     min_score: float = 5.0,            # 번화가 유지 조건
     min_poi_count: int = 8,            # POI 최소 조건
 ) -> Dict[str, Any]:
@@ -148,7 +148,7 @@ def adjust_to_busy_station_area(
     best_station_score = -1.0
     best_station_info: Dict[str, Any] | None = None
 
-    for st in stations:
+    for st in stations[:1:]:
         loc = st.get("geometry", {}).get("location", {})
         s_lat = loc.get("lat")
         s_lng = loc.get("lng")
@@ -160,8 +160,8 @@ def adjust_to_busy_station_area(
             s_lat, s_lng, radius=base_radius
         )
 
-        if poi_count == 0:
-            continue
+        # if poi_count == 0:
+        #     continue
 
         if score > best_station_score:
             best_station_score = score
@@ -178,7 +178,7 @@ def adjust_to_busy_station_area(
             }
 
     # 5. 역 후보가 없거나, 원래보다 나은 곳이 없다면 이동 안 함
-    if best_station is None or best_station_score <= orig_score:
+    if best_station is None or best_station_score < orig_score:
         return {
             "lat": lat,
             "lng": lng,

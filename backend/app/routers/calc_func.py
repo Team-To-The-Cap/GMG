@@ -6,6 +6,7 @@ import osmnx as ox
 import networkx as nx
 from .. import models
 from datetime import datetime, date, time, timedelta
+from ..services.place_hotspot import adjust_to_busy_station_area
 
 router = APIRouter(prefix="/api", tags=["meeting"])
 
@@ -363,7 +364,7 @@ from typing import List, Set
 # class CommonDatesResponse(BaseModel):
 #     meeting_id: int
 #     common_dates: List[date]
-'''
+
 def find_road_center_node(
     G: nx.MultiDiGraph,
     coords_lonlat: List[Tuple[float, float]],
@@ -547,7 +548,7 @@ def find_road_center_node(
         res["per_person"] = per
 
     return res
-'''
+
 
 def get_common_available_dates_for_meeting(meeting: models.Meeting) -> List[date]:
     """
