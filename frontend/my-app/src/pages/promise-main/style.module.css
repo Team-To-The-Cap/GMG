@@ -1,0 +1,291 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 16px calc(var(--bottom-nav-h) + 20px);
+  gap: 20px;
+}
+
+/* ─────────── Hero 카드 ─────────── */
+.heroCard {
+  width: 100%;
+  text-align: left;
+  background: linear-gradient(135deg, #f9fafb, #fff);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.badgeWrap {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.heroTitle {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 12px 0;
+}
+
+.avatars {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+
+.more {
+  background: #e5e7eb;
+  border-radius: 9999px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: #374151;
+}
+
+/* ─────────── Section ─────────── */
+.section {
+  width: 100%;
+}
+
+.participantGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 2fr));
+  gap: 12px;
+  margin-top: 10px;
+  padding: 12px 0px;
+  list-style: none;
+
+  /* background-color: #fff; */
+  border-radius: 10px;
+  /* box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05); */
+}
+
+/* 아바타/이름 하나의 아이템 */
+.participantItem {
+  /* 아바타 사이즈를 이 변수 하나로 통제 */
+  --avatar: 48px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+/* 아바타를 감싸는 래퍼: 삭제 버튼의 기준점 */
+.avatarWrap {
+  position: relative;
+  width: var(--avatar);
+  height: var(--avatar);
+  display: grid;
+  place-items: center;
+}
+
+/* Avatar 내부 이미지 둥글게 보장 (컴포넌트 구조에 따라 선택) */
+.avatarWrap :global(img),
+.avatarWrap img {
+  width: 100%;
+  height: 100%;
+  border-radius: 9999px;
+  display: block;
+  object-fit: cover;
+}
+
+/* 좌상단 겹치는 삭제 버튼 */
+.removeBtn {
+  position: absolute;
+  top: -6px; /* 살짝 겹치도록 음수 오프셋 */
+  left: -6px;
+  z-index: 1;
+
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 9999px;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  color: #111;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  transition: transform 0.12s ease, box-shadow 0.12s ease,
+    background-color 0.12s ease, opacity 0.12s ease;
+
+  opacity: 0.92;
+
+  /* 모바일 터치 UX 보강 */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  will-change: transform;
+}
+
+.participantItem:hover .removeBtn,
+.removeBtn:focus-visible {
+  opacity: 1;
+}
+
+.removeBtn:hover {
+  transform: scale(1.06);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.16);
+  background: #f8fafc;
+}
+
+/* ✅ 클릭(pressed) 느낌 강화 */
+.removeBtn:active {
+  transform: scale(0.92);
+  background-color: #eef2f7;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.12),
+    /* 안쪽 그림자 → 눌린 느낌 */ 0 1px 4px rgba(0, 0, 0, 0.08); /* 바깥 그림자 살짝 줄이기 */
+}
+
+/* 접근성 포커스 링 */
+.removeBtn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--ring, rgba(62, 147, 250, 0.4));
+}
+
+/* 비활성화 상태 */
+.removeBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* 모션 최소화 환경 대응 */
+@media (prefers-reduced-motion: reduce) {
+  .removeBtn {
+    transition: none;
+  }
+}
+
+/* 이름 줄바꿈 및 가운데 정렬 */
+.participantItemName {
+  text-align: center;
+  word-break: break-word;
+  line-height: 1.2;
+}
+
+.scheduleText {
+  font-size: 15px;
+  color: #374151;
+  margin-top: 8px;
+}
+
+.courseCard {
+  margin-top: 8px;
+  text-align: center;
+  font-size: 14px;
+  color: #4b5563;
+}
+
+/* ─────────── 여백 ─────────── */
+.bottomSpacer {
+  height: var(--bottom-nav-h);
+}
+
+.sectionTitle {
+  margin: 16px 0 8px;
+  font-size: 25px;
+  font-weight: 700;
+  text-align: left; /* ← 좌측 정렬 */
+  width: 100%;
+}
+
+/* 결과 블록 내부 간격 */
+.sectionInner {
+  padding: 0px 7px;
+  display: grid; /* or: display: flex; flex-direction: column; */
+  grid-auto-flow: row;
+  gap: 20px; /* ← 원하는 간격으로 조절 (예: 16/20/24px) */
+  align-content: start; /* 내용이 위쪽에 붙도록 */
+}
+
+/* 모바일에서 조금 더 촘촘하게 하고 싶다면 */
+@media (max-width: 400px) {
+  .sectionInner {
+    gap: 16px;
+  }
+}
+
+.inputLike {
+  display: flex;
+  align-items: center;
+  min-height: 44px; /* 입력 높이 느낌 */
+  padding: 10px 12px; /* 좌우 여백 */
+  border: 1px solid #e5e7eb; /* 연한 테두리 */
+  border-radius: 12px;
+  background: #fff;
+  color: #111;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.2;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+
+/* 키보드 포커스 접근성 */
+.inputLike:focus-visible {
+  outline: none;
+  border-color: var(--primary, #3e93fa);
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--ring, rgba(62, 147, 250, 0.4));
+}
+
+/* 기존 .inputLike 정의는 그대로 두고, 아래만 추가 */
+.inputReset {
+  border: 1px solid #e5e7eb;
+  background-color: #fff;
+  color: #111;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.2;
+
+  width: 100%;
+  min-height: 44px; /* 기존 시각 높이 유지 */
+  padding: 10px 12px;
+  border-radius: 12px;
+
+  /* 브라우저 기본 스타일 제거 */
+  outline: none;
+  box-shadow: none;
+  appearance: none;
+}
+
+/* 포커스 링은 .inputLike에 있으면 그대로 작동.
+   필요 시 여기도 추가 가능 */
+.inputReset:focus-visible {
+  border-color: var(--primary, #3e93fa);
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--ring, rgba(62, 147, 250, 0.4));
+}
+
+/* placeholder 톤 */
+.placeholder {
+  color: #9ca3af; /* gray-400 */
+  font-weight: 500;
+}
+
+/* (선택) 클릭은 막되 텍스트 드래그 복사만 허용하고 싶다면: */
+.staticField {
+  cursor: default;
+  pointer-events: auto;
+  user-select: text;
+}
+
+/* src/pages/promise-main/style.module.css */
+.editParticipantBtn {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #555;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+}

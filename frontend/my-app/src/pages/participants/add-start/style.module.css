@@ -1,0 +1,87 @@
+/* src/pages/participants/add-start/style.module.css */
+.container {
+  padding: 0px 16px;
+}
+
+.label {
+  display: block;
+  font-size: 14px;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+.input {
+  width: 100%;
+  height: 56px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 0 16px;
+  font-size: 16px;
+  background: #f9fafb;
+  outline: none;
+}
+
+.input::placeholder {
+  color: #9ca3af;
+}
+
+/* 이미지처럼 “카드형 버튼” */
+.rowBtn {
+  width: 100%;
+  margin-top: 14px;
+  height: 64px;
+  border: 1px solid #eef1f4;
+  border-radius: 16px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  cursor: pointer;
+  transition: transform 0.02s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.02);
+}
+
+.rowBtn:active {
+  transform: translateY(1px);
+}
+
+.rowBtn:hover {
+  border-color: #e5e7eb;
+  box-shadow: 0 4px 18px rgba(17, 24, 39, 0.06);
+}
+
+.icon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  color: #3b82f6; /* 아이콘 기본 톤 */
+}
+
+.rowText {
+  font-size: 16px;
+  color: #111827;
+}
+
+/* ...기존 스타일 유지... */
+
+.footer {
+  margin-top: 24px;
+  display: flex; /* ✅ 가운데 정렬용 컨테이너 */
+  justify-content: center; /* ✅ 수평 중앙 */
+}
+
+.saveBtn {
+  width: 240px; /* ✅ 버튼 폭 고정(원하면 100%로 바꿔도 됨) */
+  display: inline-flex;
+  justify-content: center;
+}
+
+/* 아이콘 공통 */
+.icon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+}
