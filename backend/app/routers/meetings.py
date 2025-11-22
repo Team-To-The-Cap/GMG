@@ -5,6 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload 
 from typing import List
 
+from datetime import date, timedelta
+from typing import Dict, Set
+
 from ..database import get_db
 from .. import schemas
 from .. import models
@@ -14,6 +17,31 @@ router = APIRouter(
     tags=["Meetings"]
 )
 
+# ✅ 날짜별로 가능한 participant id들을 모아주는 함수
+def build_date_to_participants(meeting: models.Meeting) -> Dict[date, Set[int]]:
+    """
+    meeting.participants[*].available_times 를 보고
+    날짜(date) -> 이 날짜에 가능한 참가자 id 집합(set)으로 매핑한다.
+    """
+    date_to_participants: Dict[date, Set[int]] = {}
+
+    for p in meeting.participants:
+        for t in p.available_times:
+            start_d = t.start_time.date()
+            end_d = t.end_time.date()
+
+            # 혹시 잘못 들어온 경우 대비
+            if end_d < start_d:
+                start_d, end_d = end_d, start_d
+
+            d = start_d
+            while d <= end_d:
+                if d not in date_to_participants:
+                    date_to_participants[d] = set()
+                date_to_participants[d].add(p.id)
+                d = d + timedelta(days=1)
+
+    return date_to_participants
 
 # 2. GET /meetings (모든 약속 조회)
 @router.get("/", response_model=List[schemas.MeetingResponse])
@@ -48,27 +76,32 @@ def create_meeting(
 # 2. [신규] 특정 Meeting 상세 조회 (Participants 포함)
 @router.get("/{meeting_id}", response_model=schemas.MeetingResponse)
 def get_meeting_details(meeting_id: int, db: Session = Depends(get_db)):
-    """
-    특정 meeting_id의 약속 정보와
-    해당 약속에 포함된 모든 참가자 목록을 함께 반환합니다.
-    """
-    
-    # 3. [핵심 쿼리]
-    #    joinedload(models.Meeting.participants)를 사용하여
-    #    Meeting을 조회할 때 Participants 정보도 JOIN으로 한 번에 가져옵니다. (Eager Loading)
-    meeting = db.query(models.Meeting).options(
-        joinedload(models.Meeting.participants)
-    ).filter(models.Meeting.id == meeting_id).first()
-    
-    # 4. 약속이 없는 경우 404 에러 반환
+
+    meeting = (
+        db.query(models.Meeting)
+        .options(
+            joinedload(models.Meeting.participants).joinedload(models.Participant.available_times),
+            joinedload(models.Meeting.plan).joinedload(models.MeetingPlan.available_dates),
+        )
+        .filter(models.Meeting.id == meeting_id)
+        .first()
+    )
+
     if meeting is None:
         raise HTTPException(status_code=404, detail="Meeting not found")
-        
-    # 5. 조회된 meeting 객체 반환
-    #    FastAPI가 'MeetingResponse' 스키마에 맞춰
-    #    meeting.participants까지 JSON으로 자동 변환합니다.
-    return meeting
 
+    # 참가 가능 날짜 → 참가자 ID 매핑
+    date_mapping = build_date_to_participants(meeting)
+
+    result = schemas.MeetingResponse.model_validate(meeting)
+
+    if result.plan:
+        for d in result.plan.available_dates:
+            participant_ids = sorted(date_mapping.get(d.date, []))
+            d.available_participant = participant_ids
+            d.available_participant_number = len(participant_ids)
+
+    return result
 
 @router.patch("/{meeting_id}", response_model=schemas.MeetingResponse)
 def update_meeting_name(
