@@ -42,8 +42,8 @@ const compileSelectedDates = (
 
 const makeFullDayTimes = (dates: string[]) => {
   return dates.map((date) => ({
-    start_time: `${date}T00:00:01Z`,
-    end_time: `${date}T23:59:59Z`,
+    start_time: `${date}T00:00:00+09:00`,
+    end_time: `${date}T23:59:59+09:00`,
   }));
 };
 

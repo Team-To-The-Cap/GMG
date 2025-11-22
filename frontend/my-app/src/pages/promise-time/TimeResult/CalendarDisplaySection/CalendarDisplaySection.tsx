@@ -25,48 +25,22 @@ const MONTHS = [
   "December",
 ];
 
-// 🚨 사용자가 클릭한 날짜에 표시될 세부 정보 (목업 데이터)
-const initialDateSelections = [
-  {
-    date: "2025. 11. 13",
-    avatars: [
-      "https://c.animaapp.com/mhhdoadq80wQwQ/img/shape-3.png",
-      "https://c.animaapp.com/mhhdoadq80wQwQ/img/shape-4.png",
-      "https://c.animaapp.com/mhhdoadq80wQwQ/img/shape-2.png",
-    ],
-    extraCount: 1,
-    borderColor: "border-[#41a0f4]",
-    isSelected: false,
-  },
-  {
-    date: "2025. 11. 14",
-    avatars: [
-      "https://c.animaapp.com/mhhdoadq80wQwQ/img/shape-3.png",
-      "https://c.animaapp.com/mhhdoadq80wQwQ/img/shape-4.png",
-    ],
-    extraCount: 0,
-    borderColor: "border-[#cce2fc]",
-    isSelected: false,
-  },
-];
-
 export const CalendarDisplaySection = (): JSX.Element => {
   const { promiseId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const prevState = (location.state as any) ?? {};
 
-  // ✅ 오늘 날짜 기준으로 초기 year/month 세팅
   const today = useMemo(() => new Date(), []);
   const [year, setYear] = useState(() => today.getFullYear());
-  const [month, setMonth] = useState(() => today.getMonth()); // 0-based
+  const [month, setMonth] = useState(() => today.getMonth());
 
   const [clickedDay, setClickedDay] = useState<number | null>(null);
-  const [selections, setSelections] = useState(initialDateSelections);
 
   const [participants, setParticipants] = useState<any[]>([]);
   const participantCount = participants.length;
 
+  // ---- Fetch participants ----
   useEffect(() => {
     const fetchParticipants = async () => {
       const res = await fetch(
@@ -79,61 +53,45 @@ export const CalendarDisplaySection = (): JSX.Element => {
     fetchParticipants();
   }, [promiseId]);
 
+  // ---- Fetch meeting plan ----
   const [meetingPlan, setMeetingPlan] = useState<any>(null);
 
   useEffect(() => {
     const fetchPlan = async () => {
       const res = await fetch(
-        `http://223.130.152.114:8001/meetings/${promiseId}/plans`
+        `http://223.130.152.114:8001/meetings/${promiseId}`
       );
       const data = await res.json();
-      setMeetingPlan(data);
+      setMeetingPlan(data.plan);
     };
 
     fetchPlan();
   }, [promiseId]);
 
-  //   const ymKey = useMemo(
-  //     () => `${year}-${String(month + 1).padStart(2, "0")}`,
-  //     [year, month]
-  //   );
-  // ymKey는 필요하면 캐싱 key로 사용 가능 (지금은 로그/debug 용)
-
-  // ✅ 현재 월의 날짜별 "가능 인원 수" 맵 생성
+  // ---- Build availability map for calendar ----
   const currentMonthAvailability = useMemo(() => {
     if (!meetingPlan) return {};
 
-    // meetingPlan이 배열로 올 수도 있고, 객체로 올 수도 있다고 가정
-    const plan = Array.isArray(meetingPlan) ? meetingPlan[0] : meetingPlan;
-
-    if (!plan || !Array.isArray(plan.available_dates)) return {};
-
     const result: Record<number, number> = {};
 
-    plan.available_dates.forEach((d: any) => {
-      // d.date: "2025-11-13" 같은 문자열이라고 가정
+    meetingPlan.available_dates.forEach((d: any) => {
       const dt = new Date(d.date);
-      if (Number.isNaN(dt.getTime())) return; // 파싱 실패하면 스킵
+      if (Number.isNaN(dt.getTime())) return;
 
       const y = dt.getFullYear();
-      const m = dt.getMonth(); // 0 기반 (0 = 1월)
-      const day = dt.getDate(); // 1~31
+      const m = dt.getMonth();
+      const day = dt.getDate();
 
-      // 현재 보고 있는 year/month와 같을 때만 사용
       if (y === year && m === month) {
-        // 백엔드에서 이 날짜에 가능한 인원 수를 같이 넘겨준다고 가정
-        // 예: d.available_count
-        const availableCount =
-          typeof d.available_count === "number"
-            ? d.available_count
-            : participantCount || 1; // 없으면 일단 색 보이게 1 이상으로
-
-        result[day] = availableCount;
+        result[day] =
+          typeof d.available_participant_number === "number"
+            ? d.available_participant_number
+            : 0;
       }
     });
 
     return result;
-  }, [meetingPlan, year, month, participantCount]);
+  }, [meetingPlan, year, month]);
 
   const maxAvailability = participantCount;
 
@@ -159,44 +117,36 @@ export const CalendarDisplaySection = (): JSX.Element => {
     setClickedDay((prev) => (prev === day ? null : day));
   };
 
-  const toggleSelection = (index: number) => {
-    if (index < 0) return;
-    setSelections((prevSelections) =>
-      prevSelections.map((item, idx) =>
-        idx === index ? { ...item, isSelected: !item.isSelected } : item
-      )
-    );
-  };
-
-  const filteredSelections = useMemo(() => {
-    if (clickedDay === null) return [];
-
-    const dateString = `${year}. ${String(month + 1).padStart(
-      2,
-      "0"
-    )}. ${String(clickedDay).padStart(2, "0")}`;
-
-    return selections.filter((item) => item.date === dateString);
-  }, [clickedDay, year, month, selections]);
-
-  // ✅ 선택된 날짜를 두 가지 포맷으로 준비
+  // ---- Format selected date ----
   const selectedDateISO = useMemo(() => {
     if (clickedDay === null) return null;
-    const y = year;
-    const m = String(month + 1).padStart(2, "0");
-    const d = String(clickedDay).padStart(2, "0");
-    return `${y}-${m}-${d}`; // 예: 2025-11-14
+    return `${year}-${String(month + 1).padStart(2, "0")}-${String(
+      clickedDay
+    ).padStart(2, "0")}`;
   }, [year, month, clickedDay]);
 
   const selectedDateDisplay = useMemo(() => {
     if (clickedDay === null) return null;
     return `${year}. ${String(month + 1).padStart(2, "0")}. ${String(
       clickedDay
-    ).padStart(2, "0")}`; // 예: 2025. 11. 14
+    ).padStart(2, "0")}`;
   }, [year, month, clickedDay]);
 
-  // ✅ 선택 완료 → 이전(상세) 페이지로 돌아가면서 날짜 전달
-  // ✅ 선택 완료 → /details/:promiseId 로 돌아가기
+  // ---- Find who is available on selected date ----
+  const availableParticipantsForDay = useMemo(() => {
+    if (!meetingPlan || !selectedDateISO) return [];
+
+    const record = meetingPlan.available_dates.find(
+      (d: any) => d.date === selectedDateISO
+    );
+
+    if (!record || !record.available_participant) return [];
+
+    const idSet = new Set(record.available_participant);
+    return participants.filter((p) => idSet.has(p.id));
+  }, [meetingPlan, selectedDateISO, participants]);
+
+  // ---- Save selected date ----
   const handleConfirm = () => {
     if (!selectedDateISO || !selectedDateDisplay) {
       alert("날짜를 먼저 선택해주세요.");
@@ -206,48 +156,34 @@ export const CalendarDisplaySection = (): JSX.Element => {
     navigate(`/details/${promiseId}`, {
       replace: true,
       state: {
-        finalDate: selectedDateISO, // "2025-11-14"
-        finalDateDisplay: selectedDateDisplay, // "2025. 11. 14"
+        finalDate: selectedDateISO,
+        finalDateDisplay: selectedDateDisplay,
       },
     });
   };
 
   return (
     <section className="flex z-1 w-full relative flex-col items-end gap-[17px] pt-[17px] pb-[13px] px-5 bg-[#f7f7f7]">
-      <h2 className="w-full font-['Aleo',Helvetica] font-bold text-black text-xl tracking-[0.50px] leading-4 whitespace-nowrap">
-        일정 조율 결과
-      </h2>
+      <h2 className="w-full font-bold text-black text-xl">일정 조율 결과</h2>
 
-      {/* 카드(하얀 배경, 라운드, 그림자) */}
-      <div className="w-full bg-white rounded-[18px] border border-[#eaeaea] shadow-[0px_4px_32px_#aaaaaa08]">
+      {/* Calendar Box */}
+      <div className="w-full bg-white rounded-[18px] border border-[#eaeaea] shadow">
         <div className="flex flex-col gap-6 px-[25px] py-[30px]">
-          {/* 헤더: 월/년 + 이동 버튼 */}
           <header className="flex items-center justify-between w-full">
-            <h3 className="font-bold text-[#1c1c1c] text-xl leading-normal">
+            <h3 className="font-bold text-xl text-[#1c1c1c]">
               {MONTHS[month]} {year}
             </h3>
             <div className="flex items-center gap-2">
-              <button
-                onClick={prevMonth}
-                className="w-7 h-7 grid place-items-center hover:opacity-70"
-                aria-label="이전 달"
-                type="button"
-              >
-                <ChevronLeftIcon className="w-5 h-5 text-[#1c1c1c]" />
+              <button onClick={prevMonth}>
+                <ChevronLeftIcon />
               </button>
-              <button
-                onClick={nextMonth}
-                className="w-7 h-7 grid place-items-center hover:opacity-70"
-                aria-label="다음 달"
-                type="button"
-              >
-                <ChevronRightIcon className="w-5 h-5 text-[#1c1c1c]" />
+              <button onClick={nextMonth}>
+                <ChevronRightIcon />
               </button>
             </div>
           </header>
 
-          {/* 실제 날짜 그리드 */}
-          <div className="flex flex-col gap-[11px]">
+          <div>
             <Calendar
               year={year}
               month={month}
@@ -260,65 +196,36 @@ export const CalendarDisplaySection = (): JSX.Element => {
         </div>
       </div>
 
-      {/* 범례 */}
+      {/* Legend */}
       <div className="flex items-center gap-6">
-        <div className="flex items-center gap-1.5">
-          <div className="w-5 h-5 bg-[#3e93fa] rounded-[10px]" />
-          <span className="font-['Roboto',Helvetica] font-medium text-black text-xs text-center tracking-[0] leading-[normal] whitespace-nowrap">
-            모두 가능
-          </span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-5 h-5 bg-[#cce2fc] rounded-[10px]" />
-          <span className="font-['Roboto',Helvetica] font-medium text-black text-xs text-center tracking-[0] leading-[normal] whitespace-nowrap">
-            일부 가능
-          </span>
-        </div>
+        <span className="flex items-center gap-2">
+          <div className="w-5 h-5 bg-[#3e93fa] rounded-xl"></div> 모두 가능
+        </span>
+        <span className="flex items-center gap-2">
+          <div className="w-5 h-5 bg-[#cce2fc] rounded-xl"></div> 일부 가능
+        </span>
       </div>
 
-      {/* 클릭된 날짜 정보 (목업) */}
-      {filteredSelections.length > 0 && (
-        <div className="w-full flex flex-col gap-2.5 items-center">
-          {filteredSelections.map((selection, index) => (
-            <div
-              key={`selection-${index}`}
-              className={`w-full h-[51px] bg-white rounded-[13px] overflow-hidden border-2 border-solid ${selection.borderColor} flex items-center justify-between px-4 cursor-pointer`}
-              onClick={() =>
-                toggleSelection(
-                  selections.findIndex((item) => item.date === selection.date)
-                )
-              }
-            >
-              <span className="font-['Inria_Sans',Helvetica] font-normal text-black text-xl text-center tracking-[0.50px] leading-6 whitespace-nowrap">
-                {selection.date}
+      {/* Clicked date details */}
+      {clickedDay && availableParticipantsForDay.length > 0 && (
+        <div className="w-full bg-white rounded-xl p-4 shadow border border-gray-200">
+          <div className="flex justify-between">
+            <span className="text-lg font-semibold">{selectedDateDisplay}</span>
+            <span className="text-blue-500 font-semibold">
+              {availableParticipantsForDay.length}명 가능
+            </span>
+          </div>
+
+          <div className="flex flex-wrap gap-2 mt-3">
+            {availableParticipantsForDay.map((p) => (
+              <span
+                key={p.id}
+                className="px-3 py-1 bg-gray-100 rounded-full text-sm"
+              >
+                {p.name}
               </span>
-
-              <div className="flex items-center gap-2.5">
-                <div className="flex items-end justify-end gap-1">
-                  {selection.avatars.map((avatar, avatarIndex) => (
-                    <div
-                      key={`avatar-${index}-${avatarIndex}`}
-                      className="w-6 h-6 rounded-full bg-cover bg-center bg-no-repeat border border-white"
-                      style={{ backgroundImage: `url(${avatar})` }}
-                    />
-                  ))}
-                  {selection.extraCount > 0 && (
-                    <div className="flex flex-col w-6 h-6 items-center justify-center bg-neutral-100 rounded-lg overflow-hidden border border-white">
-                      <span className="font-medium text-[#757575] text-xs text-center tracking-[0] leading-[normal] not-italic">
-                        +{selection.extraCount}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {selection.isSelected ? (
-                  <CheckSquare className="w-6 h-6 text-[#3E93FA]" />
-                ) : (
-                  <Square className="w-6 h-6 text-[#BDBDBD]" />
-                )}
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
 
