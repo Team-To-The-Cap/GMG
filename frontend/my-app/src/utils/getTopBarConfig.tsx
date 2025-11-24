@@ -4,7 +4,8 @@ import { matchPath } from "react-router-dom";
 export type TopBarConfig = {
   title: string;
   showBack: boolean;
-  backTo?: string; // ✅ 논리적인 "이전 페이지" 경로
+  backTo?: string;
+  showShare?: boolean; // ⬅️ 우측 공유 아이콘 표시 여부
 };
 
 export function getTopBarConfig(pathname: string): TopBarConfig {
@@ -13,17 +14,19 @@ export function getTopBarConfig(pathname: string): TopBarConfig {
 
   // === 메인 탭들 ===
   if (m("/")) {
-    return { title: "나의 약속", showBack: false };
+    return { title: "나의 약속", showBack: false, showShare: false };
   }
 
   if (m("/me")) {
-    return { title: "마이페이지", showBack: false };
+    return { title: "마이페이지", showBack: false, showShare: false };
   }
 
+  // 약속 추가 / 편집 메인
   if (m("/create/:promiseId")) {
     return {
       title: "약속 만들기",
       showBack: false,
+      showShare: true, // ⬅️ 공유 버튼 ON
     };
   }
 
@@ -33,6 +36,7 @@ export function getTopBarConfig(pathname: string): TopBarConfig {
       title: "약속 상세",
       showBack: true,
       backTo: "/", // 약속 목록으로
+      showShare: true, // ⬅️ 공유 버튼 ON
     };
   }
 
@@ -53,7 +57,8 @@ export function getTopBarConfig(pathname: string): TopBarConfig {
           ? `/create/${promiseId}`
           : match.pattern?.path.startsWith("/details")
           ? `/details/${promiseId}`
-          : "/", // 단독 진입 시 기본값
+          : "/",
+        showShare: false,
       };
     }
   }
@@ -76,6 +81,7 @@ export function getTopBarConfig(pathname: string): TopBarConfig {
           : match.pattern?.path.startsWith("/details")
           ? `/details/${promiseId}/participants/new`
           : "/participants/new",
+        showShare: false,
       };
     }
   }
@@ -98,6 +104,7 @@ export function getTopBarConfig(pathname: string): TopBarConfig {
           : match.pattern?.path.startsWith("/details")
           ? `/details/${promiseId}/participants/new/origin`
           : "/participants/new/origin",
+        showShare: false,
       };
     }
   }
@@ -117,6 +124,7 @@ export function getTopBarConfig(pathname: string): TopBarConfig {
         backTo: match.pattern?.path.startsWith("/create")
           ? `/create/${promiseId}`
           : `/details/${promiseId}`,
+        showShare: false,
       };
     }
   }
@@ -136,6 +144,7 @@ export function getTopBarConfig(pathname: string): TopBarConfig {
         backTo: match.pattern?.path.startsWith("/create")
           ? `/create/${promiseId}/participants/new`
           : `/details/${promiseId}/participants/new`,
+        showShare: false,
       };
     }
   }
@@ -154,6 +163,7 @@ export function getTopBarConfig(pathname: string): TopBarConfig {
         backTo: match.pattern?.path.startsWith("/create")
           ? `/create/${promiseId}/participants/new`
           : `/details/${promiseId}/participants/new`,
+        showShare: false,
       };
     }
   }
@@ -163,17 +173,18 @@ export function getTopBarConfig(pathname: string): TopBarConfig {
     return {
       title: "시간 선택",
       showBack: true,
-      backTo: "/", // 현재는 진입점이 다양할 수 있어서 기본값 유지
+      backTo: "/",
+      showShare: false,
     };
   }
 
   {
     const match = m("/time/timeresult/:promiseId");
     if (match) {
-      const { promiseId } = match.params;
       return {
         title: "최종 시간 선택",
         showBack: true,
+        showShare: false,
       };
     }
   }
@@ -192,10 +203,11 @@ export function getTopBarConfig(pathname: string): TopBarConfig {
         backTo: match.pattern?.path.startsWith("/create")
           ? `/create/${promiseId}`
           : `/details/${promiseId}`,
+        showShare: false,
       };
     }
   }
 
   // 매칭 안될 때 기본값
-  return { title: "GMG", showBack: true, backTo: "/" };
+  return { title: "GMG", showBack: true, backTo: "/", showShare: false };
 }

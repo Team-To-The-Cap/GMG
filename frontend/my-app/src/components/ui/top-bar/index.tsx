@@ -1,7 +1,8 @@
+// src/components/ui/top-bar/index.tsx
 import { useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import styles from "./style.module.css";
-import { BackIcon } from "@/assets/icons/icons";
+import { BackIcon, ShareIcon } from "@/assets/icons/icons"; // ⬅️ 여기 수정
 
 type Size = "sm" | "md" | "lg";
 type Tone = "default" | "white";
@@ -17,6 +18,8 @@ type Props = {
   tone?: Tone;
   /** 논리적인 "뒤로 갈 경로" (App의 getTopBarConfig에서 내려줌) */
   backTo?: string;
+  /** 우측에 공유 버튼을 표시할지 여부 */
+  showShare?: boolean;
 };
 
 function cx(...xs: Array<string | false | null | undefined>) {
@@ -31,6 +34,7 @@ export default function TopBar({
   size = "md",
   tone = "white",
   backTo,
+  showShare = false,
 }: Props) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -53,6 +57,34 @@ export default function TopBar({
     navigate("/", { replace: true });
   }, [onBack, backTo, navigate, location.state]);
 
+  const handleShare = useCallback(async () => {
+    const url = window.location.href;
+    const shareTitle = title || "GMG 약속";
+
+    // 모바일/지원 브라우저: Web Share API
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: shareTitle,
+          url,
+        });
+      } catch {
+        // 사용자가 취소한 경우 등은 조용히 무시
+      }
+      return;
+    }
+
+    // 그 외: 클립보드 복사 시도
+    try {
+      await navigator.clipboard.writeText(url);
+      alert("링크가 클립보드에 복사되었습니다.");
+    } catch {
+      alert(
+        `이 브라우저에서는 공유를 지원하지 않습니다.\n아래 링크를 직접 복사해 주세요.\n\n${url}`
+      );
+    }
+  }, [title]);
+
   return (
     <header
       className={cx(
@@ -73,11 +105,20 @@ export default function TopBar({
       ) : (
         <div className={styles.spacer} aria-hidden />
       )}
-
       <h1 className={styles.title}>{title}</h1>
 
       {right ? (
         <div className={styles.right}>{right}</div>
+      ) : showShare ? (
+        <button
+          type="button"
+          className={styles.iconBtn}
+          aria-label="약속 공유"
+          onClick={handleShare}
+        >
+          {/* ⬇️ 텍스트 대신 공유 아이콘 */}
+          <ShareIcon />
+        </button>
       ) : (
         <div className={styles.spacer} aria-hidden />
       )}

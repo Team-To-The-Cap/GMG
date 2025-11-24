@@ -25,7 +25,7 @@ import "./App.css";
 export default function App() {
   const location = useLocation();
 
-  const { title, showBack, backTo } = useMemo(
+  const { title, showBack, backTo, showShare } = useMemo(
     () => getTopBarConfig(location.pathname),
     [location.pathname]
   );
@@ -36,6 +36,7 @@ export default function App() {
         title={title}
         showBack={showBack}
         backTo={backTo} // ✅ onBack 대신 backTo만 넘김
+        showShare={showShare}
       />
 
       <main className="pageContainer">
