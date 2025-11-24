@@ -1,4 +1,3 @@
-// src/App.tsx
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useMemo } from "react";
 
@@ -25,14 +24,19 @@ import "./App.css";
 
 export default function App() {
   const location = useLocation();
-  const { title, showBack } = useMemo(
+
+  const { title, showBack, backTo } = useMemo(
     () => getTopBarConfig(location.pathname),
     [location.pathname]
   );
 
   return (
     <div className="appRoot">
-      <TopBar title={title} showBack={showBack} />
+      <TopBar
+        title={title}
+        showBack={showBack}
+        backTo={backTo} // ✅ onBack 대신 backTo만 넘김
+      />
 
       <main className="pageContainer">
         <Routes>
@@ -97,7 +101,7 @@ export default function App() {
             element={<SearchOriginPage />}
           />
 
-          {/* ✅ 선호 선택 페이지 */}
+          {/* 선호 선택 페이지 */}
           <Route
             path="/details/:promiseId/participants/new/preferences"
             element={<AddParticipantPreferencesPage />}
