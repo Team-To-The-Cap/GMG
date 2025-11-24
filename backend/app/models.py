@@ -87,13 +87,13 @@ class Participant(Base):
     meeting_id = Column(Integer, ForeignKey("meetings.id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String(255), nullable=False)
     member_id = Column(Integer, nullable=True)
-    start_latitude = Column(Float, nullable=False)
-    start_longitude = Column(Float, nullable=False)
+    
+    start_latitude = Column(Float, nullable=True)
+    start_longitude = Column(Float, nullable=True)
     start_address = Column(String(255), nullable=True)
     transportation = Column(String(255), nullable=True)
-
     fav_activity = Column(String(255), nullable=True)
-  
+
     # 3. [추가] Participant가 어떤 Meeting에 속했는지 역참조 설정
     meeting = relationship("Meeting", back_populates="participants")
     # 2. [수정] Participant -> ParticipantTime (1:N)

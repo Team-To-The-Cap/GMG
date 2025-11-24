@@ -82,69 +82,74 @@ def get_coords_from_address(address: str):
 # 4. [수정] POST / (새 참가자 및 시간 중첩 생성)
 @router.post("/", response_model=schemas.ParticipantResponse)
 def create_participant_for_meeting(
-    meeting_id: int, # [수정] URL 경로에서 meeting_id를 받음
-    participant_in: schemas.ParticipantCreate, 
+    meeting_id: int,
+    participant_in: schemas.ParticipantCreate,
     db: Session = Depends(get_db)
 ):
-    """
-    특정 meeting_id에 새로운 참가자 1명과
-    그 참가자가 가능한 시간 목록(N개)을 DB에 저장합니다.
-    [수정] start_address를 기반으로 위도/경도를 자동 생성합니다.
-    """
-    
-    # 1. 부모 Meeting 확인 (참가자를 추가할 약속이 존재하는지)
     meeting = db.query(models.Meeting).filter(models.Meeting.id == meeting_id).first()
     if meeting is None:
         raise HTTPException(status_code=404, detail="Meeting not found")
 
-    # 2. Pydantic 모델을 딕셔너리로 변환
     participant_dict = participant_in.model_dump()
     times_data_list = participant_dict.pop("available_times", [])
-    
-    # 3. [신규] Geocoding - 주소로 위경도 변환
+
     address = participant_dict.get("start_address")
-    if not address:
-        raise HTTPException(status_code=400, detail="start_address is required.")
-        
-    coordinates = get_coords_from_address(address)
-    if not coordinates:
+    fav = participant_dict.get("fav_activity")
+
+    # 🔹 서버에서도 최소 한 개는 확인 (이름 + (일정/장소/선호))
+    has_schedule = len(times_data_list) > 0
+    has_origin = bool(address)
+    has_pref = bool(fav)
+
+    if not (has_schedule or has_origin or has_pref):
         raise HTTPException(
-            status_code=400, 
-            detail="Invalid start_address or geocoding failed. (주소 변환 실패)"
+            status_code=400,
+            detail="At least one of schedule, origin or preferences is required.",
         )
 
-    # 4. [신규] 변환된 좌표를 딕셔너리에 추가/덮어쓰기
-    participant_dict["start_latitude"] = coordinates[0]  # 위도 (y)
-    participant_dict["start_longitude"] = coordinates[1] # 경도 (x)
+    # 🔹 주소가 있으면 지오코딩, 없으면 위경도는 None
+    if address:
+        coordinates = get_coords_from_address(address)
+        if not coordinates:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid start_address or geocoding failed. (주소 변환 실패)",
+            )
+        participant_dict["start_latitude"] = coordinates[0]
+        participant_dict["start_longitude"] = coordinates[1]
+    else:
+        participant_dict["start_latitude"] = None
+        participant_dict["start_longitude"] = None
 
-    
-    # 5. [수정] Participant (부모) 생성 (위경도 포함)
     db_participant = models.Participant(
-        **participant_dict, 
-        meeting_id=meeting_id 
+        **participant_dict,
+        meeting_id=meeting_id,
     )
-    
+
     db.add(db_participant)
     db.commit()
     db.refresh(db_participant)
-    
-    # 6. ParticipantTimes (자식) 생성
+
+    # 🔹 일정 있으면 ParticipantTime 생성, 없으면 스킵
     for time_data in times_data_list:
         db_time = models.ParticipantTime(
             **time_data,
-            meeting_id=meeting_id, # URL의 meeting_id
-            participant_id=db_participant.id # 방금 생성된 참가자 id
+            meeting_id=meeting_id,
+            participant_id=db_participant.id,
         )
         db.add(db_time)
-        
+
     db.commit()
-    
-    # 7. 최종 반환 (생성된 객체 다시 조회)
-    final_participant = db.query(models.Participant).options(
-        joinedload(models.Participant.available_times)
-    ).filter(models.Participant.id == db_participant.id).first()
+
+    final_participant = (
+        db.query(models.Participant)
+        .options(joinedload(models.Participant.available_times))
+        .filter(models.Participant.id == db_participant.id)
+        .first()
+    )
 
     return final_participant
+    
 
 @router.patch("/{participant_id}", response_model=schemas.ParticipantResponse)
 def update_participant(

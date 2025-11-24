@@ -44,22 +44,26 @@ class ParticipantTimeResponse(ParticipantTimeCreate):
 class ParticipantCreate(BaseModel):
     name: str
     member_id: Optional[int] = None
-    # start_latitude: float
-    # start_longitude: float
-    start_address: str
-    transportation: str
+
+    # 🔹 출발 장소 / 교통수단 / 선호는 선택
+    start_address: Optional[str] = None
+    transportation: Optional[str] = None
     fav_activity: Optional[str] = None
-    
-    available_times: List[ParticipantTimeCreate]
+
+    # 🔹 일정도 선택 (없으면 빈 리스트)
+    available_times: List[ParticipantTimeCreate] = []
 
 class ParticipantResponse(BaseModel):
     id: int
     name: str
     member_id: Optional[int] = None
-    start_latitude: float 
-    start_longitude: float  
-    start_address: str
-    transportation: str
+
+    # 🔹 전부 Optional + 기본값 None
+    start_latitude: Optional[float] = None
+    start_longitude: Optional[float] = None
+    start_address: Optional[str] = None
+    transportation: Optional[str] = None
+
     fav_activity: Optional[str] = None
     
     available_times: List[ParticipantTimeResponse] = [] 
