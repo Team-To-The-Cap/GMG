@@ -100,33 +100,30 @@ def reverse_geocode_naver(lon: float, lat: float) -> Optional[str]:
 
 @router.post("/{meeting_id}/plans", response_model=schemas.MeetingPlanResponse)
 def create_plan_for_meeting(
-    meeting_id: int,  # 1. URL 경로에서 meeting_id를 받음
-    plan_in: schemas.MeetingPlanCreate, # 2. Request Body에서 상세 일정 정보를 받음
-    db: Session = Depends(get_db)
+    meeting_id: int,
+    plan_in: schemas.MeetingPlanCreate,
+    db: Session = Depends(get_db),
 ):
     """
     특정 meeting_id에 연결된 새로운 Meeting_Plan (상세 일정)을 생성합니다.
+    - meeting_time 이 없어도(미정이어도) Plan 을 만들 수 있음.
     """
-    
-    # 1. (권장) 부모인 Meeting이 존재하는지 확인
-    meeting = db.query(models.Meeting).filter(models.Meeting.id == meeting_id).first()
+    meeting = (
+        db.query(models.Meeting)
+        .filter(models.Meeting.id == meeting_id)
+        .first()
+    )
     if meeting is None:
         raise HTTPException(status_code=404, detail="Meeting not found")
-        
-    # 2. Pydantic 모델을 SQLAlchemy 모델로 변환
-    #    plan_in.model_dump()로 딕셔너리를 만들고,
-    #    URL에서 받은 meeting_id를 추가합니다.
+
     db_plan = models.MeetingPlan(
-        **plan_in.model_dump(), 
-        meeting_id=meeting_id 
+        **plan_in.model_dump(),
+        meeting_id=meeting_id,
     )
-    
-    # 3. DB에 추가, 커밋, 새로고침 (INSERT 실행)
+
     db.add(db_plan)
     db.commit()
     db.refresh(db_plan)
-    
-    # 4. 생성된 객체 반환 (ID 포함)
     return db_plan
 
 @router.get("/{meeting_id}/plans", response_model=schemas.MeetingPlanResponse) 
@@ -182,91 +179,127 @@ def update_meeting_plan(
 
 
 
-# @router.post(
-#     "/{meeting_id}/plans/auto-center-and-times",
-#     response_model=schemas.MeetingCenterAndTimesResponse,
-# )
-# def create_auto_center_and_times_for_meeting(
-#     meeting_id: int,
-#     weight: str = Query("length", pattern="^(length|travel_time)$"),
-#     db: Session = Depends(get_db),
-# ):
-#     """
-#     특정 meeting_id에 대해:
+@router.post(
+    "/{meeting_id}/plans/calculate",
+    response_model=schemas.MeetingPlanResponse,
+)
+def create_auto_plan_for_meeting(
+    meeting_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    meeting_id 기준으로:
 
-#     1) 참가자들의 출발 좌표(start_latitude, start_longitude)를 이용해
-#        도로 그래프 상 '공정한 중간 지점'을 계산하고,
-#     2) 참가자들의 available_times에서 '모든 참가자가 공통으로 가능한 날짜들'을 추출해
-#     3) 두 정보를 한 번에 반환하는 엔드포인트.
-#     """
+    1) Meeting + Participant + ParticipantTime 정보를 조회하고
+    2) 공통 가능한 날짜(date 리스트)를 계산한 뒤 (없어도 OK)
+    3) 참가자 출발 좌표로 도로 그래프 중간 지점을 계산하고
+    4) MeetingPlan + MeetingPlanAvailableDate 들을 DB에 저장,
+    5) 최종 MeetingPlan(available_dates 포함)을 반환.
+    """
 
-#     # 1. Meeting + Participants + 각 참가자의 available_times를 한 번에 로딩
-#     meeting = (
-#         db.query(models.Meeting)
-#         .options(
-#             joinedload(models.Meeting.participants)
-#             .joinedload(models.Participant.available_times)
-#         )
-#         .filter(models.Meeting.id == meeting_id)
-#         .first()
-#     )
+    meeting = (
+        db.query(models.Meeting)
+        .options(
+            joinedload(models.Meeting.participants),
+            joinedload(models.Meeting.participant_times),
+        )
+        .filter(models.Meeting.id == meeting_id)
+        .first()
+    )
 
-#     if meeting is None:
-#         raise HTTPException(status_code=404, detail="Meeting not found")
+    if meeting is None:
+        raise HTTPException(status_code=404, detail="Meeting not found")
 
-#     participants = meeting.participants
-#     if not participants:
-#         raise HTTPException(status_code=400, detail="No participants in this meeting")
+    if not meeting.participants:
+        raise HTTPException(status_code=400, detail="No participants in this meeting")
 
-#     # 2. 참가자 출발 좌표 수집 (위/경도 없는 사람은 제외)
-#     coords: List[Tuple[float, float]] = []
-#     for p in participants:
-#         if p.start_latitude is None or p.start_longitude is None:
-#             continue
-#         # find_road_center_node는 (lon, lat) 순서이므로 주의
-#         coords.append((p.start_longitude, p.start_latitude))
+    # 1) 공통 가능한 날짜 계산
+    common_dates = get_common_available_dates_for_meeting(meeting)
 
-#     if not coords:
-#         raise HTTPException(
-#             status_code=400,
-#             detail="No participants with valid start_latitude/start_longitude",
-#         )
+    # ★ 공통 날짜가 있으면 "가장 이른 날짜 + 19:00",
+    #   없으면 meeting_time 은 None (일정 미정 상태)
+    if common_dates:
+        earliest_date = common_dates[0]
+        meeting_time = datetime.combine(earliest_date, time(hour=19, minute=0))
+    else:
+        meeting_time = None
 
-#     # 3. 도로 그래프 위 중간 지점 계산
-#     center_result = find_road_center_node(
-#         G,
-#         coords_lonlat=coords,
-#         weight=weight,
-#         return_paths=False,  # 여기서는 요약만 필요하므로 경로는 안 돌려줘도 됨
-#     )
+    # 2) 참가자 출발 좌표 수집 (기존 그대로)
+    coords: List[Tuple[float, float]] = []
+    for p in meeting.participants:
+        if p.start_latitude is None or p.start_longitude is None:
+            continue
+        coords.append((p.start_longitude, p.start_latitude))
 
-#     center_summary = schemas.RoadCenterSummary(
-#         node=center_result["node"],
-#         lon=center_result["lon"],
-#         lat=center_result["lat"],
-#         max_distance_m=center_result.get("max_distance_m"),
-#         max_travel_time_s=center_result.get("max_travel_time_s"),
-#         n_reached=center_result["n_reached"],
-#         n_sources=center_result["n_sources"],
-#         worst_source_node=center_result.get("worst_source_node"),
-#         worst_cost=center_result["worst_cost"],
-#     )
+    if not coords:
+        raise HTTPException(
+            status_code=400,
+            detail="No participants with valid start_latitude/start_longitude",
+        )
 
-#     # 4. 참가자 공통 가능 날짜 계산
-#     common_dates = get_common_available_dates(participants)
+    # 3) 도로 그래프 위 중간 지점 계산
+    center_result = find_road_center_node(
+        G,
+        coords_lonlat=coords,
+        weight="length",
+        return_paths=True,
+        top_k=3,
+    )
+    print(center_result)
 
-#     # TODO: 여기에서 MeetingPlan을 자동으로 생성/저장하고 싶다면
-#     #       center_summary.lon/lat + common_dates 중 첫 날짜 등을 사용해서
-#     #       models.MeetingPlan(...) 만들어서 INSERT 하는 로직을 추가하면 됨.
+    center_lat = float(center_result["lat"])
+    center_lon = float(center_result["lon"])
 
-#     # 5. 최종 응답
-#     return schemas.MeetingCenterAndTimesResponse(
-#         meeting_id=meeting_id,
-#         weight=weight,
-#         center=center_summary,
-#         common_dates=common_dates,
-#     )
+    addr = reverse_geocode_naver(center_lon, center_lat)
+    if addr is None:
+        addr = "자동 계산된 중간 지점"
 
+    # 4) MeetingPlan 생성 or 업데이트
+    db_plan = (
+        db.query(models.MeetingPlan)
+        .filter(models.MeetingPlan.meeting_id == meeting_id)
+        .first()
+    )
+
+    if db_plan is None:
+        db_plan = models.MeetingPlan(
+            meeting_id=meeting_id,
+            meeting_time=meeting_time,  # ★ None 허용
+            address=addr,
+            latitude=center_lat,
+            longitude=center_lon,
+            total_time=None,
+        )
+        db.add(db_plan)
+        db.commit()
+        db.refresh(db_plan)
+    else:
+        db_plan.meeting_time = meeting_time
+        db_plan.address = addr
+        db_plan.latitude = center_lat
+        db_plan.longitude = center_lon
+        db.commit()
+        db.refresh(db_plan)
+
+    # 5) MeetingPlanAvailableDate 갱신
+    db.query(models.MeetingPlanAvailableDate).filter(
+        models.MeetingPlanAvailableDate.meeting_plan_id == db_plan.id
+    ).delete()
+    db.commit()
+
+    # ★ 공통 날짜가 있을 때만 available_dates 채우기
+    if common_dates:
+        for d in common_dates:
+            db_date = models.MeetingPlanAvailableDate(
+                meeting_plan_id=db_plan.id,
+                date=d,
+            )
+            db.add(db_date)
+
+        db.commit()
+        db.refresh(db_plan)
+
+    return db_plan
 
 @router.post(
     "/{meeting_id}/plans/calculate",

@@ -24,27 +24,32 @@ class MeetingPlan(Base):
     - 확정된 약속의 최종 계획(시간, 장소)을 저장합니다.
     """
     
-    # 이미지에 명시된 테이블 이름 사용
     __tablename__ = "Meeting_Plans"
     id = Column(Integer, primary_key=True, index=True)
-    meeting_id = Column(Integer, ForeignKey("meetings.id", ondelete="CASCADE"), nullable=False, index=True)
-    meeting_time = Column(DateTime(timezone=True), nullable=False)
-    available_time = Column
+    meeting_id = Column(
+        Integer,
+        ForeignKey("meetings.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # ★ 일정 미정 허용: nullable=True 로 변경
+    meeting_time = Column(DateTime(timezone=True), nullable=True)
+
+    # (이 줄은 지금 오타라서 사실 의미 없음… 필요 없다면 삭제해도 됨)
+    available_time = Column           # <- 사용 안 하면 지워도 OK
+
     address = Column(VARCHAR(255), nullable=False)
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
     total_time = Column(Integer, nullable=True)
 
-
-    # --- 관계 설정 ---    
-    # 이 Plan이 어떤 Meeting에 속했는지 역참조
     meeting = relationship("Meeting", back_populates="plan")
     available_dates = relationship(
         "MeetingPlanAvailableDate",
         back_populates="meeting_plan",
         cascade="all, delete-orphan",
     )
-
 
 
 # -------------------------------------------------

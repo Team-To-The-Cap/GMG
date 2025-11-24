@@ -1,6 +1,6 @@
-from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, date
+from pydantic import BaseModel
 
 
 
@@ -101,19 +101,22 @@ class MeetingUpdate(BaseModel):
 # Meeting_Plan 스키마
 # ==========================
 
-# 1. MeetingPlan 생성(POST) 시 받을 입력 데이터
 class MeetingPlanCreate(BaseModel):
-    meeting_time: datetime
+    # ★ Optional로 변경 + 기본값 None
+    meeting_time: Optional[datetime] = None
     address: str
     latitude: float
     longitude: float
-    total_time: Optional[int] = None # 선택 사항
+    total_time: Optional[int] = None  # 선택 사항
 
 
 class MeetingPlanResponse(BaseModel):
     id: int
     meeting_id: int
-    meeting_time: datetime
+
+    # ★ Optional로 변경
+    meeting_time: Optional[datetime] = None
+
     address: str
     latitude: float
     longitude: float
@@ -126,12 +129,14 @@ class MeetingPlanResponse(BaseModel):
 
 
 class MeetingPlanUpdate(BaseModel):
+    # ★ 이미 Optional 이지만 그대로 두고,
     meeting_time: Optional[datetime] = None
-    address: Optional[str] = None
-    latitude: float
-    longitude: float
-    total_time: Optional[int] = None
 
+    # ★ address / latitude / longitude 도 나중에 일부만 수정할 수 있게 Optional 로 바꾸는 게 자연스러움
+    address: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    total_time: Optional[int] = None
 
 
 
