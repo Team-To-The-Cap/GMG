@@ -28,6 +28,15 @@ export default function AddParticipantStartPage() {
   const [preferredCats, setPreferredCats] = useState<PlaceCategory[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
+  // 🔹 최소 한 가지(일정/출발장소/선호) 입력 여부
+  const hasAnyDetail = useMemo(() => {
+    return (
+      availableTimes.length > 0 || // 일정
+      !!origin || // 출발장소
+      preferredCats.length > 0 // 선호
+    );
+  }, [availableTimes.length, origin, preferredCats.length]);
+
   // ✅ 수정 모드인지 구분하기 위한 id (null이면 신규 생성)
   const [editParticipantId, setEditParticipantId] = useState<
     string | number | null
@@ -146,14 +155,19 @@ export default function AddParticipantStartPage() {
   const submit = async () => {
     if (!promiseId) return alert("약속 ID가 없습니다.");
     if (!name.trim()) return alert("이름을 입력하세요.");
+    if (!hasAnyDetail) {
+      return alert("일정, 출발장소, 선호 중 하나 이상은 입력해주세요.");
+    }
     if (submitting) return;
 
     const payload: any = {
       name,
       member_id: 0,
-      start_address: origin ?? "",
-      transportation: transportation ?? "",
-      fav_activity: preferredCats.length > 0 ? preferredCats.join(",") : "카페",
+      // 🔹 주소 / 교통수단 / 선호는 없으면 null 로 보냄
+      start_address: origin ?? null,
+      transportation: transportation ?? null,
+      fav_activity: preferredCats.length > 0 ? preferredCats.join(",") : null,
+      // 🔹 일정은 없으면 [] (빈 배열)
       available_times: availableTimes,
     };
 
@@ -272,7 +286,7 @@ export default function AddParticipantStartPage() {
           variant="primary"
           size="lg"
           className={styles.saveBtn}
-          disabled={!name.trim() || submitting}
+          disabled={!name.trim() || submitting || !hasAnyDetail}
           onClick={submit}
         >
           {submitting ? "저장 중..." : "저장하기"}

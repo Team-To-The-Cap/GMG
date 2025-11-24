@@ -1,10 +1,5 @@
 // src/pages/.../CalendarDisplaySection.tsx
-import {
-  CheckSquare,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  Square,
-} from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useEffect, useMemo, useState, type JSX } from "react";
 import Button from "@/components/ui/button";
 import { Calendar } from "@/components/ui/Calendar";
@@ -25,6 +20,31 @@ const MONTHS = [
   "December",
 ];
 
+type ParticipantTime = {
+  start_time: string;
+  end_time: string;
+  id: number;
+};
+
+type Participant = {
+  id: number;
+  name: string;
+  available_times: ParticipantTime[];
+};
+
+type MeetingPlan = {
+  id: number;
+  meeting_time: string | null;
+  // 필요한 필드만 적당히...
+};
+
+type MeetingDetailResponse = {
+  id: number;
+  name: string;
+  participants: Participant[];
+  plan: MeetingPlan | null;
+};
+
 export const CalendarDisplaySection = (): JSX.Element => {
   const { promiseId } = useParams();
   const navigate = useNavigate();
@@ -37,63 +57,123 @@ export const CalendarDisplaySection = (): JSX.Element => {
 
   const [clickedDay, setClickedDay] = useState<number | null>(null);
 
-  const [participants, setParticipants] = useState<any[]>([]);
+  const [participants, setParticipants] = useState<Participant[]>([]);
   const participantCount = participants.length;
+
+  const [meetingPlan, setMeetingPlan] = useState<MeetingPlan | null>(null);
 
   // ---- Fetch participants ----
   useEffect(() => {
     const fetchParticipants = async () => {
+      if (!promiseId) return;
+
       const res = await fetch(
         `http://223.130.152.114:8001/meetings/${promiseId}/participants`
       );
       const data = await res.json();
+      console.log("participants:", data);
       setParticipants(data);
     };
 
     fetchParticipants();
   }, [promiseId]);
 
-  // ---- Fetch meeting plan ----
-  const [meetingPlan, setMeetingPlan] = useState<any>(null);
-
+  // ---- Fetch meeting detail (plan 정보 등 필요할 때) ----
   useEffect(() => {
     const fetchPlan = async () => {
+      if (!promiseId) return;
+
       const res = await fetch(
         `http://223.130.152.114:8001/meetings/${promiseId}`
       );
-      const data = await res.json();
-      setMeetingPlan(data.plan);
+      const data: MeetingDetailResponse = await res.json();
+      console.log("meeting data:", data);
+      setMeetingPlan(data.plan ?? null);
     };
 
     fetchPlan();
   }, [promiseId]);
 
-  // ---- Build availability map for calendar ----
-  const currentMonthAvailability = useMemo(() => {
-    if (!meetingPlan) return {};
+  // ---- participants 기반으로 날짜 → 참가자 ID 목록 맵 구성 ----
+  const dateToParticipantIds = useMemo(() => {
+    const map: Record<string, number[]> = {};
 
+    for (const p of participants) {
+      const times = p.available_times ?? [];
+      for (const t of times) {
+        const start = new Date(t.start_time);
+        const end = new Date(t.end_time);
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+          continue;
+        }
+
+        // 날짜 단위로 풀어쓰기
+        let d = new Date(
+          start.getFullYear(),
+          start.getMonth(),
+          start.getDate()
+        );
+        const endD = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+
+        while (d <= endD) {
+          const iso = d.toISOString().slice(0, 10); // "YYYY-MM-DD"
+          if (!map[iso]) {
+            map[iso] = [];
+          }
+          if (!map[iso].includes(p.id)) {
+            map[iso].push(p.id);
+          }
+
+          d.setDate(d.getDate() + 1);
+        }
+      }
+    }
+
+    console.log("dateToParticipantIds:", map);
+    return map;
+  }, [participants]);
+
+  // ---- Build availability map for calendar (현재 month/year만) ----
+  const currentMonthAvailability = useMemo(() => {
     const result: Record<number, number> = {};
 
-    meetingPlan.available_dates.forEach((d: any) => {
-      const dt = new Date(d.date);
-      if (Number.isNaN(dt.getTime())) return;
-
-      const y = dt.getFullYear();
-      const m = dt.getMonth();
-      const day = dt.getDate();
+    Object.entries(dateToParticipantIds).forEach(([iso, ids]) => {
+      const [yStr, mStr, dStr] = iso.split("-");
+      const y = Number(yStr);
+      const m = Number(mStr) - 1; // JS month 0–11
+      const day = Number(dStr);
 
       if (y === year && m === month) {
-        result[day] =
-          typeof d.available_participant_number === "number"
-            ? d.available_participant_number
-            : 0;
+        result[day] = ids.length; // 해당 날짜에 가능한 참가자 수
       }
     });
 
+    console.log("currentMonthAvailability:", result);
     return result;
-  }, [meetingPlan, year, month]);
+  }, [dateToParticipantIds, year, month]);
 
-  const maxAvailability = participantCount;
+  // ---- maxAvailability: 전체 참가자 수 기준 ----
+  const maxAvailability = useMemo(() => {
+    // 기본적으로 전체 참가자 수
+    let base = participantCount;
+
+    // 혹시 participants가 아직 안 들어왔어도,
+    // dateToParticipantIds에서 최대값을 하나 더 보정할 수 있음
+    const maxFromMap = Object.values(dateToParticipantIds).reduce(
+      (max, ids) => (ids.length > max ? ids.length : max),
+      0
+    );
+
+    if (maxFromMap > base) base = maxFromMap;
+
+    console.log(
+      "participantCount =",
+      participantCount,
+      "maxAvailability =",
+      base
+    );
+    return base;
+  }, [participantCount, dateToParticipantIds]);
 
   const prevMonth = () => {
     if (month === 0) {
@@ -110,6 +190,7 @@ export const CalendarDisplaySection = (): JSX.Element => {
   };
 
   const handleDayClick = (day: number) => {
+    // 이 달력에서 색칠된 날(= map에 있는 날)만 클릭 가능
     if (currentMonthAvailability[day] == null) {
       setClickedDay(null);
       return;
@@ -132,19 +213,14 @@ export const CalendarDisplaySection = (): JSX.Element => {
     ).padStart(2, "0")}`;
   }, [year, month, clickedDay]);
 
-  // ---- Find who is available on selected date ----
+  // ---- Find who is available on selected date (participants + dateToParticipantIds) ----
   const availableParticipantsForDay = useMemo(() => {
-    if (!meetingPlan || !selectedDateISO) return [];
+    if (!selectedDateISO) return [];
 
-    const record = meetingPlan.available_dates.find(
-      (d: any) => d.date === selectedDateISO
-    );
-
-    if (!record || !record.available_participant) return [];
-
-    const idSet = new Set(record.available_participant);
+    const ids = dateToParticipantIds[selectedDateISO] ?? [];
+    const idSet = new Set(ids);
     return participants.filter((p) => idSet.has(p.id));
-  }, [meetingPlan, selectedDateISO, participants]);
+  }, [dateToParticipantIds, selectedDateISO, participants]);
 
   // ---- Save selected date ----
   const handleConfirm = () => {

@@ -155,8 +155,6 @@ export function getTopBarConfig(pathname: string): TopBarConfig {
       return {
         title: "최종 시간 선택",
         showBack: true,
-        // 직전 스텝으로 돌려보내는 흐름
-        backTo: "/time/time1",
       };
     }
   }

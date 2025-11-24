@@ -63,9 +63,9 @@ export type Course = {
 export type PromiseDetail = {
   id: string;
   title: string;
-  dday: number;
+  dday?: number | null;
   participants: Participant[];
-  schedule: Schedule;
+  schedule?: Schedule;
   place?: Place;
   course: Course;
 };

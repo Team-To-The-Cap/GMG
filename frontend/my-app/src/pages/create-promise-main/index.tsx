@@ -68,34 +68,31 @@ export default function CreatePromiseMain() {
         setLoading(true);
         setError(undefined);
 
+        const res = await getPromiseDetail(promiseId);
+
         const draftRaw = localStorage.getItem(
           DRAFT_PROMISE_DATA_PREFIX + promiseId
         );
+
+        let finalData: PromiseDetail = res;
+
         if (draftRaw) {
           try {
             const draft = JSON.parse(draftRaw) as PromiseDetail;
-            if (alive) {
-              setData(draft);
-              setLoading(false);
-            }
-            return;
-          } catch (parseErr) {
-            console.error("draft JSON parse error:", parseErr);
+
+            finalData = {
+              ...draft,
+              participants: res.participants, // 서버 기준 반영
+            };
+          } catch (err) {
+            console.warn("draft JSON parse 실패, 서버 데이터 사용");
           }
         }
 
-        const res = await getPromiseDetail(promiseId);
-        if (alive) setData(res);
-      } catch (e: any) {
-        const draftId = localStorage.getItem(DRAFT_PROMISE_ID_KEY);
-        if (draftId && draftId === promiseId) {
-          localStorage.removeItem(DRAFT_PROMISE_ID_KEY);
-          localStorage.removeItem(DRAFT_PROMISE_DATA_PREFIX + draftId);
-          window.location.reload();
-          return;
-        }
-
-        if (alive) setError(e?.message ?? "알 수 없는 오류");
+        if (alive) setData(finalData);
+      } catch (err: any) {
+        console.error(err);
+        if (alive) setError(err?.message ?? "데이터 불러오기 실패");
       } finally {
         if (alive) setLoading(false);
       }
