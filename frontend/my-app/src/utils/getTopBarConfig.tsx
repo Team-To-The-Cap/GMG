@@ -102,6 +102,25 @@ export function getTopBarConfig(pathname: string): TopBarConfig {
     }
   }
 
+  // ✅ 반드시 가고 싶은 장소 검색 (must-visit)
+  {
+    const match =
+      m("/create/:promiseId/must-visit/search") ||
+      m("/details/:promiseId/must-visit/search");
+
+    if (match) {
+      const { promiseId } = match.params;
+      return {
+        title: "반드시 가고 싶은 장소",
+        showBack: true,
+        // 약속 메인으로 돌아가도록
+        backTo: match.pattern?.path.startsWith("/create")
+          ? `/create/${promiseId}`
+          : `/details/${promiseId}`,
+      };
+    }
+  }
+
   // 만날 날짜 선택
   {
     const match =
@@ -113,14 +132,14 @@ export function getTopBarConfig(pathname: string): TopBarConfig {
       return {
         title: "만날 날짜 선택",
         showBack: true,
-        // 🔥 약속 메인으로 가는 게 아니라,
-        // 참가자 추가 페이지로 돌아가도록 수정
+        // 참가자 추가 페이지로 돌아가도록
         backTo: match.pattern?.path.startsWith("/create")
           ? `/create/${promiseId}/participants/new`
           : `/details/${promiseId}/participants/new`,
       };
     }
   }
+
   // 만나서 할 일 선택
   {
     const match =
