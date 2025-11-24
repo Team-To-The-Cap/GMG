@@ -89,8 +89,6 @@ function buildCourseFromPlaces(meeting: MeetingResponse): Course {
  */
 function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
   const participants: Participant[] = meeting.participants.map((raw) => {
-    // MeetingParticipant 타입에는 없는 필드들(fav_activity, available_times 등)을
-    // 실제 응답에는 있다고 가정하고 any로 한 번 풀어줌
     const p: any = raw;
 
     const fav: string = p.fav_activity ?? "";
@@ -113,8 +111,6 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
       id: String(p.id),
       name: p.name,
       avatarUrl: p.avatar_url || `https://i.pravatar.cc/40?u=${p.id}`,
-
-      // ⬇️ 확장 필드들
       startAddress: p.start_address as string | undefined,
       transportation: p.transportation as string | undefined,
       favActivityRaw: fav,
@@ -123,16 +119,19 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
     };
   });
 
-  // 1) 일정: plan.meeting_time이 있으면 우선 사용
-  const scheduleISO = meeting.plan?.meeting_time ?? new Date().toISOString();
+  // 🔹 meeting.plan?.meeting_time이 있을 때만 사용
+  const scheduleISO = meeting.plan?.meeting_time ?? null;
 
-  // 2) D-day 계산
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const target = new Date(scheduleISO);
-  target.setHours(0, 0, 0, 0);
-  const diffMs = target.getTime() - today.getTime();
-  const dday = Math.round(diffMs / (1000 * 60 * 60 * 24));
+  // 🔹 D-day 계산도 "일정 있는 경우에만"
+  let dday: number | null = null;
+  if (scheduleISO) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const target = new Date(scheduleISO);
+    target.setHours(0, 0, 0, 0);
+    const diffMs = target.getTime() - today.getTime();
+    dday = Math.round(diffMs / (1000 * 60 * 60 * 24));
+  }
 
   // 3) 장소: plan.address 우선, 없으면 places[0] 사용
   const primaryPlace =
@@ -152,15 +151,15 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
         }
       : undefined;
 
-  // 4) 코스: 서버 places → Course 구조로 변환
   const course = buildCourseFromPlaces(meeting);
 
   return {
     id: String(meeting.id),
     title: meeting.name,
-    dday,
+    dday, // 🔹 null일 수 있음 (프론트에서 미정 처리)
+    // 🔹 일정이 없으면 schedule 자체를 undefined로 줄 수도 있음
+    schedule: scheduleISO ? { dateISO: scheduleISO } : undefined,
     participants,
-    schedule: { dateISO: scheduleISO },
     place: primaryPlace,
     course,
   };
