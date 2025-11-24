@@ -6,14 +6,9 @@ import type {
   CourseVisit,
   CourseTransfer,
   Course,
-  MustVisitPlace,
 } from "@/types/promise";
 import type { Participant, ParticipantTime } from "@/types/participant";
-import type {
-  MeetingPlan,
-  MeetingResponse,
-  MeetingMustVisitPlace,
-} from "@/types/meeting";
+import type { MeetingPlan, MeetingResponse } from "@/types/meeting";
 
 /**
  * 🔹 백엔드에서 내려주는 MeetingResponse.places 배열을

@@ -4,7 +4,6 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import PromiseMainView from "@/pages/promise-main/index.view";
 import {
   getPromiseDetail,
-  calculateAutoPlan,
   resetPromiseOnServer,
   createEmptyPromise,
 } from "@/services/promise/promise.service";
@@ -37,7 +36,7 @@ export default function CreatePromiseMain() {
     onCalculatePlan: baseOnCalculatePlan,
     onCalculateCourse,
     onSave: baseOnSave,
-    onReset: baseOnReset, // 기본 서버 초기화
+
     onEditMustVisitPlaces,
     onDeleteMustVisitPlace,
   } = usePromiseMainController({ promiseId, data, setData });

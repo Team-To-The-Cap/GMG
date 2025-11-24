@@ -46,7 +46,7 @@ export default function HomeView({
           >
             <PromiseCard
               title={item.title}
-              dday={item.dday}
+              dday={item.dday ?? undefined}
               participants={item.participants}
               className={styles.card}
               // ✅ 일정이 없으면 일정 미정으로 표시

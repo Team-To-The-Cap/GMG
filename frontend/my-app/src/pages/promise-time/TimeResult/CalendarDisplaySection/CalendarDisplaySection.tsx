@@ -3,7 +3,7 @@ import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useEffect, useMemo, useState, type JSX } from "react";
 import Button from "@/components/ui/button";
 import { Calendar } from "@/components/ui/Calendar";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
 const MONTHS = [
   "January",
@@ -32,24 +32,15 @@ type Participant = {
   available_times: ParticipantTime[];
 };
 
-type MeetingPlan = {
-  id: number;
-  meeting_time: string | null;
-  // 필요한 필드만 적당히...
-};
-
-type MeetingDetailResponse = {
-  id: number;
-  name: string;
-  participants: Participant[];
-  plan: MeetingPlan | null;
-};
+// type MeetingPlan = {
+//   id: number;
+//   meeting_time: string | null;
+//   // 필요한 필드만 적당히...
+// };
 
 export const CalendarDisplaySection = (): JSX.Element => {
   const { promiseId } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
-  const prevState = (location.state as any) ?? {};
 
   const today = useMemo(() => new Date(), []);
   const [year, setYear] = useState(() => today.getFullYear());
@@ -59,8 +50,6 @@ export const CalendarDisplaySection = (): JSX.Element => {
 
   const [participants, setParticipants] = useState<Participant[]>([]);
   const participantCount = participants.length;
-
-  const [meetingPlan, setMeetingPlan] = useState<MeetingPlan | null>(null);
 
   // ---- Fetch participants ----
   useEffect(() => {
@@ -79,20 +68,20 @@ export const CalendarDisplaySection = (): JSX.Element => {
   }, [promiseId]);
 
   // ---- Fetch meeting detail (plan 정보 등 필요할 때) ----
-  useEffect(() => {
-    const fetchPlan = async () => {
-      if (!promiseId) return;
+  //   useEffect(() => {
+  //     const fetchPlan = async () => {
+  //       if (!promiseId) return;
 
-      const res = await fetch(
-        `http://223.130.152.114:8001/meetings/${promiseId}`
-      );
-      const data: MeetingDetailResponse = await res.json();
-      console.log("meeting data:", data);
-      setMeetingPlan(data.plan ?? null);
-    };
+  //       const res = await fetch(
+  //         `http://223.130.152.114:8001/meetings/${promiseId}`
+  //       );
+  //       //   const data: MeetingDetailResponse = await res.json();
 
-    fetchPlan();
-  }, [promiseId]);
+  //       //   setMeetingPlan(data.plan ?? null);
+  //     };
+
+  //     fetchPlan();
+  //   }, [promiseId]);
 
   // ---- participants 기반으로 날짜 → 참가자 ID 목록 맵 구성 ----
   const dateToParticipantIds = useMemo(() => {

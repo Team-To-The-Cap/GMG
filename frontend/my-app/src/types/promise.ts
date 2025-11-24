@@ -79,3 +79,5 @@ export type PromiseDetail = {
   // ⬇️ 이 줄 추가 (백엔드 Must-Visit 매핑용)
   mustVisitPlaces?: { id: string; name: string; address?: string | null }[];
 };
+
+export type { Participant }; // ⬅️ 이 줄 추가

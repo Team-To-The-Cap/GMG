@@ -87,12 +87,12 @@ export default function AddParticipantStartPage() {
   // 이 참가자를 대표하는 key 값 (프론트/로컬 전용)
   // - 수정 모드: "id-111"
   // - 신규 모드: "draft-xxxx"
-  const participantKeyBase = useMemo(() => {
-    if (editParticipantId !== null && editParticipantId !== undefined) {
-      return `id-${String(editParticipantId)}`;
-    }
-    return participantDraftId ?? "draft-unknown";
-  }, [editParticipantId, participantDraftId]);
+  //   const participantKeyBase = useMemo(() => {
+  //     if (editParticipantId !== null && editParticipantId !== undefined) {
+  //       return `id-${String(editParticipantId)}`;
+  //     }
+  //     return participantDraftId ?? "draft-unknown";
+  //   }, [editParticipantId, participantDraftId]);
 
   const openSchedulePicker = () => {
     if (!promiseId) return;
