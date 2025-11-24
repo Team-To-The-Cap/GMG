@@ -33,6 +33,11 @@ export default function AddParticipantPreferencesPage() {
     state?.selectedTransportation ?? null
   );
 
+  // ✅ 수정 모드일 때 사용할 참가자 id (여기서 한 번 받아서 유지)
+  const [editParticipantId] = useState<string | number | undefined>(
+    state?.editParticipantId
+  );
+
   // 현재 선택된 선호 카테고리
   const [selectedCats, setSelectedCats] = useState<PlaceCategory[]>(
     (state?.selectedPreferences as PlaceCategory[]) ?? []
@@ -66,6 +71,7 @@ export default function AddParticipantPreferencesPage() {
 
     const segments = location.pathname.split("/");
     const mode = segments[1]; // 'details' 또는 'create'
+
     navigate(`/${mode}/${promiseId}/participants/new`, {
       state: {
         nameDraft,
@@ -73,6 +79,9 @@ export default function AddParticipantPreferencesPage() {
         selectedTimes,
         selectedTransportation,
         selectedPreferences: selectedCats,
+
+        // ✅ 수정 모드 유지: 다시 add-start로 돌아갈 때도 들고 감
+        editParticipantId,
       },
     });
   };

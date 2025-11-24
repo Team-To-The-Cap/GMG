@@ -1,4 +1,3 @@
-// src/App.tsx
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useMemo } from "react";
 
@@ -25,14 +24,20 @@ import "./App.css";
 
 export default function App() {
   const location = useLocation();
-  const { title, showBack } = useMemo(
+
+  const { title, showBack, backTo, showShare } = useMemo(
     () => getTopBarConfig(location.pathname),
     [location.pathname]
   );
 
   return (
     <div className="appRoot">
-      <TopBar title={title} showBack={showBack} />
+      <TopBar
+        title={title}
+        showBack={showBack}
+        backTo={backTo} // ✅ onBack 대신 backTo만 넘김
+        showShare={showShare}
+      />
 
       <main className="pageContainer">
         <Routes>
@@ -97,7 +102,7 @@ export default function App() {
             element={<SearchOriginPage />}
           />
 
-          {/* ✅ 선호 선택 페이지 */}
+          {/* 선호 선택 페이지 */}
           <Route
             path="/details/:promiseId/participants/new/preferences"
             element={<AddParticipantPreferencesPage />}
@@ -124,6 +129,16 @@ export default function App() {
           <Route path="/create/:promiseId/promise-time" element={<Time1 />} />
           <Route path="/details/:promiseId/promise-time" element={<Time1 />} />
           <Route path="/time/timeresult/:promiseId" element={<TimeResult />} />
+
+          {/* ✅ 반드시 가고 싶은 장소 검색 (새로 추가) */}
+          <Route
+            path="/details/:promiseId/must-visit/search"
+            element={<SearchOriginPage />}
+          />
+          <Route
+            path="/create/:promiseId/must-visit/search"
+            element={<SearchOriginPage />}
+          />
 
           {/* 404 → 홈으로 */}
           <Route path="*" element={<Navigate to="/" replace />} />

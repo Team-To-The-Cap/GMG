@@ -18,7 +18,7 @@ CENTER = (37.5665, 126.9780)  # 서울시청
 
 # 그래프 단순화/성분 유지 옵션
 SIMPLIFY = True         # True: 교차로/막다른길만 노드로 (권장)
-RETAIN_ALL = True       # True: 단절 성분까지 유지
+RETAIN_ALL = False       # True: 단절 성분까지 유지
 
 # 출력 폴더
 OUTDIR = "seoul_graph_out"
@@ -71,12 +71,32 @@ def add_travel_time(G, mode="drive"):
         data["travel_time"] = (L / 1000.0) / kph * 3600.0
     return G
 
-def _route_sum_attr(G, route_nodes, attr):
-    """경로(노드 리스트) 위 간선 attr 합계 (MultiDiGraph 안전)"""
-    vals = ox.utils_graph.get_route_edge_attributes(
-        G, route_nodes, attr, minimize_key="length"
-    )
-    return sum(float(v or 0.0) for v in vals)
+def _route_sum_attr(G, route_nodes, attr: str) -> float:
+    """
+    경로(노드 리스트) 위의 간선 attr 합계.
+    osmnx 버전에 안 의존하고 networkx만 사용.
+    """
+    try:
+        # 간선 weight=attr로 path 전체 합 계산
+        return float(nx.path_weight(G, route_nodes, weight=attr))
+    except Exception:
+        # 혹시 attr 없는 edge가 섞여있을 때 대비한 fallback
+        total = 0.0
+        for u, v in zip(route_nodes[:-1], route_nodes[1:]):
+            # MultiDiGraph라 edge가 여러 개 있을 수 있으니,
+            # length가 최소인 edge 하나 골라서 attr 사용.
+            data_dict = G[u][v]
+            if isinstance(data_dict, dict):
+                data = min(
+                    data_dict.values(),
+                    key=lambda d: d.get("length", 0.0)
+                )
+            else:
+                data = data_dict
+
+            total += float(data.get(attr, 0.0) or 0.0)
+        return total
+
 
 def plot_and_save(G, route_nodes, fname_png):
     fig, ax = ox.plot_graph_route(

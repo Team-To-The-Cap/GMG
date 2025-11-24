@@ -6,8 +6,14 @@ import type {
   CourseVisit,
   CourseTransfer,
   Course,
+  MustVisitPlace,
 } from "@/types/promise";
-import type { MeetingPlan, MeetingResponse } from "@/types/meeting";
+import type { Participant, ParticipantTime } from "@/types/participant";
+import type {
+  MeetingPlan,
+  MeetingResponse,
+  MeetingMustVisitPlace,
+} from "@/types/meeting";
 
 /**
  * 🔹 백엔드에서 내려주는 MeetingResponse.places 배열을
@@ -41,7 +47,7 @@ function buildCourseFromPlaces(meeting: MeetingResponse): Course {
 
       items.push({
         type: "transfer",
-        mode: "subway", // 기본값 (walk/subway 등 마음대로 조정 가능)
+        mode: "subway", // 기본값
         minutes: transferMinutes,
         note: "이동",
       });
@@ -86,24 +92,49 @@ function buildCourseFromPlaces(meeting: MeetingResponse): Course {
  * 🔹 MeetingResponse -> PromiseDetail 매핑
  */
 function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
-  const participants = meeting.participants.map((p) => ({
-    id: String(p.id),
-    name: p.name,
-    avatarUrl: (p as any).avatar_url || `https://i.pravatar.cc/40?u=${p.id}`,
-  }));
+  const participants: Participant[] = meeting.participants.map((raw) => {
+    const p: any = raw;
 
-  // 1) 일정: plan.meeting_time이 있으면 우선 사용
-  const scheduleISO = meeting.plan?.meeting_time ?? new Date().toISOString();
+    const fav: string = p.fav_activity ?? "";
+    const preferredCategories =
+      fav.length > 0
+        ? fav
+            .split(",")
+            .map((s: string) => s.trim())
+            .filter((s: string) => !!s)
+        : [];
 
-  // 2) D-day 계산
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const target = new Date(scheduleISO);
-  target.setHours(0, 0, 0, 0);
-  const diffMs = target.getTime() - today.getTime();
-  const dday = Math.round(diffMs / (1000 * 60 * 60 * 24));
+    const availableTimes: ParticipantTime[] = (p.available_times ?? []).map(
+      (t: any) => ({
+        start_time: t.start_time as string,
+        end_time: t.end_time as string,
+      })
+    );
 
-  // 3) 장소: plan.address 우선, 없으면 places[0] 사용
+    return {
+      id: String(p.id),
+      name: p.name,
+      avatarUrl: p.avatar_url || `https://i.pravatar.cc/40?u=${p.id}`,
+      startAddress: p.start_address as string | undefined,
+      transportation: p.transportation as string | undefined,
+      favActivityRaw: fav,
+      preferredCategories,
+      availableTimes,
+    };
+  });
+
+  const scheduleISO = meeting.plan?.meeting_time ?? null;
+
+  let dday: number | null = null;
+  if (scheduleISO) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const target = new Date(scheduleISO);
+    target.setHours(0, 0, 0, 0);
+    const diffMs = target.getTime() - today.getTime();
+    dday = Math.round(diffMs / (1000 * 60 * 60 * 24));
+  }
+
   const primaryPlace =
     meeting.plan?.address && meeting.plan.address.trim()
       ? {
@@ -121,18 +152,29 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
         }
       : undefined;
 
-  // 4) 코스: 서버 places → Course 구조로 변환
   const course = buildCourseFromPlaces(meeting);
+
+  // 🔹 Must-Visit Place 매핑
+  const mustVisitPlaces =
+    (meeting.must_visit_places ?? []).map((p) => ({
+      id: String(p.id),
+      name: p.name,
+      address: p.address ?? undefined,
+    })) ?? [];
 
   return {
     id: String(meeting.id),
     title: meeting.name,
     dday,
+    schedule: scheduleISO ? { dateISO: scheduleISO } : undefined,
     participants,
-    schedule: { dateISO: scheduleISO },
     place: primaryPlace,
-    course, // ✅ 실제 코스 데이터
-  };
+    course,
+    plan: meeting.plan, // MeetingResponse.plan 그대로 실어보내기 (available_dates 포함)
+
+    // ⬇️ 새 필드
+    mustVisitPlaces,
+  } as PromiseDetail;
 }
 
 /**
@@ -162,9 +204,6 @@ export async function getPromiseList(): Promise<PromiseDetail[]> {
 
 /**
  * 🔹 약속 저장 (HTTP 버전)
- * - 현재 Meeting에 대한 업데이트 API가 명확하지 않아서,
- *   예시로 name만 PATCH 하는 식으로 둠.
- *   실제 스펙에 맞게 바꿔도 됨.
  */
 export async function savePromiseDetail(
   detail: PromiseDetail
@@ -174,7 +213,6 @@ export async function savePromiseDetail(
     throw new Error(`잘못된 meeting id: ${detail.id}`);
   }
 
-  // 일단 name만 업데이트하는 예시
   await http.request(`/meetings/${meetingId}`, {
     method: "PATCH",
     headers: {
@@ -183,15 +221,11 @@ export async function savePromiseDetail(
     body: JSON.stringify({ name: detail.title }),
   });
 
-  // 실제론 서버에서 다시 조회하는 게 best지만,
-  // 지금은 detail 그대로 돌려줘도 UI 입장에서는 충분함
   return detail;
 }
 
 /**
  * 🔹 빈 약속 하나 생성
- * - FastAPI: POST /meetings/
- * - body: { "name": "string" }
  */
 export async function createEmptyPromise(): Promise<PromiseDetail> {
   const meeting = await http.request<MeetingResponse>("/meetings/", {
@@ -202,14 +236,11 @@ export async function createEmptyPromise(): Promise<PromiseDetail> {
     body: JSON.stringify({ name: "" }),
   });
 
-  // 방금 만든 meeting을 PromiseDetail로 변환
   return mapMeetingToPromiseDetail(meeting);
 }
 
 /**
  * 🔹 약속 삭제
- * - FastAPI: DELETE /meetings/{meeting_id}
- * - 성공 시 204 No Content
  */
 export async function deletePromise(promiseId: string): Promise<void> {
   const meetingId = Number(promiseId);
@@ -218,12 +249,10 @@ export async function deletePromise(promiseId: string): Promise<void> {
     throw new Error(`잘못된 meeting id: ${promiseId}`);
   }
 
-  // 실제 삭제 요청
   await http.request<void>(`/meetings/${meetingId}`, {
     method: "DELETE",
   });
 
-  // 🔥 삭제된 meeting ID가 draft로 저장된 ID라면 제거
   const storedDraftId = localStorage.getItem(DRAFT_PROMISE_ID_KEY);
 
   if (storedDraftId && storedDraftId === String(meetingId)) {
@@ -252,7 +281,6 @@ export async function deleteParticipant(
 }
 
 // 🔹 자동 일정/장소/코스 계산 (HTTP 버전)
-// FastAPI: POST /meetings/{meeting_id}/plans/calculate
 export async function calculateAutoPlan(
   promiseId: string
 ): Promise<PromiseDetail> {
@@ -261,18 +289,15 @@ export async function calculateAutoPlan(
     throw new Error(`잘못된 meeting id: ${promiseId}`);
   }
 
-  // 1) 계산 트리거
   await http.request<MeetingPlan>(`/meetings/${meetingId}/plans/calculate`, {
     method: "POST",
   });
 
-  // 2) 새로 계산된 plan/places까지 포함해서 다시 조회
   const meeting = await http.request<MeetingResponse>(`/meetings/${meetingId}`);
   return mapMeetingToPromiseDetail(meeting);
 }
 
 // 🔹 약속 이름만 수정 (HTTP 버전)
-// FastAPI: PATCH /meetings/{meeting_id}  { "name": "..." }
 export async function updateMeetingName(
   meetingId: string | number,
   name: string
@@ -288,5 +313,107 @@ export async function updateMeetingName(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ name }),
+  });
+}
+
+// 🔹 약속 전체 초기화
+export async function resetPromiseOnServer(
+  detail: PromiseDetail
+): Promise<PromiseDetail> {
+  const meetingId = Number(detail.id);
+  if (Number.isNaN(meetingId)) {
+    throw new Error(`잘못된 meeting id: ${detail.id}`);
+  }
+
+  // 1) 모든 참가자 삭제
+  const participants = detail.participants ?? [];
+  if (participants.length) {
+    await Promise.all(
+      participants.map((p) => deleteParticipant(meetingId, p.id))
+    );
+  }
+
+  // 2) 플랜 비우기
+  try {
+    await http.request(`/meetings/${meetingId}/plans`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        meeting_time: null,
+        address: "",
+        latitude: null,
+        longitude: null,
+        total_time: null,
+        available_dates: [] as any[],
+      }),
+    });
+  } catch (e) {
+    console.warn("resetPromiseOnServer: plan reset 실패 (무시 가능)", e);
+  }
+
+  // 3) 장소(코스) 비우기
+  await http.request(`/meetings/${meetingId}/places`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify([]),
+  });
+
+  // 4) 약속 이름 비우기
+  await http.request(`/meetings/${meetingId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ name: "" }),
+  });
+
+  const meeting = await http.request<MeetingResponse>(`/meetings/${meetingId}`);
+  return mapMeetingToPromiseDetail(meeting);
+}
+
+// 🔹 반드시 가고 싶은 장소 추가
+// FastAPI: POST /api/meetings/{meeting_id}/must-visit-places/
+export async function addMustVisitPlace(
+  promiseId: string | number,
+  payload: { name: string; address?: string }
+): Promise<void> {
+  const mid = Number(promiseId);
+  if (Number.isNaN(mid)) {
+    throw new Error(`잘못된 meeting id: ${promiseId}`);
+  }
+
+  await http.request(`/meetings/${mid}/must-visit-places/`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name: payload.name,
+      address: payload.address ?? "",
+    }),
+  });
+}
+
+// 🔹 반드시 가고 싶은 장소 삭제
+// FastAPI: DELETE /api/meetings/{meeting_id}/must-visit-places/{place_id}`
+export async function deleteMustVisitPlace(
+  promiseId: string | number,
+  placeId: string | number
+): Promise<void> {
+  const mid = Number(promiseId);
+  const pid = Number(placeId);
+
+  if (Number.isNaN(mid) || Number.isNaN(pid)) {
+    throw new Error(
+      `잘못된 id (meeting: ${promiseId}, mustVisitPlace: ${placeId})`
+    );
+  }
+
+  await http.request(`/meetings/${mid}/must-visit-places/${pid}`, {
+    method: "DELETE",
   });
 }

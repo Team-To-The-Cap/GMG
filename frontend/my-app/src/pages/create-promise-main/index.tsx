@@ -1,13 +1,12 @@
 // src/pages/create-promise-main/index.tsx
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useState, useCallback, useMemo } from "react";
-import CreatePromiseMainView from "./index.view";
+import PromiseMainView from "@/pages/promise-main/index.view";
 import {
   getPromiseDetail,
-  savePromiseDetail,
-  deleteParticipant,
   calculateAutoPlan,
-  updateMeetingName,
+  resetPromiseOnServer,
+  createEmptyPromise,
 } from "@/services/promise/promise.service";
 import type { PromiseDetail } from "@/types/promise";
 import { DEFAULT_PROMISE_ID } from "@/config/runtime";
@@ -15,36 +14,50 @@ import {
   DRAFT_PROMISE_DATA_PREFIX,
   DRAFT_PROMISE_ID_KEY,
 } from "@/assets/constants/storage";
+import { usePromiseMainController } from "@/pages/promise-main/index";
+import type { Participant } from "@/types/participant";
 
 export default function CreatePromiseMain() {
   const { promiseId } = useParams();
   const navigate = useNavigate();
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [calculatingPlan, setCalculatingPlan] = useState(false);
-  const [calculatingCourse, setCalculatingCourse] = useState(false);
-  const [error, setError] = useState<string>();
   const [data, setData] = useState<PromiseDetail>();
 
-  // 🔹 draft 전체를 localStorage에 저장하는 헬퍼
+  // 🔹 공통 컨트롤러 사용
+  const {
+    loading,
+    setLoading,
+    error,
+    setError,
+    saving,
+    calculatingPlan,
+    calculatingCourse,
+    onChangeTitle: baseOnChangeTitle,
+    onRemoveParticipant: baseOnRemoveParticipant,
+    onCalculatePlan: baseOnCalculatePlan,
+    onCalculateCourse,
+    onSave: baseOnSave,
+    onReset: baseOnReset, // 기본 서버 초기화
+    onEditMustVisitPlaces,
+    onDeleteMustVisitPlace,
+  } = usePromiseMainController({ promiseId, data, setData });
+
+  // 🔹 draft 헬퍼
   const persistDraft = useCallback((detail: PromiseDetail) => {
-    // 마지막으로 작업하던 약속 ID 기억
     localStorage.setItem(DRAFT_PROMISE_ID_KEY, detail.id);
-    // 해당 약속의 전체 내용 저장
     localStorage.setItem(
       DRAFT_PROMISE_DATA_PREFIX + detail.id,
       JSON.stringify(detail)
     );
   }, []);
 
-  // 🔹 현재 열려 있는 약속이 "작성 중 초안"인지 판별
   const isDraft = useMemo(() => {
     if (!promiseId) return false;
     const draftId = localStorage.getItem(DRAFT_PROMISE_ID_KEY);
     return draftId === promiseId;
   }, [promiseId]);
 
+  // 🔹 로딩 로직 (create 전용: draft 우선)
   useEffect(() => {
     if (!promiseId) {
       navigate(`/details/${DEFAULT_PROMISE_ID}`, { replace: true });
@@ -58,42 +71,39 @@ export default function CreatePromiseMain() {
         setLoading(true);
         setError(undefined);
 
-        // 1️⃣ 먼저 localStorage에 draft가 있는지 확인
+        const res = await getPromiseDetail(promiseId);
+
         const draftRaw = localStorage.getItem(
           DRAFT_PROMISE_DATA_PREFIX + promiseId
         );
+
+        let finalData: PromiseDetail = res;
+
         if (draftRaw) {
           try {
             const draft = JSON.parse(draftRaw) as PromiseDetail;
-            if (alive) {
-              setData(draft);
-              setLoading(false);
-            }
-            // draft로 복구했으면 서버 호출은 굳이 안 해도 됨
-            return;
-          } catch (parseErr) {
-            console.error("draft JSON parse error:", parseErr);
-            // 파싱 실패하면 그냥 서버에서 다시 로드
+
+            // participants 는 항상 서버 기준으로, 그 외 draft 에서 수정한 필드만 덮어쓰도록
+            const { participants: _ignoredParticipants, ...draftRest } = draft;
+
+            finalData = {
+              // 1) 서버에서 온 최신 데이터 기준
+              //    (mustVisitPlaces, plan, places 등 서버 필드 유지)
+              ...res,
+              // 2) 그 위에 클라에서 임시로 수정해 둔 필드만 얹기
+              ...draftRest,
+              // 3) participants 는 다시 한 번 서버 기준으로 고정
+              participants: res.participants,
+            };
+          } catch (err) {
+            console.warn("draft JSON parse 실패, 서버 데이터 사용");
           }
         }
 
-        // 2️⃣ draft가 없으면 서버에서 원본 조회
-        const res = await getPromiseDetail(promiseId);
-        if (alive) setData(res);
-      } catch (e: any) {
-        // 🔥 draft ID가 깨진 경우 정리
-        const draftId = localStorage.getItem(DRAFT_PROMISE_ID_KEY);
-
-        if (draftId && draftId === promiseId) {
-          // draft로 기억해둔 약속인데 더 이상 불러올 수 없으면
-          // 👉 draft ID + draft 데이터 삭제 후 새로고침
-          localStorage.removeItem(DRAFT_PROMISE_ID_KEY);
-          localStorage.removeItem(DRAFT_PROMISE_DATA_PREFIX + draftId);
-          window.location.reload();
-          return;
-        }
-
-        if (alive) setError(e?.message ?? "알 수 없는 오류");
+        if (alive) setData(finalData);
+      } catch (err: any) {
+        console.error(err);
+        if (alive) setError(err?.message ?? "데이터 불러오기 실패");
       } finally {
         if (alive) setLoading(false);
       }
@@ -102,38 +112,114 @@ export default function CreatePromiseMain() {
     return () => {
       alive = false;
     };
-  }, [promiseId, navigate]);
+  }, [promiseId, navigate, setLoading, setError]);
 
-  // 약속 이름 편집(낙관적 업데이트 + 서버에 바로 저장)
+  // ✅ create 전용: 제목 변경 시 draft도 반영하고 싶으면 이렇게 override
   const onChangeTitle = useCallback(
     async (value: string) => {
-      const trimmed = value.trim();
-
-      // 1) UI 먼저 업데이트
+      await baseOnChangeTitle(value);
       setData((prev) => {
         if (!prev) return prev;
-        return { ...prev, title: trimmed };
+        const next = { ...prev, title: value.trim() };
+        persistDraft(next);
+        return next;
+      });
+    },
+    [baseOnChangeTitle, persistDraft]
+  );
+
+  // ✅ create 전용: 참여자 삭제 시 draft까지 저장
+  const onRemoveParticipant = useCallback(
+    async (id: string) => {
+      await baseOnRemoveParticipant(id);
+      setData((prev) => {
+        if (!prev) return prev;
+        const next: PromiseDetail = {
+          ...prev,
+          participants: (prev.participants ?? []).filter((p) => p.id !== id),
+        };
+        persistDraft(next);
+        return next;
+      });
+    },
+    [baseOnRemoveParticipant, persistDraft]
+  );
+
+  // ✅ create 전용: 일정/장소 계산 후 draft 반영
+  const onCalculatePlan = useCallback(async () => {
+    if (!promiseId) return;
+
+    try {
+      // 공통 컨트롤러 로직 사용 (여기서 성공/실패 알럿, calculatingPlan 토글까지 처리됨)
+      await baseOnCalculatePlan();
+
+      // baseOnCalculatePlan이 에러 없이 끝났다면,
+      // 최신 data를 draft에만 동기화
+      setData((prev) => {
+        if (!prev) return prev;
+        persistDraft(prev);
+        return prev;
       });
 
-      // 2) 서버 PATCH
-      if (!promiseId) return;
-      try {
-        await updateMeetingName(promiseId, trimmed);
-      } catch (e: any) {
-        console.error(e);
-        alert(e?.message ?? "약속 이름 저장 중 오류가 발생했습니다.");
+      // ✅ 여기서는 "일정/장소가 계산되었습니다!" 알럿을
+      //     더 이상 띄우지 않는다 (중복/오동작 방지)
+    } catch (e) {
+      // onCalculatePlan 내부에서 에러를 다시 던지게 바꾸지 않은 이상
+      // 사실 여기로 올 일은 거의 없지만, 안전하게만 두자.
+      console.error(e);
+    }
+  }, [promiseId, baseOnCalculatePlan, setData, persistDraft]);
 
-        // (선택) 실패 시 서버 상태로 되돌리고 싶으면 재조회
-        try {
-          const fresh = await getPromiseDetail(promiseId);
-          setData(fresh);
-        } catch (err) {
-          console.error("이름 저장 실패 후 재조회도 실패:", err);
-        }
-      }
-    },
-    [promiseId]
-  );
+  // ✅ create 전용: 저장 후, 새 "약속 추가" 화면으로 다시 진입
+  const onSave = useCallback(async () => {
+    if (!data) return;
+
+    // 1) 서버에 현재 약속 저장
+    await baseOnSave();
+
+    // 2) 이 약속이 draft였다면 draft 정보 정리
+    const currentId = data.id;
+    const savedDraftId = localStorage.getItem(DRAFT_PROMISE_ID_KEY);
+    if (savedDraftId && savedDraftId === currentId) {
+      localStorage.removeItem(DRAFT_PROMISE_ID_KEY);
+      localStorage.removeItem(DRAFT_PROMISE_DATA_PREFIX + savedDraftId);
+    }
+
+    // 3) BottomNav의 handleCreateClick 로직과 동일하게,
+    //    "약속 추가" 화면을 다시 띄우기
+
+    // 혹시 남아 있는 draft 가 있다면 그걸로 이동
+    const draftId = localStorage.getItem(DRAFT_PROMISE_ID_KEY);
+    if (draftId) {
+      navigate(`/create/${draftId}`);
+      return;
+    }
+
+    // 없으면 새 약속 하나 만들고 그 쪽으로 이동
+    const draft = await createEmptyPromise();
+    localStorage.setItem(DRAFT_PROMISE_ID_KEY, draft.id);
+    navigate(`/create/${draft.id}`);
+  }, [baseOnSave, data, navigate]);
+
+  // ✅ create 전용: 서버 초기화 + draft까지 덮어쓰기
+  const onReset = useCallback(async () => {
+    if (!data) return;
+
+    const ok = window.confirm(
+      "정말 초기화하시겠습니까?\n입력하신 이름, 참가자, 일정, 장소 등이 모두 삭제됩니다."
+    );
+    if (!ok) return;
+
+    try {
+      const cleared = await resetPromiseOnServer(data);
+      setData(cleared);
+      persistDraft(cleared);
+      alert("약속 내용이 모두 초기화되었습니다.");
+    } catch (e: any) {
+      console.error(e);
+      alert(e?.message ?? "초기화 중 오류가 발생했습니다.");
+    }
+  }, [data, persistDraft]);
 
   const onEditSchedule = useCallback(() => {
     navigate(`/time/timeresult/${promiseId}`);
@@ -145,142 +231,35 @@ export default function CreatePromiseMain() {
 
   const onEditCourse = useCallback(() => {
     alert("코스 수정 기능 준비 중!");
-  }, [promiseId]);
+  }, []);
 
-  // ✅ 새 인원 추가 버튼 핸들러
   const onAddParticipant = useCallback(() => {
-    if (!promiseId) return; // 혹시 모를 가드
-
+    if (!promiseId) return;
     navigate(`/create/${promiseId}/participants/new`, {
-      state: {
-        from: "create",
-      },
+      state: { from: "create" },
     });
   }, [promiseId, navigate]);
 
-  const onEditTitle = useCallback(() => {
-    alert("약속 이름 수정 기능 준비 중!");
-  }, [promiseId, navigate]);
-
-  // 참여자 삭제(낙관적 업데이트 + draft 전체 저장 + 서버 연동)
-  const onRemoveParticipant = useCallback(
-    async (id: string) => {
-      // 1) 먼저 화면에서 제거 (낙관적 업데이트)
-      setData((prev) => {
-        if (!prev) return prev;
-        const next: PromiseDetail = {
-          ...prev,
-          participants: (prev.participants ?? []).filter((p) => p.id !== id),
-        };
-
-        // 🔥 draft 전체 저장
-        persistDraft(next);
-
-        return next;
-      });
-
+  const onEditParticipant = useCallback(
+    (participant: Participant) => {
       if (!promiseId) return;
 
-      try {
-        await deleteParticipant(promiseId, id);
-      } catch (e: any) {
-        console.error(e);
-        alert(e?.message ?? "참여자 삭제 중 오류가 발생했습니다.");
-
-        // 실패 시 서버 상태로 다시 맞추기
-        try {
-          const fresh = await getPromiseDetail(promiseId);
-          setData(fresh);
-        } catch (err) {
-          console.error("삭제 실패 후 재조회도 실패:", err);
-        }
-      }
+      navigate(`/create/${promiseId}/participants/new`, {
+        state: {
+          nameDraft: participant.name,
+          selectedOrigin: participant.startAddress ?? null,
+          selectedTransportation: participant.transportation ?? null,
+          selectedTimes: participant.availableTimes ?? [],
+          selectedPreferences: participant.preferredCategories ?? [],
+          editParticipantId: participant.id, // 수정 모드 표시
+        },
+      });
     },
-    [promiseId, persistDraft]
+    [promiseId, navigate]
   );
 
-  // 기존 onCalculate
-  // const onCalculate = useCallback(async () => {
-  const onCalculatePlan = useCallback(async () => {
-    // ✅ 이름 변경
-    if (!promiseId) return;
-
-    try {
-      setCalculatingPlan(true); // ✅ 변경
-
-      const updated = await calculateAutoPlan(promiseId);
-      setData(updated);
-
-      // 🔥 계산 결과도 draft로 저장
-      persistDraft(updated);
-
-      alert("일정/장소가 계산되었습니다!"); // ✅ 문구도 일정/장소 중심으로
-    } catch (e: any) {
-      console.error(e);
-      alert(e?.message ?? "계산 중 오류가 발생했습니다.");
-    } finally {
-      setCalculatingPlan(false); // ✅ 변경
-    }
-  }, [promiseId, persistDraft]);
-
-  const onCalculateCourse = useCallback(async () => {
-    if (!data) return;
-
-    try {
-      setCalculatingCourse(true);
-      // TODO: 나중에 실제 코스 계산 API 연동
-      alert("코스 계산 기능은 아직 준비 중이에요.");
-    } catch (e: any) {
-      console.error(e);
-    } finally {
-      setCalculatingCourse(false);
-    }
-  }, [data]);
-
-  // ✅ 저장 버튼: 실제로 서버에 저장 + draft 정리
-  const onSave = useCallback(async () => {
-    if (!data) return;
-    try {
-      setSaving(true);
-      const saved = await savePromiseDetail(data);
-      setData(saved);
-
-      const draftId = localStorage.getItem(DRAFT_PROMISE_ID_KEY);
-      if (draftId && draftId === saved.id) {
-        localStorage.removeItem(DRAFT_PROMISE_ID_KEY);
-        localStorage.removeItem(DRAFT_PROMISE_DATA_PREFIX + draftId);
-      }
-
-      alert("저장되었습니다!");
-      // navigate(`/details/${saved.id}`);
-    } catch (e: any) {
-      console.error(e);
-      alert(e?.message ?? "저장 중 오류가 발생했습니다.");
-    } finally {
-      setSaving(false);
-    }
-  }, [data]);
-
-  // ✅ 초기화 버튼: ID는 유지, 내용만 비우고 draft 덮어쓰기
-  const onReset = useCallback(() => {
-    if (!data) return;
-    const cleared: PromiseDetail = {
-      ...data,
-      title: "",
-      participants: [],
-      place: undefined,
-      // 필요에 따라 schedule, course도 초기화 가능
-      // schedule: { dateISO: new Date().toISOString() },
-      // course: { ...data.course, items: [], summary: { totalMinutes: 0, ... } }
-    };
-    setData(cleared);
-
-    // 🔥 초기화된 상태를 draft로 저장
-    persistDraft(cleared);
-  }, [data, persistDraft]);
-
   return (
-    <CreatePromiseMainView
+    <PromiseMainView
       loading={loading}
       error={error}
       data={data}
@@ -288,9 +267,9 @@ export default function CreatePromiseMain() {
       onEditPlace={onEditPlace}
       onEditCourse={onEditCourse}
       onAddParticipant={onAddParticipant}
-      onEditTitle={onEditTitle}
       onChangeTitle={onChangeTitle}
       onRemoveParticipant={onRemoveParticipant}
+      onEditParticipant={onEditParticipant}
       onCalculatePlan={onCalculatePlan}
       onCalculateCourse={onCalculateCourse}
       onSave={onSave}
@@ -299,6 +278,8 @@ export default function CreatePromiseMain() {
       onReset={onReset}
       calculatingPlan={calculatingPlan}
       calculatingCourse={calculatingCourse}
+      onEditMustVisitPlaces={onEditMustVisitPlaces}
+      onDeleteMustVisitPlace={onDeleteMustVisitPlace}
     />
   );
 }

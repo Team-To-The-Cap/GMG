@@ -1,5 +1,5 @@
+// src/pages/promise-main/index.view.tsx
 // @ts-nocheck
-// src/pages/create-promise-main/index.view.tsx
 import React from "react";
 import SectionHeader from "@/components/ui/section-header";
 import Button from "@/components/ui/button";
@@ -13,8 +13,10 @@ import {
   ResultIcon,
   EditIcon,
 } from "@/assets/icons/icons";
+import { MapPin, ChevronRight } from "lucide-react"; // ⬅️ 추가
 import styles from "./style.module.css";
-import type { Participant, PromiseDetail } from "@/types/promise";
+import type { PromiseDetail } from "@/types/promise";
+import type { Participant } from "@/types/participant";
 import CourseSummaryCard from "@/components/ui/course-summary-card";
 import CourseDetailList from "@/components/ui/course-detail-list";
 
@@ -22,30 +24,35 @@ type Props = {
   loading: boolean;
   error?: string;
   data?: PromiseDetail;
+
   onEditSchedule?: () => void;
   onEditPlace?: () => void;
   onEditCourse?: () => void;
   onAddParticipant?: () => void;
 
   onChangeTitle?: (value: string) => void;
-  onEditTitle?: () => void;
 
   onChangeScheduleDate?: (valueISO: string) => void;
   onChangePlaceName?: (value: string) => void;
 
   onRemoveParticipant?: (id: string) => void;
+  onEditParticipant?: (participant: Participant) => void;
+  onDeleteMustVisitPlace?: (id: string) => void;
 
-  /** 하단 버튼 액션 */
-  onCalculatePlan?: () => void; // ✅ 일정/장소 계산
-  onCalculateCourse?: () => void; // ✅ 코스 계산
+  onCalculatePlan?: () => void;
+  onCalculateCourse?: () => void;
   onSave?: () => void;
 
-  /** 추가: 저장 로딩 + 초안 여부 + 초기화 */
   saving?: boolean;
-  calculatingPlan?: boolean; // ✅ 일정/장소 계산중
-  calculatingCourse?: boolean; // ✅ 코스 계산중
+  calculatingPlan?: boolean;
+  calculatingCourse?: boolean;
+
   isDraft?: boolean;
   onReset?: () => void;
+
+  // ⬇️ 새로 추가: 반드시 가고 싶은 장소들 (meeting 단위)
+  mustVisitPlaces?: { id: string; name: string; address?: string | null }[];
+  onEditMustVisitPlaces?: () => void;
 };
 
 type State = {
@@ -89,10 +96,7 @@ function toYMD(iso?: string): string {
   return `${y}-${m}-${day}`;
 }
 
-export default class CreatePromiseMainView extends React.PureComponent<
-  Props,
-  State
-> {
+export default class PromiseMainView extends React.PureComponent<Props, State> {
   state: State = {
     titleDraft: this.props.data?.title ?? "",
     scheduleDraft: toYMD(this.props.data?.schedule?.dateISO),
@@ -115,6 +119,7 @@ export default class CreatePromiseMainView extends React.PureComponent<
     }
   }
 
+  // ===== 제목 =====
   private commitTitle = () => {
     const { onChangeTitle } = this.props;
     const value = this.state.titleDraft.trim();
@@ -135,6 +140,7 @@ export default class CreatePromiseMainView extends React.PureComponent<
     }
   };
 
+  // ===== 일정 =====
   private commitSchedule = () => {
     const { onChangeScheduleDate } = this.props;
     const value = this.state.scheduleDraft;
@@ -159,6 +165,7 @@ export default class CreatePromiseMainView extends React.PureComponent<
     }
   };
 
+  // ===== 장소 =====
   private commitPlace = () => {
     const { onChangePlaceName } = this.props;
     const value = this.state.placeDraft.trim();
@@ -179,6 +186,7 @@ export default class CreatePromiseMainView extends React.PureComponent<
     }
   };
 
+  // ===== 공통 섹션들 =====
   private renderSkeleton() {
     return (
       <div className={styles.container}>
@@ -195,26 +203,8 @@ export default class CreatePromiseMainView extends React.PureComponent<
     );
   }
 
-  private renderHeroCard(
-    title: string,
-    dday: number,
-    participants: Participant[]
-  ) {
-    return (
-      <PromiseCard
-        title={title}
-        dday={dday}
-        participants={participants}
-        className={styles.heroCard}
-      >
-        {/* 카드 본문 */}
-      </PromiseCard>
-    );
-  }
-
-  private renderTitleSection(nameFromData: string) {
+  private renderTitleSection() {
     const { titleDraft } = this.state;
-
     return (
       <section className={styles.section}>
         <SectionHeader icon={<ResultIcon />} title="약속 이름" size="sm" />
@@ -233,7 +223,9 @@ export default class CreatePromiseMainView extends React.PureComponent<
   }
 
   private renderParticipantsSection(participants: Participant[]) {
-    const { onAddParticipant, onRemoveParticipant } = this.props;
+    const { onAddParticipant, onRemoveParticipant, onEditParticipant } =
+      this.props;
+
     return (
       <section className={styles.section}>
         <SectionHeader icon={<UserIcon />} title="참석자 명단" size="sm" />
@@ -248,13 +240,25 @@ export default class CreatePromiseMainView extends React.PureComponent<
                   aria-label={`${p.name} 삭제`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    onRemoveParticipant?.(p.id);
+                    onRemoveParticipant?.(String(p.id));
                   }}
                 >
                   ×
                 </button>
               </div>
               <span className={styles.participantItemName}>{p.name}</span>
+
+              {/* ⬇️ 수정 버튼 */}
+              <button
+                type="button"
+                className={styles.editParticipantBtn}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEditParticipant?.(p);
+                }}
+              >
+                수정
+              </button>
             </li>
           ))}
         </ul>
@@ -271,17 +275,159 @@ export default class CreatePromiseMainView extends React.PureComponent<
     );
   }
 
-  private renderScheduleSection(dateLabel: string) {
-    const { onEditSchedule } = this.props;
+  // ===== 반드시 가고 싶은 장소 =====
+
+  private renderMustVisitPlacesSection() {
+    const {
+      data,
+      mustVisitPlaces,
+      onEditMustVisitPlaces,
+      onDeleteMustVisitPlace,
+    } = this.props;
+
+    // 우선순위: props.mustVisitPlaces ▶ data.mustVisitPlaces ▶ []
+    const rawPlaces: {
+      id?: string | number;
+      name: string;
+      address?: string | null;
+    }[] =
+      mustVisitPlaces ??
+      ((data as any)?.mustVisitPlaces as any[]) ??
+      ([] as any[]);
+
+    // ✅ (1) 중복 제거: name + address 기준으로만 유니크 처리
+    const dedupedPlaces = Array.from(
+      new Map(
+        rawPlaces.map((p) => {
+          const key = `${(p.name ?? "").trim()}-${(
+            p.address ?? ""
+          ).trim()}`.toLowerCase();
+          return [key, { ...p }]; // id는 그대로 두고, key만 name+address 사용
+        })
+      ).values()
+    );
+
+    const handleClickSearch = () => {
+      onEditMustVisitPlaces?.();
+    };
+
+    return (
+      <section className={styles.section}>
+        <SectionHeader
+          icon={<PinIcon />}
+          title="반드시 가고 싶은 장소"
+          size="sm"
+          action={
+            <Button
+              variant="ghost"
+              size="xs"
+              iconLeft={<EditIcon width={16} height={16} />}
+              onClick={handleClickSearch}
+            >
+              관리
+            </Button>
+          }
+        />
+
+        <div className="px-1 py-1">
+          {/* 새로운 장소 검색하기 카드 (add-origin 스타일) */}
+          <button
+            type="button"
+            onClick={handleClickSearch}
+            className="w-full flex items-start gap-2 px-4 py-3.5 rounded-2xl shadow-md bg-white active:scale-[0.99] transition mb-4"
+          >
+            <div className="w-9 h-9 flex items-center justify-center rounded-full bg-indigo-50 text-indigo-500 mt-0.5">
+              <MapPin size={24} />
+            </div>
+
+            <div className="flex flex-col flex-1 text-left">
+              <div className="text-[15px] font-semibold text-gray-900">
+                새로운 장소 검색하기
+              </div>
+              <div className="text-[12px] text-gray-500">
+                꼭 가보고 싶은 장소를 검색해서 추가해 보세요
+              </div>
+            </div>
+
+            <ChevronRight size={18} className="text-slate-400" />
+          </button>
+
+          {/* 저장된 장소 리스트 */}
+          {dedupedPlaces.length === 0 ? (
+            <div
+              className={`${styles.inputLike} ${styles.staticField}`}
+              style={{ fontSize: 13 }}
+            >
+              아직 등록된 “반드시 가고 싶은 장소”가 없어요.
+            </div>
+          ) : (
+            <ul className="space-y-2">
+              {dedupedPlaces.map((p) => (
+                <SwipeToDeleteItem
+                  key={String(p.id)}
+                  onDelete={() => onDeleteMustVisitPlace?.(String(p.id))}
+                >
+                  <li
+                    className={`flex items-center gap-3 p-3.5 rounded-2xl border shadow-sm 
+                    bg-white border-slate-100`}
+                  >
+                    <div className="w-9 h-9 grid place-items-center rounded-full bg-indigo-50 text-indigo-500">
+                      <MapPin size={20} />
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[15px] font-semibold text-slate-900 truncate">
+                        {p.name}
+                      </div>
+                      {p.address && (
+                        <div className="text-[12px] text-slate-500 truncate">
+                          {p.address}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="text-slate-400">
+                      <ChevronRight size={18} />
+                    </div>
+                  </li>
+                </SwipeToDeleteItem>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
+    );
+  }
+
+  private renderScheduleSection() {
+    const { onEditSchedule, data } = this.props;
     const { scheduleDraft } = this.state;
 
-    const human = scheduleDraft
-      ? new Date(scheduleDraft).toLocaleDateString("ko-KR", {
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        })
-      : "날짜 미정";
+    // 🔎 백엔드에서 계산해준 plan 안의 available_dates 길이 확인
+    const plan: any = (data as any)?.plan;
+    const availableDates: any[] = Array.isArray(plan?.available_dates)
+      ? plan.available_dates
+      : [];
+
+    const hasParticipants =
+      Array.isArray(data?.participants) && data.participants.length > 0;
+
+    let human: string;
+
+    if (scheduleDraft) {
+      // ✅ 사용자가 최종 날짜를 선택해서 저장한 경우
+      human = new Date(scheduleDraft).toLocaleDateString("ko-KR", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+    } else if (plan && hasParticipants && availableDates.length === 0) {
+      // ✅ plan은 존재하고, 참가자도 있는데 공통 가능한 날짜가 하나도 없을 때
+      human = "모두가 함께 가능한 날짜가 없어요";
+    } else {
+      // ✅ 아직 자동 계산을 안 했거나, 데이터가 거의 없는 상태
+      human = "날짜 미정";
+    }
 
     return (
       <section className={styles.section}>
@@ -309,7 +455,7 @@ export default class CreatePromiseMainView extends React.PureComponent<
     );
   }
 
-  private renderPlaceSection(placeLabel: string) {
+  private renderPlaceSection() {
     const { onEditPlace } = this.props;
     const { placeDraft } = this.state;
 
@@ -336,23 +482,6 @@ export default class CreatePromiseMainView extends React.PureComponent<
           {placeDraft || "장소 미정"}
         </div>
       </section>
-    );
-  }
-
-  // 일정/장소 계산 버튼
-  private renderPlanCalculateButton() {
-    const { onCalculatePlan, calculatingPlan } = this.props;
-
-    return (
-      <Button
-        variant="primary"
-        size="sm"
-        style={{ width: "95%", justifySelf: "center", marginTop: 8 }}
-        onClick={onCalculatePlan}
-        disabled={calculatingPlan}
-      >
-        {calculatingPlan ? "일정/장소 계산 중..." : "일정/장소 계산하기"}
-      </Button>
     );
   }
 
@@ -393,7 +522,22 @@ export default class CreatePromiseMainView extends React.PureComponent<
     );
   }
 
-  // 코스 계산 버튼
+  private renderPlanCalculateButton() {
+    const { onCalculatePlan, calculatingPlan } = this.props;
+
+    return (
+      <Button
+        variant="primary"
+        size="sm"
+        style={{ width: "95%", justifySelf: "center", marginTop: 8 }}
+        onClick={onCalculatePlan}
+        disabled={calculatingPlan}
+      >
+        {calculatingPlan ? "일정/장소 계산 중..." : "일정/장소 계산하기"}
+      </Button>
+    );
+  }
+
   private renderCourseCalculateButton() {
     const { onCalculateCourse, calculatingCourse } = this.props;
 
@@ -413,13 +557,13 @@ export default class CreatePromiseMainView extends React.PureComponent<
   private renderFinalSaveArea() {
     const { onSave, saving, isDraft, onReset } = this.props;
 
-    // 초안일 때: 초기화 + 저장 버튼 둘 다 표시
-    if (isDraft) {
+    // ✅ onReset이 넘어오면: 두 개 버튼 (초기화 + 저장)
+    if (onReset) {
       return (
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1.2fr",
+            gridTemplateColumns: "1fr 1fr",
             gap: 8,
             width: "100%",
           }}
@@ -446,7 +590,6 @@ export default class CreatePromiseMainView extends React.PureComponent<
       );
     }
 
-    // 기존 약속일 때: 저장하기만
     return (
       <Button
         variant="primary"
@@ -467,24 +610,20 @@ export default class CreatePromiseMainView extends React.PureComponent<
     if (error) return this.renderError(error);
     if (!data) return this.renderError("데이터가 없습니다.");
 
-    const dateLabel = new Date(data.schedule.dateISO).toLocaleDateString(
-      "ko-KR",
-      { year: "numeric", month: "long", day: "numeric" }
-    );
-    const placeLabel = data.place?.name ?? "장소 미정";
-
     return (
       <div className={styles.container}>
-        {this.renderTitleSection(data.title)}
+        {this.renderTitleSection()}
         {this.renderParticipantsSection(data.participants)}
+        {this.renderMustVisitPlacesSection()}
+        {/* ⬅️ 새 섹션 */}
         <section className={styles.section}>
           <SectionHeader icon={<ResultIcon />} title="결과" size="md" />
           <div className={styles.sectionInner}>
-            {this.renderScheduleSection(dateLabel)}
-            {this.renderPlaceSection(placeLabel)}
-            {this.renderPlanCalculateButton()} {/* ✅ 일정/장소 계산 버튼 */}
+            {this.renderScheduleSection()}
+            {this.renderPlaceSection()}
+            {this.renderPlanCalculateButton()}
             {this.renderCourseSection(data.course)}
-            {this.renderCourseCalculateButton()} {/* ✅ 코스 계산 버튼 */}
+            {this.renderCourseCalculateButton()}
             {this.renderFinalSaveArea()}
           </div>
         </section>
@@ -492,4 +631,117 @@ export default class CreatePromiseMainView extends React.PureComponent<
       </div>
     );
   }
+}
+type SwipeToDeleteItemProps = {
+  children: React.ReactNode;
+  onDelete?: () => void;
+};
+
+/**
+ * 오른쪽 → 왼쪽으로 드래그하면 "삭제" 버튼이 오른쪽에서 나타나는 래퍼
+ * - 모바일: 터치 드래그
+ * - 데스크탑: 마우스 드래그
+ */
+function SwipeToDeleteItem({ children, onDelete }: SwipeToDeleteItemProps) {
+  const [translateX, setTranslateX] = React.useState(0);
+  const [dragging, setDragging] = React.useState(false);
+  const startXRef = React.useRef(0);
+
+  const MAX_LEFT = -80; // 왼쪽으로 최대 80px
+  const THRESHOLD = -40; // -40px 이상 드래그되면 열린 상태 유지
+
+  // ───────── 터치 이벤트 ─────────
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    setDragging(true);
+    startXRef.current = e.touches[0].clientX;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!dragging) return;
+    const currentX = e.touches[0].clientX;
+    const diff = currentX - startXRef.current;
+
+    if (diff < 0) {
+      // 오른쪽 -> 왼쪽으로 드래그할 때만
+      setTranslateX(Math.max(diff, MAX_LEFT));
+    } else {
+      // 오른쪽으로 밀면 다시 닫힘
+      setTranslateX(0);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setDragging(false);
+    if (translateX <= THRESHOLD) {
+      setTranslateX(MAX_LEFT);
+    } else {
+      setTranslateX(0);
+    }
+  };
+
+  // ───────── 마우스 이벤트 (데스크탑용) ─────────
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    setDragging(true);
+    startXRef.current = e.clientX;
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!dragging) return;
+    const currentX = e.clientX;
+    const diff = currentX - startXRef.current;
+
+    if (diff < 0) {
+      setTranslateX(Math.max(diff, MAX_LEFT));
+    } else {
+      setTranslateX(0);
+    }
+  };
+
+  const handleMouseUp = () => {
+    if (!dragging) return;
+    setDragging(false);
+    if (translateX <= THRESHOLD) {
+      setTranslateX(MAX_LEFT);
+    } else {
+      setTranslateX(0);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    if (!dragging) return;
+    setDragging(false);
+    if (translateX <= THRESHOLD) {
+      setTranslateX(MAX_LEFT);
+    } else {
+      setTranslateX(0);
+    }
+  };
+
+  return (
+    <div className={styles.swipeRow}>
+      {/* 뒤에 깔려있는 삭제 버튼 */}
+      <button
+        type="button"
+        className={styles.swipeDeleteBtn}
+        onClick={onDelete}
+      >
+        삭제
+      </button>
+
+      {/* 실제 리스트 아이템 (좌우 슬라이드) */}
+      <div
+        className={styles.swipeContent}
+        style={{ transform: `translateX(${translateX}px)` }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
+      >
+        {children}
+      </div>
+    </div>
+  );
 }

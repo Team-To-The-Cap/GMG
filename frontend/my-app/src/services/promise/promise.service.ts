@@ -65,3 +65,32 @@ export async function updateMeetingName(
     ? mockImpl.updateMeetingName(promiseId, name)
     : httpImpl.updateMeetingName(promiseId, name);
 }
+
+/** 🔹 약속 전체 초기화 (서버/모킹 공통 인터페이스) */
+export async function resetPromiseOnServer(
+  detail: PromiseDetail
+): Promise<PromiseDetail> {
+  return useMock
+    ? mockImpl.resetPromiseOnServer(detail)
+    : httpImpl.resetPromiseOnServer(detail);
+}
+
+/** 🔹 반드시 가고 싶은 장소 추가 */
+export async function addMustVisitPlace(
+  promiseId: string,
+  payload: { name: string; address?: string }
+): Promise<void> {
+  return useMock
+    ? mockImpl.addMustVisitPlace(promiseId, payload)
+    : httpImpl.addMustVisitPlace(promiseId, payload);
+}
+
+/** 🔹 반드시 가고 싶은 장소 삭제 */
+export async function deleteMustVisitPlace(
+  promiseId: string,
+  placeId: string
+): Promise<void> {
+  return useMock
+    ? mockImpl.deleteMustVisitPlace(promiseId, placeId)
+    : httpImpl.deleteMustVisitPlace(promiseId, placeId);
+}

@@ -1,16 +1,12 @@
 // src/pages/promise-detail/index.tsx
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState, useCallback } from "react";
-import CreatePromiseMainView from "./index.view";
-import {
-  getPromiseDetail,
-  savePromiseDetail,
-  deleteParticipant,
-  calculateAutoPlan,
-  updateMeetingName, // ✅ 추가
-} from "@/services/promise/promise.service";
+import PromiseMainView from "@/pages/promise-main/index.view";
+import { getPromiseDetail } from "@/services/promise/promise.service";
 import type { PromiseDetail } from "@/types/promise";
 import { DEFAULT_PROMISE_ID } from "@/config/runtime";
+import { usePromiseMainController } from "@/pages/promise-main/index";
+import type { Participant } from "@/types/participant";
 
 export default function PromiseDetailPage() {
   const { promiseId } = useParams();
@@ -18,17 +14,32 @@ export default function PromiseDetailPage() {
   const location = useLocation();
 
   const navState = location.state as {
-    finalDate?: string; // "2025-11-14"
+    finalDate?: string;
     finalDateDisplay?: string;
   } | null;
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [calculatingPlan, setCalculatingPlan] = useState(false); // ✅ 일정/장소 계산 로딩
-  const [calculatingCourse, setCalculatingCourse] = useState(false); // ✅ 코스 계산 로딩
-  const [error, setError] = useState<string>();
   const [data, setData] = useState<PromiseDetail>();
 
+  // 🔹 공통 컨트롤러 사용
+  const {
+    loading,
+    setLoading,
+    error,
+    setError,
+    saving,
+    calculatingPlan,
+    calculatingCourse,
+    onChangeTitle: baseOnChangeTitle,
+    onRemoveParticipant,
+    onCalculatePlan,
+    onCalculateCourse,
+    onSave,
+    onReset,
+    onEditMustVisitPlaces,
+    onDeleteMustVisitPlace,
+  } = usePromiseMainController({ promiseId, data, setData });
+
+  // 🔹 로딩 로직 (detail 전용: finalDate 패치)
   useEffect(() => {
     if (!promiseId) {
       navigate(`/details/${DEFAULT_PROMISE_ID}`, { replace: true });
@@ -44,19 +55,15 @@ export default function PromiseDetailPage() {
 
         const res = await getPromiseDetail(promiseId);
 
-        // 시간 조율 화면에서 선택한 날짜
         const finalDate = navState?.finalDate;
-
         let patched: PromiseDetail = res;
 
         if (finalDate) {
-          // res.schedule이 항상 있다는 전제 하에
           patched = {
             ...res,
             schedule: {
               ...res.schedule,
-              // 🚩 여기만 바꿔주면 index.view가 알아서 새 날짜로 그림
-              dateISO: finalDate, // e.g. "2025-11-14"
+              dateISO: finalDate,
             },
           };
         }
@@ -72,7 +79,17 @@ export default function PromiseDetailPage() {
     return () => {
       alive = false;
     };
-  }, [promiseId, navigate, navState?.finalDate]);
+  }, [promiseId, navigate, navState?.finalDate, setLoading, setError]);
+
+  // 🔹 필요하면 base 핸들러를 살짝 래핑해서 override 가능
+  const onChangeTitle = useCallback(
+    async (value: string) => {
+      // detail 페이지에서만 별도 로깅/추가 행동 넣고 싶으면 여기
+      await baseOnChangeTitle(value);
+      // 예: 실패 시 재조회 등의 추가 처리도 가능
+    },
+    [baseOnChangeTitle]
+  );
 
   const onEditSchedule = useCallback(() => {
     if (!promiseId) return;
@@ -96,112 +113,26 @@ export default function PromiseDetailPage() {
     });
   }, [promiseId, navigate]);
 
-  const onEditTitle = useCallback(() => {
-    alert("약속 이름 수정 기능 준비 중!");
-  }, []);
-
-  // ✅ 약속 이름 변경: UI 낙관적 업데이트 + 서버 PATCH
-  const onChangeTitle = useCallback(
-    async (value: string) => {
-      const trimmed = value.trim();
-
-      // 1) UI 먼저 업데이트
-      setData((prev) => (prev ? { ...prev, title: trimmed } : prev));
-
-      // 2) 서버 PATCH
+  const onEditParticipant = useCallback(
+    (participant: Participant) => {
       if (!promiseId) return;
-      try {
-        await updateMeetingName(promiseId, trimmed);
-      } catch (e: any) {
-        console.error(e);
-        alert(e?.message ?? "약속 이름 저장 중 오류가 발생했습니다.");
 
-        // (선택) 실패 시 서버 상태로 되돌리기
-        try {
-          const fresh = await getPromiseDetail(promiseId);
-          setData(fresh);
-        } catch (err) {
-          console.error("이름 저장 실패 후 재조회도 실패:", err);
-        }
-      }
-    },
-    [promiseId]
-  );
-
-  const onRemoveParticipant = useCallback(
-    async (id: string) => {
-      setData((prev) => {
-        if (!prev) return prev;
-        const next = (prev.participants ?? []).filter((p) => p.id !== id);
-        return { ...prev, participants: next };
+      navigate(`/details/${promiseId}/participants/new`, {
+        state: {
+          nameDraft: participant.name,
+          selectedOrigin: participant.startAddress ?? null,
+          selectedTransportation: participant.transportation ?? null,
+          selectedTimes: participant.availableTimes ?? [],
+          selectedPreferences: participant.preferredCategories ?? [],
+          editParticipantId: participant.id,
+        },
       });
-
-      if (!promiseId) return;
-
-      try {
-        await deleteParticipant(promiseId, id);
-      } catch (e: any) {
-        console.error(e);
-        alert(e?.message ?? "참여자 삭제 중 오류가 발생했습니다.");
-
-        try {
-          const fresh = await getPromiseDetail(promiseId);
-          setData(fresh);
-        } catch (err) {
-          console.error("삭제 실패 후 재조회도 실패:", err);
-        }
-      }
     },
-    [promiseId]
+    [promiseId, navigate]
   );
-
-  // ✅ 일정/장소 계산 버튼
-  const onCalculatePlan = useCallback(async () => {
-    if (!promiseId) return;
-
-    try {
-      setCalculatingPlan(true);
-      const updated = await calculateAutoPlan(promiseId);
-      setData(updated);
-      alert("일정/장소가 계산되었습니다!");
-    } catch (e: any) {
-      console.error(e);
-      alert(e?.message ?? "계산 중 오류가 발생했습니다.");
-    } finally {
-      setCalculatingPlan(false);
-    }
-  }, [promiseId]);
-
-  // ✅ 코스 계산 버튼 (현재는 TODO)
-  const onCalculateCourse = useCallback(async () => {
-    try {
-      setCalculatingCourse(true);
-      // TODO: 코스 계산 API 나오면 여기서 호출
-      alert("코스 계산 기능은 아직 준비 중입니다.");
-    } catch (e: any) {
-      console.error(e);
-    } finally {
-      setCalculatingCourse(false);
-    }
-  }, []);
-
-  const onSave = useCallback(async () => {
-    if (!data) return;
-    try {
-      setSaving(true);
-      const saved = await savePromiseDetail(data);
-      setData(saved);
-      alert("저장되었습니다!");
-    } catch (e: any) {
-      console.error(e);
-      alert(e?.message ?? "저장 중 오류가 발생했습니다.");
-    } finally {
-      setSaving(false);
-    }
-  }, [data]);
 
   return (
-    <CreatePromiseMainView
+    <PromiseMainView
       loading={loading}
       error={error}
       data={data}
@@ -209,16 +140,18 @@ export default function PromiseDetailPage() {
       onEditPlace={onEditPlace}
       onEditCourse={onEditCourse}
       onAddParticipant={onAddParticipant}
-      onEditTitle={onEditTitle}
       onChangeTitle={onChangeTitle}
       onRemoveParticipant={onRemoveParticipant}
-      // 🔽 계산 버튼 분리
+      onEditParticipant={onEditParticipant}
       onCalculatePlan={onCalculatePlan}
       onCalculateCourse={onCalculateCourse}
       onSave={onSave}
       saving={saving}
       calculatingPlan={calculatingPlan}
       calculatingCourse={calculatingCourse}
+      onReset={onReset}
+      onEditMustVisitPlaces={onEditMustVisitPlaces}
+      onDeleteMustVisitPlace={onDeleteMustVisitPlace}
     />
   );
 }

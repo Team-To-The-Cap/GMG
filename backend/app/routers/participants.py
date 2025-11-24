@@ -1,9 +1,11 @@
-# app/routers/participants.py
-
 # 1. [수정] HTTPException, status 임포트
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List
+
+
+# [신규] Naver API 호출을 위한 requests 임포트
+import requests 
 
 from ..database import get_db
 from .. import schemas
@@ -11,46 +13,83 @@ from .. import models
 
 # 2. [수정] 라우터 prefix 변경 (계층적 구조)
 router = APIRouter(
-    prefix="/meetings/{meeting_id}/participants", # API 주소가 /meetings/{id}/participants로 시작
-    tags=["Participants"]                  # /docs 태그 이름 변경
+    prefix="/meetings/{meeting_id}/participants", 
+    tags=["Participants"]              
 )
 
-# 3. [수정] GET / (특정 약속의 모든 참가자 조회)
-@router.get("/", response_model=List[schemas.ParticipantResponse])
-def get_participants_for_meeting(
-    meeting_id: int, # [수정] URL 경로에서 meeting_id를 받음
-    db: Session = Depends(get_db)
-):
+
+CLIENT_ID = "o3qhd1pz6i"
+CLIENT_SECRET = "CgU14l9YJBqqNetcd8KiZ0chNLJmYBwmy9HkAjg5"
+GEOCODE_URL = "https://maps.apigw.ntruss.com/map-geocode/v2/geocode"
+
+def get_coords_from_address(address: str):
     """
-    특정 meeting_id에 연결된 모든 참가자 목록과
-    각 참가자의 시간 목록(available_times)을 함께 조회합니다.
+    Naver Geocoding API를 호출하여 주소로부터 (위도, 경도)를 반환합니다.
+    성공 시 (lat, lon) 튜플, 실패 시 None.
     """
-    
-    # 1. 부모인 Meeting이 존재하는지 확인
-    meeting = db.query(models.Meeting).filter(models.Meeting.id == meeting_id).first()
-    if meeting is None:
-        raise HTTPException(status_code=404, detail="Meeting not found")
-        
-    # 2. [수정] 해당 meeting_id의 참가자만 조회 (Eager Loading 포함)
-    participants = db.query(models.Participant).filter(
-        models.Participant.meeting_id == meeting_id
-    ).options(
-        joinedload(models.Participant.available_times)
-    ).all()
-    
-    return participants
+    headers = {
+        "X-NCP-APIGW-API-KEY-ID": "o3qhd1pz6i",
+        "X-NCP-APIGW-API-KEY": "CgU14l9YJBqqNetcd8KiZ0chNLJmYBwmy9HkAjg5",
+        "Accept": "application/json",
+    }   
+    params = {"query": address}
+
+    # ▶ 민감정보는 출력하지 말고 끝자리만 확인
+    print("--- [Geocoding Debug] ---")
+    print("Endpoint     :", GEOCODE_URL)
+    print("Query        :", address)
+    print(CLIENT_ID)
+    print("ClientID tail:", CLIENT_SECRET[-6:] if CLIENT_ID else "None")
+    print("-------------------------")
+
+    try:
+        resp = requests.get(GEOCODE_URL, params=params, headers=headers, timeout=7)
+        print("Final URL    :", resp.url)
+        print("Status       :", resp.status_code)
+    except requests.exceptions.RequestException as e:
+        print(f"!!! [Geocoding] 요청 예외: {e}")
+        return None
+
+    # 4xx/5xx 상세 바디 출력
+    if resp.status_code != 200:
+        print("Body(text)   :", resp.text)
+        return None
+
+    # 정상 파싱
+    try:
+        data = resp.json()
+    except ValueError:
+        print("!!! [Geocoding] JSON 파싱 실패:", resp.text[:200])
+        return None
+
+    # addresses가 비었는지 검사
+    addresses = data.get("addresses", [])
+    if not addresses:
+        print("!!! [Geocoding] 결과 0건:", data)
+        return None
+
+    first = addresses[0]
+    # Naver: x=경도(lon), y=위도(lat)
+    try:
+        x = float(first["x"])
+        y = float(first["y"])
+        return (y, x)
+    except (KeyError, ValueError) as e:
+        print("!!! [Geocoding] 좌표 파싱 실패:", e, "; payload:", first)
+        return None
+
 
 # 4. [수정] POST / (새 참가자 및 시간 중첩 생성)
 @router.post("/", response_model=schemas.ParticipantResponse)
 def create_participant_for_meeting(
     meeting_id: int, # [수정] URL 경로에서 meeting_id를 받음
-    # [수정] meeting_id가 빠진 'ParticipantCreateNested' 스키마 사용
     participant_in: schemas.ParticipantCreate, 
     db: Session = Depends(get_db)
 ):
     """
     특정 meeting_id에 새로운 참가자 1명과
     그 참가자가 가능한 시간 목록(N개)을 DB에 저장합니다.
+    [수정] start_address를 기반으로 위도/경도를 자동 생성합니다.
     """
     
     # 1. 부모 Meeting 확인 (참가자를 추가할 약속이 존재하는지)
@@ -58,11 +97,28 @@ def create_participant_for_meeting(
     if meeting is None:
         raise HTTPException(status_code=404, detail="Meeting not found")
 
-    # 2. Participant (부모) 생성
+    # 2. Pydantic 모델을 딕셔너리로 변환
     participant_dict = participant_in.model_dump()
     times_data_list = participant_dict.pop("available_times", [])
     
-    # [수정] meeting_id를 URL 경로에서 주입
+    # 3. [신규] Geocoding - 주소로 위경도 변환
+    address = participant_dict.get("start_address")
+    if not address:
+        raise HTTPException(status_code=400, detail="start_address is required.")
+        
+    coordinates = get_coords_from_address(address)
+    if not coordinates:
+        raise HTTPException(
+            status_code=400, 
+            detail="Invalid start_address or geocoding failed. (주소 변환 실패)"
+        )
+
+    # 4. [신규] 변환된 좌표를 딕셔너리에 추가/덮어쓰기
+    participant_dict["start_latitude"] = coordinates[0]  # 위도 (y)
+    participant_dict["start_longitude"] = coordinates[1] # 경도 (x)
+
+    
+    # 5. [수정] Participant (부모) 생성 (위경도 포함)
     db_participant = models.Participant(
         **participant_dict, 
         meeting_id=meeting_id 
@@ -72,7 +128,7 @@ def create_participant_for_meeting(
     db.commit()
     db.refresh(db_participant)
     
-    # 3. ParticipantTimes (자식) 생성
+    # 6. ParticipantTimes (자식) 생성
     for time_data in times_data_list:
         db_time = models.ParticipantTime(
             **time_data,
@@ -83,7 +139,7 @@ def create_participant_for_meeting(
         
     db.commit()
     
-    # 4. 최종 반환 (생성된 객체 다시 조회)
+    # 7. 최종 반환 (생성된 객체 다시 조회)
     final_participant = db.query(models.Participant).options(
         joinedload(models.Participant.available_times)
     ).filter(models.Participant.id == db_participant.id).first()
@@ -94,12 +150,13 @@ def create_participant_for_meeting(
 def update_participant(
     meeting_id: int, 
     participant_id: int, 
-    participant_in: schemas.ParticipantUpdate, # [수정] 확장된 스키마 사용
+    participant_in: schemas.ParticipantUpdate, 
     db: Session = Depends(get_db)
 ):
     """
     특정 participant_id의 참가자 정보 또는
     참가 가능 시간 목록(available_times)을 수정(덮어쓰기)합니다.
+    [수정] start_address가 변경되면 위도/경도를 다시 계산합니다.
     """
     
     # 1. DB에서 원본 Participant 조회 (meeting_id 검증 포함)
@@ -114,18 +171,35 @@ def update_participant(
     # 2. Pydantic 모델을 딕셔너리로 변환 (클라이언트가 보낸 필드만)
     update_data = participant_in.model_dump(exclude_unset=True)
     
-    # 3. [신규] 'available_times'가 요청에 포함되었는지 확인
+    # 3. [신규] 'start_address'가 업데이트 목록에 있는지 확인
+    if "start_address" in update_data:
+        address = update_data["start_address"]
+        if not address:
+             raise HTTPException(status_code=400, detail="start_address cannot be set to empty.")
+
+        # Geocoding 수행
+        coordinates = get_coords_from_address(address)
+        if not coordinates:
+            raise HTTPException(
+                status_code=400, 
+                detail="Invalid new start_address or geocoding failed."
+            )
+        
+        # [신규] update_data 딕셔너리에 위경도 값 추가/덮어쓰기
+        update_data["start_latitude"] = coordinates[0]
+        update_data["start_longitude"] = coordinates[1]
+        
+    
+    # 4. [기존] 'available_times'가 요청에 포함되었는지 확인
     if "available_times" in update_data:
-        # 3a. 'available_times' 목록을 딕셔너리에서 분리
+        # 4a. 'available_times' 목록을 딕셔너리에서 분리
         times_data_list = update_data.pop("available_times")
         
-        # 3b. [핵심] 기존의 모든 참가 시간(ParticipantTime) 삭제
-        # (models.py의 cascade="all, delete-orphan" 설정 덕분에
-        #  SQLAlchemy가 이 작업을 자동으로 처리합니다.)
+        # 4b. [핵심] 기존의 모든 참가 시간(ParticipantTime) 삭제
         db_participant.available_times = []
         db.commit() # (삭제를 먼저 반영)
 
-        # 3c. 새 시간 목록으로 재생성
+        # 4c. 새 시간 목록으로 재생성
         for time_data in times_data_list:
             db_time = models.ParticipantTime(
                 **time_data,
@@ -134,14 +208,14 @@ def update_participant(
             )
             db.add(db_time)
 
-    # 4. 'name' 등 Participant의 나머지 필드 업데이트
+    # 5. [기존] 'name' 등 Participant의 (Geocoding으로 수정된 위경도 포함) 나머지 필드 업데이트
     for key, value in update_data.items():
         setattr(db_participant, key, value)
         
-    # 5. DB에 모든 변경 사항 커밋 (UPDATE 및 INSERT 실행)
+    # 6. DB에 모든 변경 사항 커밋 (UPDATE 및 INSERT 실행)
     db.commit()
     
-    # 6. 수정된 최종 객체를 (관계 포함하여) 다시 조회 후 반환
+    # 7. 수정된 최종 객체를 (관계 포함하여) 다시 조회 후 반환
     final_participant = db.query(models.Participant).options(
         joinedload(models.Participant.available_times)
     ).filter(models.Participant.id == db_participant.id).first()

@@ -1,5 +1,6 @@
 // src/assets/icons/icons.tsx
 import * as React from "react";
+import { Share } from "lucide-react";
 
 type SvgProps = React.SVGProps<SVGSVGElement> & { title?: string };
 
@@ -391,3 +392,7 @@ export const HeartIcon = withA11y<SvgProps>((props) => (
     />
   </svg>
 ));
+
+export const ShareIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <Share width={20} height={20} {...props} />
+);
