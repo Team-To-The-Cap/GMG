@@ -15,6 +15,8 @@ class MeetingPlanAvailableDateCreate(MeetingPlanAvailableDateBase):
 class MeetingPlanAvailableDateResponse(MeetingPlanAvailableDateBase):
     id: int
     meeting_plan_id: int
+    available_participant: List[int] = []
+    available_participant_number: int = 0
 
     class Config:
         from_attributes = True
