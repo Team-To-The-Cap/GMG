@@ -14,7 +14,7 @@ class MeetingPlanAvailableDateBase(BaseModel):
 
 class MeetingPlanAvailableDateCreate(MeetingPlanAvailableDateBase):
     pass
-    
+
 
 class MeetingPlanAvailableDateResponse(MeetingPlanAvailableDateBase):
     id: int
@@ -182,6 +182,34 @@ class MeetingPlaceUpdate(BaseModel):
 
 
 # ================================
+# MeetingMustVisitPlace 스키마
+# ================================
+
+class MeetingMustVisitPlaceBase(BaseModel):
+    name: str
+    address: Optional[str] = None
+
+
+class MeetingMustVisitPlaceCreate(MeetingMustVisitPlaceBase):
+    # body 로 받을 때 meeting_id 를 같이 줄 수도 있고,
+    # path parameter 로 받을 수도 있음 (라우터 구현에 맞춰 사용)
+    meeting_id: int
+
+
+class MeetingMustVisitPlaceResponse(MeetingMustVisitPlaceBase):
+    id: int
+    meeting_id: int
+
+    class Config:
+        from_attributes = True
+
+
+# 라우터에서 쓰고 있는 이름을 위해 alias 하나 더 제공
+class MeetingMustVisitPlaceRead(MeetingMustVisitPlaceResponse):
+    pass
+
+
+# ================================
 # 최종 Meeting 응답 스키마
 # ================================
 
@@ -194,6 +222,9 @@ class MeetingResponse(MeetingBase):
     plan: Optional[MeetingPlanResponse] = None
 
     places: List[MeetingPlaceResponse] = []
+
+    # ★ 새로 추가: 반드시 가고 싶은 장소들
+    must_visit_places: List[MeetingMustVisitPlaceResponse] = []
 
     class Config:
         # SQLAlchemy 모델 객체를 Pydantic 모델로 자동 변환

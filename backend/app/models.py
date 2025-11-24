@@ -5,16 +5,64 @@ from sqlalchemy.orm import relationship
 
 
 
-# 약속 식별 Database
+# ===================== Meeting =====================
 class Meeting(Base):
     __tablename__ = "meetings"
+
     id = Column(Integer, primary_key=True, index=True)
     name = Column(VARCHAR(255), nullable=True)
-    
-    participants = relationship("Participant", back_populates="meeting", cascade="all, delete-orphan")
-    participant_times = relationship("ParticipantTime", back_populates="meeting", cascade="all, delete-orphan")
-    plan = relationship("MeetingPlan", back_populates="meeting", cascade="all, delete-orphan", uselist=False)
-    places = relationship("MeetingPlace", back_populates="meeting", cascade="all, delete-orphan")
+
+    participants = relationship(
+        "Participant",
+        back_populates="meeting",
+        cascade="all, delete-orphan",
+    )
+    participant_times = relationship(
+        "ParticipantTime",
+        back_populates="meeting",
+        cascade="all, delete-orphan",
+    )
+    plan = relationship(
+        "MeetingPlan",
+        back_populates="meeting",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+    places = relationship(
+        "MeetingPlace",
+        back_populates="meeting",
+        cascade="all, delete-orphan",
+    )
+
+    # ★ 새로 추가: 반드시 가고 싶은 장소들
+    must_visit_places = relationship(
+        "MeetingMustVisitPlace",
+        back_populates="meeting",
+        cascade="all, delete-orphan",
+    )
+
+
+# ===================== MUST VISIT PLACE =====================
+class MeetingMustVisitPlace(Base):
+    """
+    Meeting별 '반드시 가고 싶은 장소' 목록
+    """
+    __tablename__ = "meeting_must_visit_places"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+
+    # ★ Meeting.__tablename__ 이 "meetings" 이므로 여기도 "meetings.id"
+    meeting_id = Column(
+        Integer,
+        ForeignKey("meetings.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    name = Column(String(255), nullable=False)
+    address = Column(String(500), nullable=True)
+
+    meeting = relationship("Meeting", back_populates="must_visit_places")
 
 
 

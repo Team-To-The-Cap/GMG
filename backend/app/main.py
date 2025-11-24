@@ -17,7 +17,7 @@ from .routers import meeting_places
 from .routers import google_api  
 from .routers import naver_search 
 from .routers import course
-
+from .routers import meeting_must_visit_place
 
 
 app = FastAPI()
@@ -50,6 +50,7 @@ app.include_router(meeting_plans.router, prefix="")
 app.include_router(meeting_places.router, prefix="")
 app.include_router(google_api.router, prefix="")
 app.include_router(naver_search.router, prefix="") 
+app.include_router(meeting_must_visit_place.router, prefix="") 
 
 
 def get_db():
