@@ -1,6 +1,6 @@
 // src/App.tsx
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { useMemo, useCallback } from "react";
+import { useMemo, useCallback, useRef } from "react";
 
 import { Capacitor } from "@capacitor/core";
 import { Share } from "@capacitor/share";
@@ -30,6 +30,8 @@ import "./App.css";
 export default function App() {
   const location = useLocation();
 
+  const shareInProgressRef = useRef(false); // 🔹 공유 중복 호출 방지용
+
   const { title, showBack, backTo, showShare } = useMemo(
     () => getTopBarConfig(location.pathname),
     [location.pathname]
@@ -40,11 +42,32 @@ export default function App() {
   const PUBLIC_BASE_URL =
     import.meta.env.VITE_PUBLIC_WEB_BASE_URL ?? "https://example.com";
 
+  const isIgnorableShareError = (err: unknown) => {
+    if (!err || typeof err !== "object") return false;
+    const anyErr = err as any;
+    const name = anyErr.name as string | undefined;
+    const message = anyErr.message as string | undefined;
+
+    // ✅ 사용자가 취소했거나, 이미 share()가 진행 중일 때 나는 에러들
+    if (name === "AbortError") return true;
+    if (name === "InvalidStateError") return true;
+    if (typeof message === "string") {
+      if (message.toLowerCase().includes("abort due to cancellation"))
+        return true;
+      if (message.toLowerCase().includes("share() is already in progress"))
+        return true;
+    }
+    return false;
+  };
+
   const handleShare = useCallback(async () => {
+    // 🔒 이미 공유 중이면 그냥 무시
+    if (shareInProgressRef.current) return;
+    shareInProgressRef.current = true;
+
     try {
       const shareUrl = `${PUBLIC_BASE_URL}${location.pathname}`;
 
-      // 1) 네이티브(Capacitor) 환경이면 Capacitor Share 플러그인 사용
       if (Capacitor.isNativePlatform()) {
         await Share.share({
           title: "약속 공유",
@@ -55,7 +78,6 @@ export default function App() {
         return;
       }
 
-      // 2) 브라우저에서 Web Share API 지원 시
       if (navigator.share) {
         await navigator.share({
           title: "약속 공유",
@@ -65,7 +87,6 @@ export default function App() {
         return;
       }
 
-      // 3) 마지막 fallback: 클립보드 복사
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(shareUrl);
         alert("공유 링크가 클립보드에 복사되었습니다.");
@@ -76,8 +97,18 @@ export default function App() {
         `이 환경에서는 공유 기능을 사용할 수 없습니다.\n\n링크: ${shareUrl}`
       );
     } catch (e) {
-      console.error("[share] error", e);
+      // 👇 로그는 남기되, 취소/중복 호출 에러는 조용히 무시
+      console.warn("[share] error", e);
+
+      if (isIgnorableShareError(e)) {
+        // 사용자 취소나 중복 호출은 정상적인 사용자 행동으로 취급
+        return;
+      }
+
+      // 진짜 오류만 사용자에게 알리기
       alert("공유 중 오류가 발생했습니다.");
+    } finally {
+      shareInProgressRef.current = false;
     }
   }, [location.pathname, PUBLIC_BASE_URL]);
 
