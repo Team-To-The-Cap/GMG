@@ -124,22 +124,27 @@ export function Calendar({
 
   const canInteract = interactive === true;
 
-  const handleDown = (day: number, disabled?: boolean) => {
+  // 🔹 드래그 선택용 Pointer 핸들러 (마우스/터치 공통)
+  const handlePointerDown = (
+    day: number,
+    disabled?: boolean,
+    e?: React.PointerEvent<HTMLButtonElement>
+  ) => {
     if (!day || disabled) return;
 
-    if (canInteract) {
-      // 1. INTERACTIVE MODE (Drag/Paint)
-      isPointerDown.current = true;
-      const mode: DragMode = selected.has(day) ? "erase" : "paint";
-      setDragMode(mode);
-      applySelection([day], mode);
-    } else if (onDayClick) {
-      // 2. NON-INTERACTIVE MODE (Single Click)
-      onDayClick(day);
+    if (!canInteract) {
+      // 비인터랙티브 모드에서는 그냥 클릭 한 번만 전달
+      onDayClick?.(day);
+      return;
     }
+
+    isPointerDown.current = true;
+    const mode: DragMode = selected.has(day) ? "erase" : "paint";
+    setDragMode(mode);
+    applySelection([day], mode);
   };
 
-  const handleEnter = (day: number, disabled?: boolean) => {
+  const handlePointerEnter = (day: number, disabled?: boolean) => {
     if (!canInteract) return;
     if (!isPointerDown.current || !day || disabled) return;
     applySelection([day], dragMode);
@@ -149,16 +154,6 @@ export function Calendar({
     isPointerDown.current = false;
     setDragMode("idle");
   };
-
-  React.useEffect(() => {
-    const up = () => endDrag();
-    window.addEventListener("mouseup", up);
-    window.addEventListener("touchend", up);
-    return () => {
-      window.removeEventListener("mouseup", up);
-      window.removeEventListener("touchend", up);
-    };
-  }, []);
 
   return (
     <div className={cn("flex flex-col gap-3 w-full", className)}>
@@ -177,7 +172,8 @@ export function Calendar({
       {/* 5×7 날짜 그리드 */}
       <div
         className="flex flex-col gap-[11px] select-none"
-        onMouseLeave={endDrag}
+        onPointerUp={endDrag}
+        onPointerLeave={endDrag}
       >
         {grid.map((row, rIdx) => (
           <div key={rIdx} className="grid grid-cols-7 gap-px">
@@ -189,7 +185,7 @@ export function Calendar({
               // interactive=false일 때 availability 정보 사용
               const paint = !canInteract ? colorFor(day) : null;
 
-              // ⬇️ 이 줄 추가: 해당 날짜의 가능 인원 수
+              // 해당 날짜 가능 인원 수 (결과 표시 모드에서 뱃지)
               const cnt = availability?.[day] ?? 0;
 
               return (
@@ -203,22 +199,28 @@ export function Calendar({
                       data-day={day}
                       aria-pressed={isSelected}
                       disabled={isDisabled}
-                      onMouseDown={() => handleDown(day, isDisabled)}
-                      onMouseEnter={() => handleEnter(day, isDisabled)}
-                      onTouchStart={() => handleDown(day, isDisabled)}
-                      onTouchMove={(e) => {
-                        const t = e.touches[0];
-                        const el = document.elementFromPoint(
-                          t.clientX,
-                          t.clientY
-                        ) as HTMLElement | null;
-                        const key = el?.getAttribute?.("data-day");
-                        if (key) handleEnter(Number(key), isDisabled);
-                      }}
-                      onTouchEnd={endDrag}
+                      // 🔹 인터랙티브 모드(드래그 선택)는 Pointer 이벤트로 통합
+                      onPointerDown={
+                        canInteract
+                          ? (e) => handlePointerDown(day, isDisabled, e)
+                          : undefined
+                      }
+                      onPointerEnter={
+                        canInteract
+                          ? () => handlePointerEnter(day, isDisabled)
+                          : undefined
+                      }
+                      // 🔹 비인터랙티브 모드는 클릭 한 번만
+                      onClick={
+                        !canInteract
+                          ? () => {
+                              if (!isDisabled) onDayClick?.(day);
+                            }
+                          : undefined
+                      }
                       className={cn(
                         "w-10 h-10 rounded-full inline-flex items-center justify-center",
-                        "relative", // ✅ 뱃지 절대 위치를 위한 기준
+                        "relative",
                         "p-0 m-0 box-border select-none align-middle",
                         "appearance-none border-0 outline-none ring-0 focus:outline-none focus:ring-0",
                         "transition-colors duration-150 ease-in-out shadow-none",
@@ -258,22 +260,22 @@ export function Calendar({
                         {day}
                       </span>
 
-                      {/* 참석자 수: 알림 뱃지 스타일 (오른쪽 위 작은 동그라미) */}
+                      {/* 참석자 수 뱃지 (결과 화면용) */}
                       {cnt > 0 && (
                         <span
                           className="
-                pointer-events-none
-                absolute
-                -top-1
-                -right-1
-                flex
-                items-center
-                justify-center
-                rounded-full
-                text-[10px]
-                font-semibold
-                text-white
-              "
+                            pointer-events-none
+                            absolute
+                            -top-1
+                            -right-1
+                            flex
+                            items-center
+                            justify-center
+                            rounded-full
+                            text-[10px]
+                            font-semibold
+                            text-white
+                          "
                           style={{
                             minWidth: 16,
                             height: 16,
