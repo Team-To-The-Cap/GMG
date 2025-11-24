@@ -270,16 +270,34 @@ export default class PromiseMainView extends React.PureComponent<Props, State> {
   }
 
   private renderScheduleSection() {
-    const { onEditSchedule } = this.props;
+    const { onEditSchedule, data } = this.props;
     const { scheduleDraft } = this.state;
 
-    const human = scheduleDraft
-      ? new Date(scheduleDraft).toLocaleDateString("ko-KR", {
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        })
-      : "날짜 미정";
+    // 🔎 백엔드에서 계산해준 plan 안의 available_dates 길이 확인
+    const plan: any = (data as any)?.plan;
+    const availableDates: any[] = Array.isArray(plan?.available_dates)
+      ? plan.available_dates
+      : [];
+
+    const hasParticipants =
+      Array.isArray(data?.participants) && data.participants.length > 0;
+
+    let human: string;
+
+    if (scheduleDraft) {
+      // ✅ 사용자가 최종 날짜를 선택해서 저장한 경우
+      human = new Date(scheduleDraft).toLocaleDateString("ko-KR", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+    } else if (plan && hasParticipants && availableDates.length === 0) {
+      // ✅ plan은 존재하고, 참가자도 있는데 공통 가능한 날짜가 하나도 없을 때
+      human = "모두가 함께 가능한 날짜가 없어요";
+    } else {
+      // ✅ 아직 자동 계산을 안 했거나, 데이터가 거의 없는 상태
+      human = "날짜 미정";
+    }
 
     return (
       <section className={styles.section}>

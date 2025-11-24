@@ -119,10 +119,8 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
     };
   });
 
-  // 🔹 meeting.plan?.meeting_time이 있을 때만 사용
   const scheduleISO = meeting.plan?.meeting_time ?? null;
 
-  // 🔹 D-day 계산도 "일정 있는 경우에만"
   let dday: number | null = null;
   if (scheduleISO) {
     const today = new Date();
@@ -133,7 +131,6 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
     dday = Math.round(diffMs / (1000 * 60 * 60 * 24));
   }
 
-  // 3) 장소: plan.address 우선, 없으면 places[0] 사용
   const primaryPlace =
     meeting.plan?.address && meeting.plan.address.trim()
       ? {
@@ -156,13 +153,15 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
   return {
     id: String(meeting.id),
     title: meeting.name,
-    dday, // 🔹 null일 수 있음 (프론트에서 미정 처리)
-    // 🔹 일정이 없으면 schedule 자체를 undefined로 줄 수도 있음
+    dday,
     schedule: scheduleISO ? { dateISO: scheduleISO } : undefined,
     participants,
     place: primaryPlace,
     course,
-  };
+
+    // ⬇⬇⬇ 이 줄 추가
+    plan: meeting.plan, // MeetingResponse.plan 그대로 실어보내기 (available_dates 포함)
+  } as any; // PromiseDetail 타입에 plan 없으면 ts 무시용
 }
 
 /**
