@@ -1,15 +1,19 @@
 // src/services/promise/promise.service.http.ts
 import { DRAFT_PROMISE_ID_KEY } from "@/assets/constants/storage";
 import { http } from "@/lib/http";
-// src/services/promise/promise.service.http.ts
 import type {
   PromiseDetail,
   CourseVisit,
   CourseTransfer,
   Course,
+  MustVisitPlace,
 } from "@/types/promise";
 import type { Participant, ParticipantTime } from "@/types/participant";
-import type { MeetingPlan, MeetingResponse } from "@/types/meeting";
+import type {
+  MeetingPlan,
+  MeetingResponse,
+  MeetingMustVisitPlace,
+} from "@/types/meeting";
 
 /**
  * 🔹 백엔드에서 내려주는 MeetingResponse.places 배열을
@@ -43,7 +47,7 @@ function buildCourseFromPlaces(meeting: MeetingResponse): Course {
 
       items.push({
         type: "transfer",
-        mode: "subway", // 기본값 (walk/subway 등 마음대로 조정 가능)
+        mode: "subway", // 기본값
         minutes: transferMinutes,
         note: "이동",
       });
@@ -150,6 +154,14 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
 
   const course = buildCourseFromPlaces(meeting);
 
+  // 🔹 Must-Visit Place 매핑
+  const mustVisitPlaces =
+    (meeting.must_visit_places ?? []).map((p) => ({
+      id: String(p.id),
+      name: p.name,
+      address: p.address ?? undefined,
+    })) ?? [];
+
   return {
     id: String(meeting.id),
     title: meeting.name,
@@ -158,10 +170,11 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
     participants,
     place: primaryPlace,
     course,
-
-    // ⬇⬇⬇ 이 줄 추가
     plan: meeting.plan, // MeetingResponse.plan 그대로 실어보내기 (available_dates 포함)
-  } as any; // PromiseDetail 타입에 plan 없으면 ts 무시용
+
+    // ⬇️ 새 필드
+    mustVisitPlaces,
+  } as PromiseDetail;
 }
 
 /**
@@ -191,9 +204,6 @@ export async function getPromiseList(): Promise<PromiseDetail[]> {
 
 /**
  * 🔹 약속 저장 (HTTP 버전)
- * - 현재 Meeting에 대한 업데이트 API가 명확하지 않아서,
- *   예시로 name만 PATCH 하는 식으로 둠.
- *   실제 스펙에 맞게 바꿔도 됨.
  */
 export async function savePromiseDetail(
   detail: PromiseDetail
@@ -203,7 +213,6 @@ export async function savePromiseDetail(
     throw new Error(`잘못된 meeting id: ${detail.id}`);
   }
 
-  // 일단 name만 업데이트하는 예시
   await http.request(`/meetings/${meetingId}`, {
     method: "PATCH",
     headers: {
@@ -212,15 +221,11 @@ export async function savePromiseDetail(
     body: JSON.stringify({ name: detail.title }),
   });
 
-  // 실제론 서버에서 다시 조회하는 게 best지만,
-  // 지금은 detail 그대로 돌려줘도 UI 입장에서는 충분함
   return detail;
 }
 
 /**
  * 🔹 빈 약속 하나 생성
- * - FastAPI: POST /meetings/
- * - body: { "name": "string" }
  */
 export async function createEmptyPromise(): Promise<PromiseDetail> {
   const meeting = await http.request<MeetingResponse>("/meetings/", {
@@ -231,14 +236,11 @@ export async function createEmptyPromise(): Promise<PromiseDetail> {
     body: JSON.stringify({ name: "" }),
   });
 
-  // 방금 만든 meeting을 PromiseDetail로 변환
   return mapMeetingToPromiseDetail(meeting);
 }
 
 /**
  * 🔹 약속 삭제
- * - FastAPI: DELETE /meetings/{meeting_id}
- * - 성공 시 204 No Content
  */
 export async function deletePromise(promiseId: string): Promise<void> {
   const meetingId = Number(promiseId);
@@ -247,12 +249,10 @@ export async function deletePromise(promiseId: string): Promise<void> {
     throw new Error(`잘못된 meeting id: ${promiseId}`);
   }
 
-  // 실제 삭제 요청
   await http.request<void>(`/meetings/${meetingId}`, {
     method: "DELETE",
   });
 
-  // 🔥 삭제된 meeting ID가 draft로 저장된 ID라면 제거
   const storedDraftId = localStorage.getItem(DRAFT_PROMISE_ID_KEY);
 
   if (storedDraftId && storedDraftId === String(meetingId)) {
@@ -281,7 +281,6 @@ export async function deleteParticipant(
 }
 
 // 🔹 자동 일정/장소/코스 계산 (HTTP 버전)
-// FastAPI: POST /meetings/{meeting_id}/plans/calculate
 export async function calculateAutoPlan(
   promiseId: string
 ): Promise<PromiseDetail> {
@@ -290,18 +289,15 @@ export async function calculateAutoPlan(
     throw new Error(`잘못된 meeting id: ${promiseId}`);
   }
 
-  // 1) 계산 트리거
   await http.request<MeetingPlan>(`/meetings/${meetingId}/plans/calculate`, {
     method: "POST",
   });
 
-  // 2) 새로 계산된 plan/places까지 포함해서 다시 조회
   const meeting = await http.request<MeetingResponse>(`/meetings/${meetingId}`);
   return mapMeetingToPromiseDetail(meeting);
 }
 
 // 🔹 약속 이름만 수정 (HTTP 버전)
-// FastAPI: PATCH /meetings/{meeting_id}  { "name": "..." }
 export async function updateMeetingName(
   meetingId: string | number,
   name: string
@@ -320,7 +316,7 @@ export async function updateMeetingName(
   });
 }
 
-// 🔹 약속 전체 초기화: 이름 / 참가자 / 일정 / 장소 / 코스 모두 비움
+// 🔹 약속 전체 초기화
 export async function resetPromiseOnServer(
   detail: PromiseDetail
 ): Promise<PromiseDetail> {
@@ -333,15 +329,11 @@ export async function resetPromiseOnServer(
   const participants = detail.participants ?? [];
   if (participants.length) {
     await Promise.all(
-      participants.map(
-        (p) => deleteParticipant(meetingId, p.id) // 이미 있는 함수 재사용
-      )
+      participants.map((p) => deleteParticipant(meetingId, p.id))
     );
   }
 
-  // 2) 플랜(일정/장소) 비우기
-  // plan 자체가 null인 경우에는 PATCH에서 404 나올 수도 있으니 try/catch로 감싸고,
-  // 404 정도는 무시해도 됨.
+  // 2) 플랜 비우기
   try {
     await http.request(`/meetings/${meetingId}/plans`, {
       method: "PATCH",
@@ -367,7 +359,7 @@ export async function resetPromiseOnServer(
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify([]), // 장소 0개로 교체
+    body: JSON.stringify([]),
   });
 
   // 4) 약속 이름 비우기
@@ -379,7 +371,49 @@ export async function resetPromiseOnServer(
     body: JSON.stringify({ name: "" }),
   });
 
-  // 5) 최종 상태 다시 조회해서 PromiseDetail로 변환
   const meeting = await http.request<MeetingResponse>(`/meetings/${meetingId}`);
   return mapMeetingToPromiseDetail(meeting);
+}
+
+// 🔹 반드시 가고 싶은 장소 추가
+// FastAPI: POST /api/meetings/{meeting_id}/must-visit-places/
+export async function addMustVisitPlace(
+  promiseId: string | number,
+  payload: { name: string; address?: string }
+): Promise<void> {
+  const mid = Number(promiseId);
+  if (Number.isNaN(mid)) {
+    throw new Error(`잘못된 meeting id: ${promiseId}`);
+  }
+
+  await http.request(`/meetings/${mid}/must-visit-places/`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name: payload.name,
+      address: payload.address ?? "",
+    }),
+  });
+}
+
+// 🔹 반드시 가고 싶은 장소 삭제
+// FastAPI: DELETE /api/meetings/{meeting_id}/must-visit-places/{place_id}`
+export async function deleteMustVisitPlace(
+  promiseId: string | number,
+  placeId: string | number
+): Promise<void> {
+  const mid = Number(promiseId);
+  const pid = Number(placeId);
+
+  if (Number.isNaN(mid) || Number.isNaN(pid)) {
+    throw new Error(
+      `잘못된 id (meeting: ${promiseId}, mustVisitPlace: ${placeId})`
+    );
+  }
+
+  await http.request(`/meetings/${mid}/must-visit-places/${pid}`, {
+    method: "DELETE",
+  });
 }

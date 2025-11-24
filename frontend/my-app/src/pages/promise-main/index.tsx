@@ -1,11 +1,13 @@
 // src/pages/promise-main/index.ts
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   savePromiseDetail,
   deleteParticipant,
   calculateAutoPlan,
   updateMeetingName,
   resetPromiseOnServer,
+  deleteMustVisitPlace,
 } from "@/services/promise/promise.service";
 import type { PromiseDetail } from "@/types/promise";
 
@@ -16,6 +18,10 @@ export type PromiseMainHandlers = {
   onCalculateCourse: () => Promise<void>;
   onSave: () => Promise<void>;
   onReset: () => Promise<void>;
+
+  // ⬇️ 반드시 가고 싶은 장소 편집/관리 화면으로 이동
+  onEditMustVisitPlaces: () => Promise<void>;
+  onDeleteMustVisitPlace: (id: string) => Promise<void>;
 };
 
 export type PromiseMainController = {
@@ -47,7 +53,17 @@ export function usePromiseMainController({
   const [calculatingCourse, setCalculatingCourse] = useState(false);
   const [error, setError] = useState<string>();
 
-  // ✅ 기본: 약속 이름 변경 (서버 PATCH + 실패 시 재조회)
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // ✅ 현재 경로를 보고 create / details 모드 판별
+  const mode = useMemo<"create" | "details">(() => {
+    const seg = location.pathname.split("/")[1]; // "", "create", "53", ...
+    if (seg === "create") return "create";
+    return "details";
+  }, [location.pathname]);
+
+  // ✅ 약속 이름 변경 (서버 PATCH + 실패 시 재조회)
   const onChangeTitle = useCallback(
     async (value: string) => {
       if (!promiseId) return;
@@ -61,13 +77,12 @@ export function usePromiseMainController({
       } catch (e: any) {
         console.error(e);
         alert(e?.message ?? "약속 이름 저장 중 오류가 발생했습니다.");
-        // 실패 시에는 호출하는 쪽에서 재조회 로직을 추가적으로 붙일 수 있음
       }
     },
     [promiseId, setData]
   );
 
-  // ✅ 기본: 참여자 삭제 (낙관적 업데이트 + 서버 연동)
+  // ✅ 참여자 삭제 (낙관적 업데이트 + 서버 연동)
   const onRemoveParticipant = useCallback(
     async (id: string) => {
       if (!promiseId) return;
@@ -84,13 +99,12 @@ export function usePromiseMainController({
       } catch (e: any) {
         console.error(e);
         alert(e?.message ?? "참여자 삭제 중 오류가 발생했습니다.");
-        // 필요하면 호출하는 쪽에서 재조회 추가 가능
       }
     },
     [promiseId, setData]
   );
 
-  // ✅ 기본: 일정/장소/코스 자동 계산
+  // ✅ 일정/장소 자동 계산
   const onCalculatePlan = useCallback(async () => {
     if (!promiseId) return;
     try {
@@ -106,7 +120,7 @@ export function usePromiseMainController({
     }
   }, [promiseId, setData]);
 
-  // ✅ 기본: 코스 계산 (현재는 TODO)
+  // ✅ 코스 계산 (현재는 TODO)
   const onCalculateCourse = useCallback(async () => {
     try {
       setCalculatingCourse(true);
@@ -118,7 +132,7 @@ export function usePromiseMainController({
     }
   }, []);
 
-  // ✅ 기본: 저장
+  // ✅ 저장
   const onSave = useCallback(async () => {
     if (!data) return;
     try {
@@ -134,7 +148,7 @@ export function usePromiseMainController({
     }
   }, [data, setData]);
 
-  // ✅ 기본: 서버까지 전체 초기화
+  // ✅ 전체 초기화
   const onReset = useCallback(async () => {
     if (!data) return;
 
@@ -161,6 +175,42 @@ export function usePromiseMainController({
     }
   }, [data, setData]);
 
+  // ✅ 반드시 가고 싶은 장소 관리 화면으로 이동
+  const onEditMustVisitPlaces = useCallback(async () => {
+    if (!promiseId) return;
+    // 현재 페이지가 /create/:id 이면 /create/:id/must-visit/search
+    // /details/:id 이면 /details/:id/must-visit/search
+    navigate(`/${mode}/${promiseId}/must-visit/search`);
+  }, [promiseId, mode, navigate]);
+
+  // ✅ Must-Visit Place 삭제
+  const onDeleteMustVisitPlace = useCallback(
+    async (placeId: string) => {
+      if (!promiseId) return;
+
+      // 1) UI를 먼저 업데이트 (낙관적)
+      setData((prev) => {
+        if (!prev) return prev;
+        const prevArr = (prev.mustVisitPlaces ?? []) as any[];
+        const nextArr = prevArr.filter((p) => String(p.id) !== String(placeId));
+        return {
+          ...prev,
+          mustVisitPlaces: nextArr,
+        } as PromiseDetail;
+      });
+
+      // 2) 서버 삭제
+      try {
+        await deleteMustVisitPlace(promiseId, placeId);
+      } catch (e: any) {
+        console.error(e);
+        alert(e?.message ?? "장소 삭제 중 오류가 발생했습니다.");
+        // 필요하면 여기서 다시 fetch 해서 상태 복구도 가능
+      }
+    },
+    [promiseId, setData]
+  );
+
   return {
     data,
     setData,
@@ -177,5 +227,7 @@ export function usePromiseMainController({
     onCalculateCourse,
     onSave,
     onReset,
+    onEditMustVisitPlaces,
+    onDeleteMustVisitPlace,
   };
 }

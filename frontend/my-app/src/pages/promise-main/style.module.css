@@ -289,3 +289,41 @@
   cursor: pointer;
   text-decoration: underline;
 }
+/* ───────── 반드시 가고 싶은 장소: 스와이프 삭제 행 ───────── */
+
+.swipeRow {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px; /* 기존 카드 라운딩 톤 맞춤 */
+}
+
+/* 뒤에 깔린 삭제 버튼 */
+.swipeDeleteBtn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+
+  width: 80px;
+  border: none;
+  outline: none;
+
+  background: #f97373; /* 연한 빨강 */
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  cursor: pointer;
+}
+
+/* 위에 얹혀서 좌우로 슬라이드 되는 컨텐츠 */
+.swipeContent {
+  position: relative;
+  z-index: 1;
+  transition: transform 0.2s ease-out;
+  touch-action: pan-y; /* 세로 스크롤은 그대로, 가로는 우리가 처리 */
+}

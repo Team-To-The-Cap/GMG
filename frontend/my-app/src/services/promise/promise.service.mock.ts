@@ -532,6 +532,7 @@ export async function resetPromiseOnServer(
     participants: [],
     schedule: { dateISO: "" }, // 일정 미정
     place: undefined,
+    mustVisitPlaces: [],
     course: {
       // 코스 구조는 유지하되 내용만 싹 비움
       ...(existing.course ?? {
@@ -556,4 +557,37 @@ export async function resetPromiseOnServer(
 
   MOCK_DB[detail.id] = cleared;
   return cleared;
+}
+// 🔹 반드시 가고 싶은 장소 추가 (Mock 버전)
+export async function addMustVisitPlace(
+  promiseId: string,
+  payload: { name: string; address?: string }
+): Promise<void> {
+  await delay(100);
+  const item = MOCK_DB[promiseId];
+  if (!item) return;
+
+  const list = item.mustVisitPlaces ?? [];
+  const id = `mv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  item.mustVisitPlaces = [
+    ...list,
+    {
+      id,
+      name: payload.name,
+      address: payload.address,
+    },
+  ];
+}
+
+// 🔹 반드시 가고 싶은 장소 삭제 (Mock 버전)
+export async function deleteMustVisitPlace(
+  promiseId: string,
+  placeId: string
+): Promise<void> {
+  await delay(100);
+  const item = MOCK_DB[promiseId];
+  if (!item || !item.mustVisitPlaces) return;
+
+  item.mustVisitPlaces = item.mustVisitPlaces.filter((p) => p.id !== placeId);
 }

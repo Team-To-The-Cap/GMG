@@ -39,15 +39,23 @@ export type MeetingPlace = {
   duration: number;
 };
 
+/** 서버 Must-Visit Place 타입 */
+export type MeetingMustVisitPlace = {
+  id: number;
+  meeting_id: number;
+  name: string;
+  address: string | null;
+};
+
 /** 백엔드 Meeting 응답 전체 */
 export type MeetingResponse = {
   id: number;
   name: string;
   participants: MeetingParticipant[];
 
-  // 🔹 자동 계산 결과 등
   plan?: MeetingPlan;
-
-  // 🔹 추천 장소들
   places?: MeetingPlace[];
+
+  // ⬇️ 이 줄 추가
+  must_visit_places?: MeetingMustVisitPlace[];
 };

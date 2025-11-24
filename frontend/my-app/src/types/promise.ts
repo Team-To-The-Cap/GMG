@@ -12,6 +12,13 @@ export type Place = {
   lng?: number;
 };
 
+// 🔹 반드시 가고 싶은 장소 (meeting 단위)
+export type MustVisitPlace = {
+  id: string;
+  name: string;
+  address?: string | null;
+};
+
 // 이동 수단
 export type TravelMode = "walk" | "subway" | "bus" | "car" | "taxi" | "bike";
 
@@ -68,4 +75,7 @@ export type PromiseDetail = {
   schedule?: Schedule;
   place?: Place;
   course: Course;
+
+  // ⬇️ 이 줄 추가 (백엔드 Must-Visit 매핑용)
+  mustVisitPlaces?: { id: string; name: string; address?: string | null }[];
 };

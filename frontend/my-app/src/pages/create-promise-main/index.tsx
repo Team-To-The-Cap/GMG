@@ -37,6 +37,8 @@ export default function CreatePromiseMain() {
     onCalculateCourse,
     onSave: baseOnSave,
     onReset: baseOnReset, // 기본 서버 초기화
+    onEditMustVisitPlaces,
+    onDeleteMustVisitPlace,
   } = usePromiseMainController({ promiseId, data, setData });
 
   // 🔹 draft 헬퍼
@@ -80,9 +82,17 @@ export default function CreatePromiseMain() {
           try {
             const draft = JSON.parse(draftRaw) as PromiseDetail;
 
+            // participants 는 항상 서버 기준으로, 그 외 draft 에서 수정한 필드만 덮어쓰도록
+            const { participants: _ignoredParticipants, ...draftRest } = draft;
+
             finalData = {
-              ...draft,
-              participants: res.participants, // 서버 기준 반영
+              // 1) 서버에서 온 최신 데이터 기준
+              //    (mustVisitPlaces, plan, places 등 서버 필드 유지)
+              ...res,
+              // 2) 그 위에 클라에서 임시로 수정해 둔 필드만 얹기
+              ...draftRest,
+              // 3) participants 는 다시 한 번 서버 기준으로 고정
+              participants: res.participants,
             };
           } catch (err) {
             console.warn("draft JSON parse 실패, 서버 데이터 사용");
@@ -229,7 +239,7 @@ export default function CreatePromiseMain() {
       onAddParticipant={onAddParticipant}
       onChangeTitle={onChangeTitle}
       onRemoveParticipant={onRemoveParticipant}
-      onEditParticipant={onEditParticipant} // ⬅️ 전달
+      onEditParticipant={onEditParticipant}
       onCalculatePlan={onCalculatePlan}
       onCalculateCourse={onCalculateCourse}
       onSave={onSave}
@@ -238,6 +248,8 @@ export default function CreatePromiseMain() {
       onReset={onReset}
       calculatingPlan={calculatingPlan}
       calculatingCourse={calculatingCourse}
+      onEditMustVisitPlaces={onEditMustVisitPlaces}
+      onDeleteMustVisitPlace={onDeleteMustVisitPlace}
     />
   );
 }

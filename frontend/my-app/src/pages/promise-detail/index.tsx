@@ -35,6 +35,8 @@ export default function PromiseDetailPage() {
     onCalculateCourse,
     onSave,
     onReset,
+    onEditMustVisitPlaces,
+    onDeleteMustVisitPlace,
   } = usePromiseMainController({ promiseId, data, setData });
 
   // 🔹 로딩 로직 (detail 전용: finalDate 패치)
@@ -140,7 +142,7 @@ export default function PromiseDetailPage() {
       onAddParticipant={onAddParticipant}
       onChangeTitle={onChangeTitle}
       onRemoveParticipant={onRemoveParticipant}
-      onEditParticipant={onEditParticipant} // ⬅️ 전달
+      onEditParticipant={onEditParticipant}
       onCalculatePlan={onCalculatePlan}
       onCalculateCourse={onCalculateCourse}
       onSave={onSave}
@@ -148,6 +150,8 @@ export default function PromiseDetailPage() {
       calculatingPlan={calculatingPlan}
       calculatingCourse={calculatingCourse}
       onReset={onReset}
+      onEditMustVisitPlaces={onEditMustVisitPlaces}
+      onDeleteMustVisitPlace={onDeleteMustVisitPlace}
     />
   );
 }

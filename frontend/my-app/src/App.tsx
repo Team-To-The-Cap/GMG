@@ -129,6 +129,16 @@ export default function App() {
           <Route path="/details/:promiseId/promise-time" element={<Time1 />} />
           <Route path="/time/timeresult/:promiseId" element={<TimeResult />} />
 
+          {/* ✅ 반드시 가고 싶은 장소 검색 (새로 추가) */}
+          <Route
+            path="/details/:promiseId/must-visit/search"
+            element={<SearchOriginPage />}
+          />
+          <Route
+            path="/create/:promiseId/must-visit/search"
+            element={<SearchOriginPage />}
+          />
+
           {/* 404 → 홈으로 */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

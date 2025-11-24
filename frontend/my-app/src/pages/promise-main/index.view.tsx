@@ -13,9 +13,10 @@ import {
   ResultIcon,
   EditIcon,
 } from "@/assets/icons/icons";
+import { MapPin, ChevronRight } from "lucide-react"; // ⬅️ 추가
 import styles from "./style.module.css";
 import type { PromiseDetail } from "@/types/promise";
-import type { Participant } from "@/types/participant"; // ⬅️ 여기서 가져오기
+import type { Participant } from "@/types/participant";
 import CourseSummaryCard from "@/components/ui/course-summary-card";
 import CourseDetailList from "@/components/ui/course-detail-list";
 
@@ -35,7 +36,8 @@ type Props = {
   onChangePlaceName?: (value: string) => void;
 
   onRemoveParticipant?: (id: string) => void;
-  onEditParticipant?: (participant: Participant) => void; // ⬅️ 추가
+  onEditParticipant?: (participant: Participant) => void;
+  onDeleteMustVisitPlace?: (id: string) => void;
 
   onCalculatePlan?: () => void;
   onCalculateCourse?: () => void;
@@ -47,6 +49,10 @@ type Props = {
 
   isDraft?: boolean;
   onReset?: () => void;
+
+  // ⬇️ 새로 추가: 반드시 가고 싶은 장소들 (meeting 단위)
+  mustVisitPlaces?: { id: string; name: string; address?: string | null }[];
+  onEditMustVisitPlaces?: () => void;
 };
 
 type State = {
@@ -269,6 +275,130 @@ export default class PromiseMainView extends React.PureComponent<Props, State> {
     );
   }
 
+  // ===== 반드시 가고 싶은 장소 =====
+
+  private renderMustVisitPlacesSection() {
+    const {
+      data,
+      mustVisitPlaces,
+      onEditMustVisitPlaces,
+      onDeleteMustVisitPlace,
+    } = this.props;
+
+    // 우선순위: props.mustVisitPlaces ▶ data.mustVisitPlaces ▶ []
+    const rawPlaces: {
+      id?: string | number;
+      name: string;
+      address?: string | null;
+    }[] =
+      mustVisitPlaces ??
+      ((data as any)?.mustVisitPlaces as any[]) ??
+      ([] as any[]);
+
+    // ✅ (1) 중복 제거: name + address 기준으로만 유니크 처리
+    const dedupedPlaces = Array.from(
+      new Map(
+        rawPlaces.map((p) => {
+          const key = `${(p.name ?? "").trim()}-${(
+            p.address ?? ""
+          ).trim()}`.toLowerCase();
+          return [key, { ...p }]; // id는 그대로 두고, key만 name+address 사용
+        })
+      ).values()
+    );
+
+    const handleClickSearch = () => {
+      onEditMustVisitPlaces?.();
+    };
+
+    return (
+      <section className={styles.section}>
+        <SectionHeader
+          icon={<PinIcon />}
+          title="반드시 가고 싶은 장소"
+          size="sm"
+          action={
+            <Button
+              variant="ghost"
+              size="xs"
+              iconLeft={<EditIcon width={16} height={16} />}
+              onClick={handleClickSearch}
+            >
+              관리
+            </Button>
+          }
+        />
+
+        <div className="px-1 py-1">
+          {/* 새로운 장소 검색하기 카드 (add-origin 스타일) */}
+          <button
+            type="button"
+            onClick={handleClickSearch}
+            className="w-full flex items-start gap-2 px-4 py-3.5 rounded-2xl shadow-md bg-white active:scale-[0.99] transition mb-4"
+          >
+            <div className="w-9 h-9 flex items-center justify-center rounded-full bg-indigo-50 text-indigo-500 mt-0.5">
+              <MapPin size={24} />
+            </div>
+
+            <div className="flex flex-col flex-1 text-left">
+              <div className="text-[15px] font-semibold text-gray-900">
+                새로운 장소 검색하기
+              </div>
+              <div className="text-[12px] text-gray-500">
+                꼭 가보고 싶은 장소를 검색해서 추가해 보세요
+              </div>
+            </div>
+
+            <ChevronRight size={18} className="text-slate-400" />
+          </button>
+
+          {/* 저장된 장소 리스트 */}
+          {dedupedPlaces.length === 0 ? (
+            <div
+              className={`${styles.inputLike} ${styles.staticField}`}
+              style={{ fontSize: 13 }}
+            >
+              아직 등록된 “반드시 가고 싶은 장소”가 없어요.
+            </div>
+          ) : (
+            <ul className="space-y-2">
+              {dedupedPlaces.map((p) => (
+                <SwipeToDeleteItem
+                  key={String(p.id)}
+                  onDelete={() => onDeleteMustVisitPlace?.(String(p.id))}
+                >
+                  <li
+                    className={`flex items-center gap-3 p-3.5 rounded-2xl border shadow-sm 
+                    bg-white border-slate-100`}
+                  >
+                    <div className="w-9 h-9 grid place-items-center rounded-full bg-indigo-50 text-indigo-500">
+                      <MapPin size={20} />
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[15px] font-semibold text-slate-900 truncate">
+                        {p.name}
+                      </div>
+                      {p.address && (
+                        <div className="text-[12px] text-slate-500 truncate">
+                          {p.address}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="text-slate-400">
+                      <ChevronRight size={18} />
+                    </div>
+                  </li>
+                </SwipeToDeleteItem>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
+    );
+  }
+
   private renderScheduleSection() {
     const { onEditSchedule, data } = this.props;
     const { scheduleDraft } = this.state;
@@ -433,7 +563,7 @@ export default class PromiseMainView extends React.PureComponent<Props, State> {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr", // 두 버튼 같은 너비
+            gridTemplateColumns: "1fr 1fr",
             gap: 8,
             width: "100%",
           }}
@@ -460,7 +590,6 @@ export default class PromiseMainView extends React.PureComponent<Props, State> {
       );
     }
 
-    // ✅ onReset 없으면: 저장 버튼만
     return (
       <Button
         variant="primary"
@@ -485,6 +614,8 @@ export default class PromiseMainView extends React.PureComponent<Props, State> {
       <div className={styles.container}>
         {this.renderTitleSection()}
         {this.renderParticipantsSection(data.participants)}
+        {this.renderMustVisitPlacesSection()}
+        {/* ⬅️ 새 섹션 */}
         <section className={styles.section}>
           <SectionHeader icon={<ResultIcon />} title="결과" size="md" />
           <div className={styles.sectionInner}>
@@ -500,4 +631,117 @@ export default class PromiseMainView extends React.PureComponent<Props, State> {
       </div>
     );
   }
+}
+type SwipeToDeleteItemProps = {
+  children: React.ReactNode;
+  onDelete?: () => void;
+};
+
+/**
+ * 오른쪽 → 왼쪽으로 드래그하면 "삭제" 버튼이 오른쪽에서 나타나는 래퍼
+ * - 모바일: 터치 드래그
+ * - 데스크탑: 마우스 드래그
+ */
+function SwipeToDeleteItem({ children, onDelete }: SwipeToDeleteItemProps) {
+  const [translateX, setTranslateX] = React.useState(0);
+  const [dragging, setDragging] = React.useState(false);
+  const startXRef = React.useRef(0);
+
+  const MAX_LEFT = -80; // 왼쪽으로 최대 80px
+  const THRESHOLD = -40; // -40px 이상 드래그되면 열린 상태 유지
+
+  // ───────── 터치 이벤트 ─────────
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    setDragging(true);
+    startXRef.current = e.touches[0].clientX;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!dragging) return;
+    const currentX = e.touches[0].clientX;
+    const diff = currentX - startXRef.current;
+
+    if (diff < 0) {
+      // 오른쪽 -> 왼쪽으로 드래그할 때만
+      setTranslateX(Math.max(diff, MAX_LEFT));
+    } else {
+      // 오른쪽으로 밀면 다시 닫힘
+      setTranslateX(0);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setDragging(false);
+    if (translateX <= THRESHOLD) {
+      setTranslateX(MAX_LEFT);
+    } else {
+      setTranslateX(0);
+    }
+  };
+
+  // ───────── 마우스 이벤트 (데스크탑용) ─────────
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    setDragging(true);
+    startXRef.current = e.clientX;
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!dragging) return;
+    const currentX = e.clientX;
+    const diff = currentX - startXRef.current;
+
+    if (diff < 0) {
+      setTranslateX(Math.max(diff, MAX_LEFT));
+    } else {
+      setTranslateX(0);
+    }
+  };
+
+  const handleMouseUp = () => {
+    if (!dragging) return;
+    setDragging(false);
+    if (translateX <= THRESHOLD) {
+      setTranslateX(MAX_LEFT);
+    } else {
+      setTranslateX(0);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    if (!dragging) return;
+    setDragging(false);
+    if (translateX <= THRESHOLD) {
+      setTranslateX(MAX_LEFT);
+    } else {
+      setTranslateX(0);
+    }
+  };
+
+  return (
+    <div className={styles.swipeRow}>
+      {/* 뒤에 깔려있는 삭제 버튼 */}
+      <button
+        type="button"
+        className={styles.swipeDeleteBtn}
+        onClick={onDelete}
+      >
+        삭제
+      </button>
+
+      {/* 실제 리스트 아이템 (좌우 슬라이드) */}
+      <div
+        className={styles.swipeContent}
+        style={{ transform: `translateX(${translateX}px)` }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
+      >
+        {children}
+      </div>
+    </div>
+  );
 }
