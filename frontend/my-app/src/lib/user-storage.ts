@@ -18,6 +18,10 @@ export const STORAGE_KEYS = {
 
 export const MAX_SAVED_PLACES = 3;
 
+// 🔹 참가자별 저장용 prefix
+//    participantKey는 반드시 "회의ID + 참가자고유식별자" 조합으로 만들어주기 (이름 X)
+const PARTICIPANT_PLACES_PREFIX = "gmg.participant.places.v1";
+
 function safeParse<T>(s: string | null, fallback: T): T {
   try {
     return s ? (JSON.parse(s) as T) : fallback;
@@ -34,8 +38,8 @@ export function loadProfile(): Profile {
 }
 
 /**
- * 저장된 장소 불러오기
- * - 항상 최대 5개까지만 반환
+ * 저장된 장소 불러오기 (공통 MyPage 용)
+ * - 항상 최대 MAX_SAVED_PLACES개까지만 반환
  * - 타입이 이상한 값은 필터링
  */
 export function loadSavedPlaces(): SavedPlace[] {
@@ -76,7 +80,7 @@ export function saveProfile(p: Profile) {
  * 내부용: SavedPlace 배열을
  * - id 기준으로 중복 제거
  * - 순서는 전달된 배열 순서를 유지(앞쪽이 더 최신이라고 가정)
- * - 최대 5개까지만 저장
+ * - 최대 MAX_SAVED_PLACES개까지만 저장
  */
 function _normalizePlaces(places: SavedPlace[]): SavedPlace[] {
   const seen = new Set<string>();
@@ -94,8 +98,7 @@ function _normalizePlaces(places: SavedPlace[]): SavedPlace[] {
 }
 
 /**
- * 장소 목록 저장
- * - 항상 최대 5개까지만 localStorage에 저장
+ * 장소 목록 저장 (공통 MyPage 용)
  */
 export function saveSavedPlaces(places: SavedPlace[]) {
   const normalized = _normalizePlaces(places);
@@ -112,4 +115,55 @@ export function savePlaces(places: SavedPlace[]) {
 
 export function saveSelectedCats(cats: PlaceCategory[]) {
   localStorage.setItem(STORAGE_KEYS.cats, JSON.stringify(cats));
+}
+
+/* ============================================================
+ * 🔹 참가자별 저장 장소 관리 함수들
+ *    - participantKey 예:
+ *      - "98:id-111"      (기존 참가자)
+ *      - "98:draft-xxxx"  (새 참가자 플로우)
+ * ========================================================== */
+
+function getParticipantPlacesKey(participantKey: string): string {
+  return `${PARTICIPANT_PLACES_PREFIX}:${participantKey}`;
+}
+
+/**
+ * 특정 참가자용 저장된 장소 불러오기
+ */
+export function loadSavedPlacesForParticipant(
+  participantKey: string
+): SavedPlace[] {
+  const key = getParticipantPlacesKey(participantKey);
+  const raw = safeParse<unknown>(localStorage.getItem(key), []);
+
+  if (!Array.isArray(raw)) return [];
+
+  const arr: SavedPlace[] = raw
+    .filter(
+      (p: any) =>
+        p &&
+        typeof p.id === "string" &&
+        typeof p.name === "string" &&
+        typeof p.address === "string"
+    )
+    .map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      address: p.address,
+    }));
+
+  return arr.slice(0, MAX_SAVED_PLACES);
+}
+
+/**
+ * 특정 참가자용 저장된 장소 저장
+ */
+export function saveSavedPlacesForParticipant(
+  participantKey: string,
+  places: SavedPlace[]
+) {
+  const key = getParticipantPlacesKey(participantKey);
+  const normalized = _normalizePlaces(places);
+  localStorage.setItem(key, JSON.stringify(normalized));
 }

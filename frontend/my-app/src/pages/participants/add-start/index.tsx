@@ -25,6 +25,31 @@ export default function AddParticipantStartPage() {
     string | number | null
   >(null);
 
+  // ✅ 참가자 "임시 초안"용 draftId (신규 플로우에서만 의미 있음)
+  const [draftId] = useState<string | null>(() => {
+    const state = location.state as any;
+
+    // 이미 있는 참가자 수정 중이면 draftId는 의미 없음
+    if (state?.editParticipantId != null) {
+      return state?.draftId ?? null;
+    }
+
+    // 새 참가자 플로우인데, 이전 단계에서 이미 draftId가 있었다면 그대로 재사용
+    if (state?.draftId) {
+      return state.draftId as string;
+    }
+
+    // 완전 새로운 플로우라면 새로 생성
+    const random =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? (crypto as any).randomUUID()
+        : `${Date.now().toString(36)}-${Math.random()
+            .toString(36)
+            .slice(2, 8)}`;
+
+    return `draft-${random}`;
+  });
+
   useEffect(() => {
     const state = location.state as any;
 
@@ -63,7 +88,8 @@ export default function AddParticipantStartPage() {
         selectedTransportation: transportation,
         selectedPreferences: preferredCats,
         selectedTimes: availableTimes, // 🔹 기존 날짜들도 같이 넘기기
-        editParticipantId: (location.state as any)?.editParticipantId,
+        editParticipantId, // 수정 모드면 그대로
+        draftId, // 🔹 새 참가자 플로우 식별용
       },
     });
   };
@@ -79,13 +105,12 @@ export default function AddParticipantStartPage() {
     navigate(path, {
       state: {
         nameDraft: name,
-        // ✅ 지금 화면에 보이는 출발 장소를 그대로 넘겨줘야
-        // add-origin에서 기본 선택값으로 체크할 수 있음
         selectedOrigin: origin,
         selectedTimes: availableTimes,
         selectedTransportation: transportation,
         selectedPreferences: preferredCats,
-        editParticipantId, // (수정 모드 유지)
+        editParticipantId,
+        draftId, // 🔹 여기서도 같이 넘김
       },
     });
   };
@@ -102,7 +127,8 @@ export default function AddParticipantStartPage() {
         selectedTimes: availableTimes,
         selectedTransportation: transportation,
         selectedPreferences: preferredCats,
-        editParticipantId, // ✅ 유지
+        editParticipantId,
+        draftId, // 🔹 유지
       },
     });
   };
