@@ -317,16 +317,6 @@ export default class PromiseMainView extends React.PureComponent<Props, State> {
           icon={<PinIcon />}
           title="반드시 가고 싶은 장소"
           size="sm"
-          action={
-            <Button
-              variant="ghost"
-              size="xs"
-              iconLeft={<EditIcon width={16} height={16} />}
-              onClick={handleClickSearch}
-            >
-              관리
-            </Button>
-          }
         />
 
         <div className="px-1 py-1">
