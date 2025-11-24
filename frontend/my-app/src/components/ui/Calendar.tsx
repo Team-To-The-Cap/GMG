@@ -93,11 +93,19 @@ export function Calendar({
     const cnt = availability[day] ?? 0;
     if (cnt <= 0) return null; // 아무도 불가능 → 색 없음
 
-    const isAll = cnt === maxAvail; // 전체 인원과 같으면 "모두 가능"
-    const bg = isAll ? "#3e93fa" : "#cce2fc"; // 진파랑 / 연파랑
-    const fg = isAll ? "#ffffff" : "#0b2540";
+    const ratio = cnt / maxAvail; // 0~1
+    // base: 연한 파랑, ratio 높을수록 진하게
+    const start = { r: 204, g: 226, b: 252 }; // #cce2fc
+    const end = { r: 62, g: 147, b: 250 }; // #3e93fa
 
-    return { bg, fg };
+    const r = Math.round(start.r + (end.r - start.r) * ratio);
+    const g = Math.round(start.g + (end.g - start.g) * ratio);
+    const b = Math.round(start.b + (end.b - start.b) * ratio);
+
+    return {
+      bg: `rgb(${r}, ${g}, ${b})`,
+      fg: ratio > 0.6 ? "#ffffff" : "#0b2540",
+    };
   };
 
   const applySelection = (days: number[], mode: DragMode) => {
@@ -178,8 +186,11 @@ export function Calendar({
               const isSelected = !!cell.day && selected.has(day);
               const isDisabled = !!cell.disabled;
 
-              // interactive=false일 때만 availability 색을 사용
+              // interactive=false일 때 availability 정보 사용
               const paint = !canInteract ? colorFor(day) : null;
+
+              // ⬇️ 이 줄 추가: 해당 날짜의 가능 인원 수
+              const cnt = availability?.[day] ?? 0;
 
               return (
                 <div
@@ -207,6 +218,7 @@ export function Calendar({
                       onTouchEnd={endDrag}
                       className={cn(
                         "w-10 h-10 rounded-full inline-flex items-center justify-center",
+                        "relative", // ✅ 뱃지 절대 위치를 위한 기준
                         "p-0 m-0 box-border select-none align-middle",
                         "appearance-none border-0 outline-none ring-0 focus:outline-none focus:ring-0",
                         "transition-colors duration-150 ease-in-out shadow-none",
@@ -241,9 +253,38 @@ export function Calendar({
                         cursor: canInteract ? "pointer" : "default",
                       }}
                     >
+                      {/* 날짜 숫자 */}
                       <span className="font-semibold text-base leading-none">
                         {day}
                       </span>
+
+                      {/* 참석자 수: 알림 뱃지 스타일 (오른쪽 위 작은 동그라미) */}
+                      {cnt > 0 && (
+                        <span
+                          className="
+                pointer-events-none
+                absolute
+                -top-1
+                -right-1
+                flex
+                items-center
+                justify-center
+                rounded-full
+                text-[10px]
+                font-semibold
+                text-white
+              "
+                          style={{
+                            minWidth: 16,
+                            height: 16,
+                            padding: "0 3px",
+                            backgroundColor: "#3b3e45",
+                            boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
+                          }}
+                        >
+                          {cnt}
+                        </span>
+                      )}
                     </button>
                   ) : (
                     <div className="h-10 w-10" />
