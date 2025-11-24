@@ -1,12 +1,12 @@
 // @ts-nocheck
 // src/pages/participants/serach-origin/index.tsx
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Search, MapPin } from "lucide-react";
 import styles from "./style.module.css";
 import {
-  loadSavedPlaces,
-  savePlaces,
+  loadSavedPlacesForParticipant,
+  saveSavedPlacesForParticipant,
   type SavedPlace,
   MAX_SAVED_PLACES,
 } from "@/lib/user-storage";
@@ -37,6 +37,21 @@ export default function SearchOriginPage() {
   const abortRef = useRef<AbortController | null>(null);
 
   const onBack = () => navigate(-1);
+
+  // 🔹 참가자 구분용 key
+  //   - 원칙: AddParticipantOriginPage 에서 만든 participantKey를 그대로 사용
+  //   - 혹시나 없는 상태로 진입했다면, meetingId + draft-unknown 으로 최소한 분리
+  const participantKey = useMemo(() => {
+    if (baseState.participantKey) return baseState.participantKey;
+
+    const baseMeetingId = promiseId ?? "no-meeting";
+    const participantIdPart =
+      baseState.editParticipantId != null
+        ? `id-${baseState.editParticipantId}`
+        : "draft-unknown";
+
+    return `${baseMeetingId}:${participantIdPart}`;
+  }, [baseState.participantKey, baseState.editParticipantId, promiseId]);
 
   // ───────────────── 디바운스 검색 ─────────────────
   useEffect(() => {
@@ -90,11 +105,11 @@ export default function SearchOriginPage() {
       ? `/${mode}/${promiseId}/participants/new/origin`
       : `/participants/new/origin`;
 
-    // 🔹 이전 목록: state 우선, 없으면 localStorage
+    // 🔹 이전 목록: state 우선, 없으면 "해당 참가자용 localStorage" 사용
     const prevSaved: SavedPlace[] =
       baseState.savedPlaces && baseState.savedPlaces.length
         ? baseState.savedPlaces
-        : loadSavedPlaces();
+        : loadSavedPlacesForParticipant(participantKey);
 
     // 🔹 중복 제거 후 맨 앞에 새 place 추가
     let nextSaved = prevSaved.filter((p) => p.id !== place.id);
@@ -105,15 +120,16 @@ export default function SearchOriginPage() {
       nextSaved = nextSaved.slice(0, MAX_SAVED_PLACES);
     }
 
-    // 🔹 localStorage 에도 반영 (선택)
-    savePlaces(nextSaved);
+    // 🔹 참가자별 localStorage 에도 반영
+    saveSavedPlacesForParticipant(participantKey, nextSaved);
 
     navigate(originPath, {
       replace: true,
       state: {
         ...baseState,
         selectedOrigin: place,
-        savedPlaces: nextSaved, // ✅ 이제 항상 MAX_SAVED_PLACES 이하
+        savedPlaces: nextSaved, // ✅ 참가자 전용 리스트
+        participantKey, // ✅ 돌아가서도 동일 key 유지
       },
     });
   };

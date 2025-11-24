@@ -1,10 +1,18 @@
 // src/pages/participants/add-start/index.tsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import Button from "@/components/ui/button";
 import styles from "./style.module.css";
 import { CalendarIcon, PinIcon, HeartIcon } from "@/assets/icons/icons";
 import type { PlaceCategory } from "@/lib/user-storage";
+
+function createDraftId() {
+  // crypto.randomUUID 지원 안 되는 옛 브라우저 대비 fallback
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return `draft-${crypto.randomUUID()}`;
+  }
+  return `draft-${Math.random().toString(36).slice(2)}`;
+}
 
 export default function AddParticipantStartPage() {
   const navigate = useNavigate();
@@ -25,30 +33,12 @@ export default function AddParticipantStartPage() {
     string | number | null
   >(null);
 
-  // ✅ 참가자 "임시 초안"용 draftId (신규 플로우에서만 의미 있음)
-  const [draftId] = useState<string | null>(() => {
-    const state = location.state as any;
-
-    // 이미 있는 참가자 수정 중이면 draftId는 의미 없음
-    if (state?.editParticipantId != null) {
-      return state?.draftId ?? null;
-    }
-
-    // 새 참가자 플로우인데, 이전 단계에서 이미 draftId가 있었다면 그대로 재사용
-    if (state?.draftId) {
-      return state.draftId as string;
-    }
-
-    // 완전 새로운 플로우라면 새로 생성
-    const random =
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? (crypto as any).randomUUID()
-        : `${Date.now().toString(36)}-${Math.random()
-            .toString(36)
-            .slice(2, 8)}`;
-
-    return `draft-${random}`;
-  });
+  // ✅ 이 참가자 전용 draft-id (신규 참가자일 때만 사용)
+  //    - location.state.participantDraftId가 있으면 재사용
+  //    - 없으면 최초 진입 시 새로 생성해서 끝까지 고정
+  const [participantDraftId, setParticipantDraftId] = useState<string | null>(
+    null
+  );
 
   useEffect(() => {
     const state = location.state as any;
@@ -69,11 +59,31 @@ export default function AddParticipantStartPage() {
       setPreferredCats(state.selectedPreferences as PlaceCategory[]);
     }
 
-    // 🔥 여기서 한 번만 editParticipantId를 고정
     if (state?.editParticipantId !== undefined) {
+      // 🔹 수정 모드: 서버 participant id 사용
       setEditParticipantId(state.editParticipantId);
+      // 수정 모드에서는 draft-id 필요 없음
+      setParticipantDraftId(null);
+    } else {
+      // 🔹 신규 참가자: 기존 state에 draft-id가 있으면 재사용, 없으면 새로 생성
+      if (state?.participantDraftId) {
+        setParticipantDraftId(state.participantDraftId);
+      } else {
+        const newDraftId = createDraftId();
+        setParticipantDraftId(newDraftId);
+      }
     }
   }, [location.state]);
+
+  // 이 참가자를 대표하는 key 값 (프론트/로컬 전용)
+  // - 수정 모드: "id-111"
+  // - 신규 모드: "draft-xxxx"
+  const participantKeyBase = useMemo(() => {
+    if (editParticipantId !== null && editParticipantId !== undefined) {
+      return `id-${String(editParticipantId)}`;
+    }
+    return participantDraftId ?? "draft-unknown";
+  }, [editParticipantId, participantDraftId]);
 
   const openSchedulePicker = () => {
     if (!promiseId) return;
@@ -87,9 +97,9 @@ export default function AddParticipantStartPage() {
         selectedOrigin: origin,
         selectedTransportation: transportation,
         selectedPreferences: preferredCats,
-        selectedTimes: availableTimes, // 🔹 기존 날짜들도 같이 넘기기
-        editParticipantId, // 수정 모드면 그대로
-        draftId, // 🔹 새 참가자 플로우 식별용
+        selectedTimes: availableTimes,
+        editParticipantId,
+        participantDraftId, // ✅ 새 화면으로도 draft-id 전달
       },
     });
   };
@@ -110,7 +120,7 @@ export default function AddParticipantStartPage() {
         selectedTransportation: transportation,
         selectedPreferences: preferredCats,
         editParticipantId,
-        draftId, // 🔹 여기서도 같이 넘김
+        participantDraftId, // ✅ origin 페이지에서도 사용
       },
     });
   };
@@ -128,7 +138,7 @@ export default function AddParticipantStartPage() {
         selectedTransportation: transportation,
         selectedPreferences: preferredCats,
         editParticipantId,
-        draftId, // 🔹 유지
+        participantDraftId, // ✅ 유지
       },
     });
   };
@@ -192,7 +202,6 @@ export default function AddParticipantStartPage() {
         throw new Error(err || "저장 실패");
       }
 
-      // 현재 경로에서 create / details 뽑아서 원래 약속 페이지로 복귀
       const segments = location.pathname.split("/");
       const mode = segments[1];
       const id = segments[2];

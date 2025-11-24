@@ -17,63 +17,42 @@ export default function AddParticipantOriginPage() {
   const location = useLocation();
 
   const state = (location.state || {}) as ParticipantLocationState & {
-    draftId?: string;
-    participantKey?: string;
+    participantDraftId?: string | null;
   };
   const nameDraft = state.nameDraft ?? "";
 
-  // 🔹 참가자 구분용 key
-  //   우선순위:
-  //   1) state.participantKey (검색 페이지 등에서 이미 계산된 값)
-  //   2) 기존 참가자 수정: state.editParticipantId
-  //   3) 신규 참가자: state.draftId (AddParticipantStartPage에서 생성)
-  //   4) 정말 아무것도 없으면 이 페이지에서 임시 draftId 생성
+  // 🔹 참가자 구분용 key base
+  //   - 기존 참가자 수정: state.editParticipantId 사용 → "id-111"
+  //   - 신규 참가자: participantDraftId 사용 → "draft-xxxx"
+  const participantKeyBase = useMemo(() => {
+    if (state.editParticipantId != null) {
+      return `id-${state.editParticipantId}`;
+    }
+    if (state.participantDraftId) {
+      return state.participantDraftId;
+    }
+    return "draft-unknown";
+  }, [state.editParticipantId, state.participantDraftId]);
+
+  // 최종 localStorage key: meetingId + participantKeyBase
   const participantKey = useMemo(() => {
     const baseMeetingId = promiseId ?? "no-meeting";
-
-    // 1) 이미 participantKey가 있다면 그대로 사용
-    if (state.participantKey) {
-      return state.participantKey;
-    }
-
-    // 2) 기존 참가자 수정 모드
-    if (state.editParticipantId != null) {
-      return `${baseMeetingId}:id-${state.editParticipantId}`;
-    }
-
-    // 3) 새 참가자 플로우에서 AddParticipantStartPage가 준 draftId 사용
-    if (state.draftId) {
-      return `${baseMeetingId}:${state.draftId}`;
-    }
-
-    // 4) 예외적으로 아무 정보도 없을 때만 임시 키 생성
-    const random =
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? (crypto as any).randomUUID()
-        : `${Date.now().toString(36)}-${Math.random()
-            .toString(36)
-            .slice(2, 8)}`;
-    return `${baseMeetingId}:draft-${random}`;
-  }, [promiseId, state.participantKey, state.editParticipantId, state.draftId]);
+    return `${baseMeetingId}:${participantKeyBase}`;
+  }, [promiseId, participantKeyBase]);
 
   // ───────────────── 저장된 장소 목록 (참가자별) ─────────────────
   const baseSaved = useMemo<SavedPlace[]>(() => {
-    // 이전 화면에서 state.savedPlaces를 넘겨줬다면 그걸 우선 사용
     if (state.savedPlaces && state.savedPlaces.length) {
       return state.savedPlaces;
     }
-    // 없으면 localStorage 참가자별 저장 목록 사용
     return loadSavedPlacesForParticipant(participantKey);
   }, [state.savedPlaces, participantKey]);
 
   // 🔹 selectedOrigin: string | SavedPlace | null → SavedPlace | null 로 정규화
-  //    - string 이면 baseSaved 안에서 먼저 같은 장소를 찾고
-  //    - 없을 때만 새 SavedPlace 를 만들어서 사용
   const normalizedSelected = useMemo<SavedPlace | null>(() => {
     const raw = state.selectedOrigin;
     if (!raw) return null;
 
-    // 문자열로 넘어온 경우 (서버에서 온 start_address)
     if (typeof raw === "string") {
       const norm = raw.trim();
 
@@ -92,7 +71,6 @@ export default function AddParticipantOriginPage() {
 
       if (found) return found;
 
-      // 완전히 새로운 장소면 임시 SavedPlace 객체 생성
       return {
         id: norm,
         name: norm,
@@ -100,7 +78,6 @@ export default function AddParticipantOriginPage() {
       };
     }
 
-    // 이미 SavedPlace 로 넘어온 경우
     return raw;
   }, [state.selectedOrigin, baseSaved]);
 
@@ -108,7 +85,6 @@ export default function AddParticipantOriginPage() {
   const saved = useMemo<SavedPlace[]>(() => {
     if (!normalizedSelected) return baseSaved;
 
-    // id 가 다르더라도 같은 주소면 같은 장소로 본다
     const exists = baseSaved.some(
       (p) =>
         p.id === normalizedSelected.id ||
@@ -119,7 +95,6 @@ export default function AddParticipantOriginPage() {
 
     if (exists) return baseSaved;
 
-    // 정말 새 장소일 때만 맨 위에 추가
     return [normalizedSelected, ...baseSaved];
   }, [baseSaved, normalizedSelected]);
 
@@ -153,13 +128,11 @@ export default function AddParticipantOriginPage() {
       : `/participants/new/origin/search`;
 
     navigate(path, {
-      // 🔹 replace: true 빼야 뒤로가기 시 /origin 으로 돌아감
       state: {
         ...state,
-        savedPlaces: saved, // 최신 목록 넘기기
+        savedPlaces: saved,
         selectedOrigin: selectedPlace ?? normalizedSelected ?? null,
-        participantKey, // 검색 페이지에서도 같은 key 사용
-        draftId: state.draftId, // 혹시 모를 경우를 위해 유지
+        participantDraftId: state.participantDraftId ?? null,
       },
     });
   };
@@ -172,7 +145,7 @@ export default function AddParticipantOriginPage() {
   const onConfirm = () => {
     if (!selectedPlace) return;
 
-    // 🔹 참가자별 저장소에 현재 saved 리스트 저장
+    // ✅ 참가자별 저장소에 현재 saved 리스트 저장
     saveSavedPlacesForParticipant(participantKey, saved);
 
     const segments = location.pathname.split("/");
@@ -186,10 +159,10 @@ export default function AddParticipantOriginPage() {
       state: {
         ...state,
         nameDraft,
-        selectedOrigin: selectedPlace.address, // start 페이지에는 주소 문자열만 넘김
+        selectedOrigin: selectedPlace.address,
         selectedTransportation: transportation,
         savedPlaces: saved,
-        participantKey,
+        participantDraftId: state.participantDraftId ?? participantKeyBase,
       },
     });
   };
