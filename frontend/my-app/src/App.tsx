@@ -1,5 +1,9 @@
+// src/App.tsx
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { useMemo } from "react";
+import { useMemo, useCallback } from "react";
+
+import { Capacitor } from "@capacitor/core";
+import { Share } from "@capacitor/share";
 
 import Home from "@/pages/home";
 import CreatePromiseMain from "@/pages/create-promise-main";
@@ -19,6 +23,7 @@ import BottomNav from "@/components/layout/bottom-nav";
 import TopBar from "@/components/ui/top-bar";
 import { RUNTIME, DEFAULT_PROMISE_ID } from "@/config/runtime";
 import { getTopBarConfig } from "@/utils/getTopBarConfig";
+import { ShareIcon } from "@/assets/icons/icons";
 
 import "./App.css";
 
@@ -30,13 +35,79 @@ export default function App() {
     [location.pathname]
   );
 
+  // 🔗 실제 웹에서 열릴 수 있는 베이스 URL
+  // 배포 주소가 생기면 VITE_PUBLIC_WEB_BASE_URL에 넣어두고 사용하면 됨
+  const PUBLIC_BASE_URL =
+    import.meta.env.VITE_PUBLIC_WEB_BASE_URL ?? "https://example.com";
+
+  const handleShare = useCallback(async () => {
+    try {
+      const shareUrl = `${PUBLIC_BASE_URL}${location.pathname}`;
+
+      // 1) 네이티브(Capacitor) 환경이면 Capacitor Share 플러그인 사용
+      if (Capacitor.isNativePlatform()) {
+        await Share.share({
+          title: "약속 공유",
+          text: "GMG에서 약속을 확인해보세요!",
+          url: shareUrl,
+          dialogTitle: "약속 공유하기",
+        });
+        return;
+      }
+
+      // 2) 브라우저에서 Web Share API 지원 시
+      if (navigator.share) {
+        await navigator.share({
+          title: "약속 공유",
+          text: "GMG에서 약속을 확인해보세요!",
+          url: shareUrl,
+        });
+        return;
+      }
+
+      // 3) 마지막 fallback: 클립보드 복사
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(shareUrl);
+        alert("공유 링크가 클립보드에 복사되었습니다.");
+        return;
+      }
+
+      alert(
+        `이 환경에서는 공유 기능을 사용할 수 없습니다.\n\n링크: ${shareUrl}`
+      );
+    } catch (e) {
+      console.error("[share] error", e);
+      alert("공유 중 오류가 발생했습니다.");
+    }
+  }, [location.pathname, PUBLIC_BASE_URL]);
+
   return (
     <div className="appRoot">
       <TopBar
         title={title}
         showBack={showBack}
-        backTo={backTo} // ✅ onBack 대신 backTo만 넘김
-        showShare={showShare}
+        backTo={backTo}
+        // 👉 우측 공유 아이콘
+        right={
+          showShare ? (
+            <button
+              type="button"
+              aria-label="약속 공유"
+              onClick={handleShare}
+              style={{
+                width: "100%",
+                height: "100%",
+                border: "none",
+                background: "transparent",
+                display: "grid",
+                placeItems: "center",
+                padding: 0,
+              }}
+            >
+              <ShareIcon />
+            </button>
+          ) : undefined
+        }
       />
 
       <main className="pageContainer">
@@ -130,7 +201,7 @@ export default function App() {
           <Route path="/details/:promiseId/promise-time" element={<Time1 />} />
           <Route path="/time/timeresult/:promiseId" element={<TimeResult />} />
 
-          {/* ✅ 반드시 가고 싶은 장소 검색 (새로 추가) */}
+          {/* 반드시 가고 싶은 장소 검색 */}
           <Route
             path="/details/:promiseId/must-visit/search"
             element={<SearchOriginPage />}

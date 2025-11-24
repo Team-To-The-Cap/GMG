@@ -36,7 +36,6 @@ export default function CreatePromiseMain() {
     onCalculatePlan: baseOnCalculatePlan,
     onCalculateCourse,
     onSave: baseOnSave,
-
     onEditMustVisitPlaces,
     onDeleteMustVisitPlace,
   } = usePromiseMainController({ promiseId, data, setData });
@@ -102,7 +101,44 @@ export default function CreatePromiseMain() {
         if (alive) setData(finalData);
       } catch (err: any) {
         console.error(err);
-        if (alive) setError(err?.message ?? "데이터 불러오기 실패");
+        const msg = String(err?.message ?? "");
+
+        if (!alive) return;
+
+        // ✅ 서버에 Meeting 이 없는 경우(404) → 깨진 드래프트로 보고 새 약속 생성
+        if (msg.includes("404") && msg.includes("Meeting not found")) {
+          try {
+            // 기존 드래프트 키가 현재 ID와 같다면 정리
+            const savedDraftId = localStorage.getItem(DRAFT_PROMISE_ID_KEY);
+            if (savedDraftId && savedDraftId === promiseId) {
+              localStorage.removeItem(DRAFT_PROMISE_ID_KEY);
+              localStorage.removeItem(DRAFT_PROMISE_DATA_PREFIX + savedDraftId);
+            }
+
+            // 새 약속 하나 생성
+            const newMeeting = await createEmptyPromise();
+            if (!alive) return;
+
+            // 새 약속을 드래프트로 저장
+            localStorage.setItem(DRAFT_PROMISE_ID_KEY, newMeeting.id);
+            setData(newMeeting);
+            setError(undefined);
+
+            // URL 의 promiseId 와 다르면 새 ID로 교체
+            if (newMeeting.id !== promiseId) {
+              navigate(`/create/${newMeeting.id}`, { replace: true });
+            }
+          } catch (err2: any) {
+            console.error(err2);
+            if (alive)
+              setError(
+                err2?.message ?? "데이터 불러오기 실패 (새 약속 생성 실패)"
+              );
+          }
+        } else {
+          // 그 외 에러는 기존처럼 메시지만 보여줌
+          setError(msg || "데이터 불러오기 실패");
+        }
       } finally {
         if (alive) setLoading(false);
       }
@@ -113,7 +149,7 @@ export default function CreatePromiseMain() {
     };
   }, [promiseId, navigate, setLoading, setError]);
 
-  // ✅ create 전용: 제목 변경 시 draft도 반영하고 싶으면 이렇게 override
+  // ✅ create 전용: 제목 변경 시 draft도 반영
   const onChangeTitle = useCallback(
     async (value: string) => {
       await baseOnChangeTitle(value);
@@ -159,12 +195,7 @@ export default function CreatePromiseMain() {
         persistDraft(prev);
         return prev;
       });
-
-      // ✅ 여기서는 "일정/장소가 계산되었습니다!" 알럿을
-      //     더 이상 띄우지 않는다 (중복/오동작 방지)
     } catch (e) {
-      // onCalculatePlan 내부에서 에러를 다시 던지게 바꾸지 않은 이상
-      // 사실 여기로 올 일은 거의 없지만, 안전하게만 두자.
       console.error(e);
     }
   }, [promiseId, baseOnCalculatePlan, setData, persistDraft]);

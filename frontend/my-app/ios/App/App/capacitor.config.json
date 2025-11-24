@@ -2,5 +2,7 @@
 	"appId": "com.gmg.app",
 	"appName": "GMG",
 	"webDir": "dist",
-	"packageClassList": []
+	"packageClassList": [
+		"SharePlugin"
+	]
 }
