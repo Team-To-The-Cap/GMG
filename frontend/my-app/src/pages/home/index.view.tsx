@@ -137,6 +137,28 @@ export default function HomeView({
         </Section>
       )}
 
+      {/* 지난 약속 섹션 */}
+      {grouped.past.length > 0 && (
+        <Section title="지난 약속" badge={`${grouped.past.length}개`} icon="📁">
+          {grouped.past.map((item) => (
+            <SwipeableCard
+              key={item.id}
+              onCardClick={() => navigate(`/details/${item.id}`)}
+              onDeleteRequest={() => onDelete(item.id)}
+            >
+              <PromiseCard
+                variant="compact" // ✅ 여기도
+                title={item.title}
+                dday={item.dday ?? undefined}
+                participants={item.participants}
+                className={styles.card}
+                unscheduled={!item.schedule?.dateISO}
+              />
+            </SwipeableCard>
+          ))}
+        </Section>
+      )}
+
       {/* 미정 약속 섹션 */}
       {grouped.unscheduled.length > 0 && (
         <Section
@@ -163,27 +185,6 @@ export default function HomeView({
         </Section>
       )}
 
-      {/* 지난 약속 섹션 */}
-      {grouped.past.length > 0 && (
-        <Section title="지난 약속" badge={`${grouped.past.length}개`} icon="📁">
-          {grouped.past.map((item) => (
-            <SwipeableCard
-              key={item.id}
-              onCardClick={() => navigate(`/details/${item.id}`)}
-              onDeleteRequest={() => onDelete(item.id)}
-            >
-              <PromiseCard
-                variant="compact" // ✅ 여기도
-                title={item.title}
-                dday={item.dday ?? undefined}
-                participants={item.participants}
-                className={styles.card}
-                unscheduled={!item.schedule?.dateISO}
-              />
-            </SwipeableCard>
-          ))}
-        </Section>
-      )}
       <div className={styles.bottomSpacer} />
     </div>
   );
