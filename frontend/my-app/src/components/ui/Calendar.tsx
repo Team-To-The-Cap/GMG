@@ -12,7 +12,7 @@ interface CalendarCell {
 export interface CalendarProps {
   year: number; // 예: 2025
   month: number; // 0~11 (예: 9 = October)
-  onSelect?: (dates: Date[]) => void; // 선택된 날짜 목록
+  onSelect?: (dates: Date[]) => void; // 선택된 날짜 목록 (interactive=true 일 때)
   apiDays?: Partial<Record<number, { disabled?: boolean }>>;
   className?: string;
   initialSelected?: number[];
@@ -21,7 +21,7 @@ export interface CalendarProps {
   interactive?: boolean; // true면 드래그 선택, false면 onDayClick만 동작
   availability?: Record<number, number>; // day(1~31) -> 가능한 인원 수
   maxAvailability?: number; // 최대 인원(색 정규화 기준). 없으면 availability의 max 사용
-  onDayClick?: (day: number) => void;
+  onDayClick?: (day: number) => void; // interactive=false 일 때 사용
 }
 
 /** month/year로 5×7 그리드 생성 (항상 35칸) — 월요일 시작 기준 */
@@ -68,15 +68,8 @@ export function Calendar({
   const [dragMode, setDragMode] = useState<DragMode>("idle");
   const isPointerDown = useRef(false);
 
-  // 오늘(00:00 기준) — 지난 날짜 회색 처리용
-  const today = useMemo(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }, []);
-
+  // initialSelected / year / month 바뀔 때 상태 동기화
   React.useEffect(() => {
-    // initialSelected가 변경될 때마다 상태를 재설정
     setSelected(new Set(initialSelected));
   }, [year, month, JSON.stringify(initialSelected)]);
 
@@ -85,15 +78,22 @@ export function Calendar({
     [year, month, apiDays]
   );
 
+  // 오늘 0시 기준
+  const today = useMemo(() => {
+    const t = new Date();
+    t.setHours(0, 0, 0, 0);
+    return t;
+  }, []);
+
   const maxAvail = useMemo(() => {
-    if (typeof maxAvailability === "number") return maxAvailability; // ← 우선 외부에서 받은 값
+    if (typeof maxAvailability === "number") return maxAvailability;
     if (!availability) return 0;
     const values = Object.values(availability);
     if (values.length === 0) return 0;
     return Math.max(...values);
   }, [availability, maxAvailability]);
 
-  // ✅ 인원 수에 따른 색상 (결과 화면용)
+  // ✅ 인원 수에 따른 색상 (모두 가능 / 일부 가능)
   const colorFor = (day: number) => {
     if (!availability || maxAvail <= 0) return null;
 
@@ -101,7 +101,6 @@ export function Calendar({
     if (cnt <= 0) return null;
 
     const ratio = cnt / maxAvail; // 0~1
-    // base: 연한 파랑, ratio 높을수록 진하게
     const start = { r: 204, g: 226, b: 252 }; // #cce2fc
     const end = { r: 62, g: 147, b: 250 }; // #3e93fa
 
@@ -122,7 +121,7 @@ export function Calendar({
     else if (mode === "erase") days.forEach((d) => next.delete(d));
     setSelected(next);
 
-    // 부모에 Date[]로 알림
+    // 부모에 Date[]로 알림 (interactive=true 에서만 의미있게 사용)
     const picked = Array.from(next)
       .sort((a, b) => a - b)
       .map((d) => new Date(year, month, d));
@@ -131,7 +130,7 @@ export function Calendar({
 
   const canInteract = interactive === true;
 
-  // 🔹 드래그 선택용 Pointer 핸들러 (마우스/터치 공통)
+  // 🔹 드래그 선택용 Pointer 핸들러 (interactive=true 에서만)
   const handlePointerDown = (
     day: number,
     disabled?: boolean,
@@ -139,11 +138,7 @@ export function Calendar({
   ) => {
     if (!day || disabled) return;
 
-    if (!canInteract) {
-      // 비인터랙티브 모드에서는 그냥 클릭 한 번만 전달
-      onDayClick?.(day);
-      return;
-    }
+    if (!canInteract) return;
 
     isPointerDown.current = true;
     const mode: DragMode = selected.has(day) ? "erase" : "paint";
@@ -186,45 +181,46 @@ export function Calendar({
           <div key={rIdx} className="grid grid-cols-7 gap-px">
             {row.map((cell, cIdx) => {
               const day = cell.day ?? 0;
-              const isDisabled = !!cell.disabled;
+              const isSelected = !!cell.day && selected.has(day);
+              const isDisabledByApi = !!cell.disabled;
 
-              const cellDate =
-                cell.day != null ? new Date(year, month, day) : undefined;
-
-              if (cellDate) {
-                cellDate.setHours(0, 0, 0, 0);
+              // 🔹 이 날짜의 Date/과거 여부
+              let isPast = false;
+              if (cell.day) {
+                const d = new Date(year, month, day);
+                d.setHours(0, 0, 0, 0);
+                isPast = d.getTime() < today.getTime();
               }
 
-              // ✅ 오늘 기준 이전 날짜?
-              const isPast = !!cellDate && cellDate.getTime() < today.getTime();
-
-              const isSelected = !!cell.day && !isDisabled && selected.has(day);
-
-              // interactive=false일 때 availability 정보 사용
+              // interactive=false 일 때 availability 기반 색
               const paint = !canInteract ? colorFor(day) : null;
 
-              // 해당 날짜 가능 인원 수 (결과 표시 모드에서 뱃지)
+              // 해당 날짜 가능 인원 수 (결과 화면용 뱃지)
               const cnt = availability?.[day] ?? 0;
 
-              // 스타일 계산
-              let bgColor = "transparent";
-              let textColor = "#111111";
-              let boxShadow = "none";
+              // ---- 스타일 결정 ----
+              let bgColor: string | undefined;
+              let fgColor: string | undefined;
+              let boxShadow: string | undefined;
 
-              if (isPast) {
-                // 1) 지난 날짜: 회색 처리 (선택 가능은 유지)
-                bgColor = "#e5e7eb";
-                textColor = "#9ca3af";
-              } else if (paint) {
-                // 2) 결과 모드에서의 파랑 그라데이션
-                bgColor = paint.bg;
-                textColor = paint.fg;
-                boxShadow = "0 2px 6px rgba(0,0,0,.12)";
-              } else if (canInteract && isSelected) {
-                // 3) 드래그 선택 모드에서 선택된 날
+              if (isSelected) {
+                // 선택된 날짜 (양쪽 모드 공통)
                 bgColor = "#3e93fa";
-                textColor = "#ffffff";
+                fgColor = "#ffffff";
                 boxShadow = "0 2px 6px rgba(0,0,0,.12)";
+              } else if (!canInteract && paint && !isPast) {
+                // 결과 모드 + 가용 인원 색상 (오늘 이후만)
+                bgColor = paint.bg;
+                fgColor = paint.fg;
+                boxShadow = "0 2px 6px rgba(0,0,0,.12)";
+              } else if (isPast) {
+                // 과거 날짜: 회색 처리(클릭은 가능)
+                bgColor = "#e5e7eb"; // gray-200
+                fgColor = "#9ca3af"; // gray-400
+              } else {
+                // 기본
+                bgColor = "transparent";
+                fgColor = undefined;
               }
 
               return (
@@ -237,23 +233,34 @@ export function Calendar({
                       type="button"
                       data-day={day}
                       aria-pressed={isSelected}
-                      disabled={isDisabled}
-                      // 🔹 인터랙티브 모드(드래그 선택)는 Pointer 이벤트로 통합
+                      disabled={isDisabledByApi}
+                      // 🔹 드래그 선택은 interactive=true 에서만
                       onPointerDown={
                         canInteract
-                          ? (e) => handlePointerDown(day, isDisabled, e)
+                          ? (e) => handlePointerDown(day, isDisabledByApi, e)
                           : undefined
                       }
                       onPointerEnter={
                         canInteract
-                          ? () => handlePointerEnter(day, isDisabled)
+                          ? () => handlePointerEnter(day, isDisabledByApi)
                           : undefined
                       }
-                      // 🔹 비인터랙티브 모드는 클릭 한 번만
+                      // 🔹 결과 화면(interactive=false)에서는 클릭 한 번으로
+                      //     1) 내부 selected 상태(싱글 선택) 갱신
+                      //     2) 부모 onDayClick 호출
                       onClick={
                         !canInteract
                           ? () => {
-                              if (!isDisabled) onDayClick?.(day);
+                              if (isDisabledByApi) return;
+                              setSelected((prev) => {
+                                const next = new Set<number>();
+                                // 이미 선택돼 있으면 해제, 아니면 이 날만 선택
+                                if (!prev.has(day)) {
+                                  next.add(day);
+                                }
+                                return next;
+                              });
+                              onDayClick?.(day);
                             }
                           : undefined
                       }
@@ -263,19 +270,21 @@ export function Calendar({
                         "p-0 m-0 box-border select-none align-middle",
                         "appearance-none border-0 outline-none ring-0 focus:outline-none focus:ring-0",
                         "transition-colors duration-150 ease-in-out shadow-none",
-                        isDisabled
-                          ? "opacity-40 pointer-events-none"
-                          : canInteract
-                          ? "hover:bg-blue-100"
-                          : ""
+                        isDisabledByApi ? "opacity-40 pointer-events-none" : "",
+                        !isDisabledByApi ? "cursor-pointer" : "cursor-default",
+                        !canInteract && isPast ? "text-gray-400" : "",
+                        canInteract && !isSelected ? "text-[#111]" : ""
                       )}
                       style={{
+                        backgroundColor: bgColor,
+                        color: fgColor,
+                        boxShadow,
                         border: "0 none",
                         outline: "none",
-                        backgroundColor: bgColor,
-                        color: textColor,
-                        boxShadow,
-                        cursor: canInteract ? "pointer" : "default",
+                        opacity:
+                          !canInteract && isPast && !isSelected && !paint
+                            ? 0.45
+                            : undefined,
                       }}
                     >
                       {/* 날짜 숫자 */}
