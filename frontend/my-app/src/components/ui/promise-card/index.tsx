@@ -11,7 +11,8 @@ type CardProps = {
   dday?: number;
   footer?: ReactNode;
   participants?: PromiseParticipant[];
-  variant?: "default" | "hero";
+  /** default: 일반 카드 / hero: 생성 화면 등에서 크게 / compact: 홈 2열 그리드용 */
+  variant?: "default" | "hero" | "compact";
   onClick?: () => void;
   /** ✅ 일정 미정 여부: true면 D-Day 대신 "일정 미정" 표시 */
   unscheduled?: boolean;
@@ -64,11 +65,13 @@ export default function PromiseCard({
     badgeTone = ddayTone(dday);
   }
 
+  const avatarSize = variant === "compact" ? 24 : 28;
+
   return (
     <section
       className={cx(
         styles.card,
-        styles[variant],
+        styles[variant], // .hero, .compact 등
         clickable && styles.clickable,
         className
       )}
@@ -89,7 +92,7 @@ export default function PromiseCard({
               className={cx(
                 styles.badge,
                 styles[`badge--${variant}`],
-                badgeTone ? styles[badgeTone] : undefined // ✅ 여기 수정
+                badgeTone ? styles[badgeTone] : undefined
               )}
             >
               {badgeText}
@@ -110,7 +113,7 @@ export default function PromiseCard({
       >
         {visibleAvatars.map((p) => (
           <div key={p.id} className={styles.participantAvatar}>
-            <Avatar alt={p.name} src={p.avatarUrl} size={28} />
+            <Avatar alt={p.name} src={p.avatarUrl} size={avatarSize} />
           </div>
         ))}
         {hiddenCount > 0 && (
