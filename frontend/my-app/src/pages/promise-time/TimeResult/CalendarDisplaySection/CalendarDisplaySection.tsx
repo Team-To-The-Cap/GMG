@@ -32,12 +32,6 @@ type Participant = {
   available_times: ParticipantTime[];
 };
 
-// type MeetingPlan = {
-//   id: number;
-//   meeting_time: string | null;
-//   // 필요한 필드만 적당히...
-// };
-
 export const CalendarDisplaySection = (): JSX.Element => {
   const { promiseId } = useParams();
   const navigate = useNavigate();
@@ -66,22 +60,6 @@ export const CalendarDisplaySection = (): JSX.Element => {
 
     fetchParticipants();
   }, [promiseId]);
-
-  // ---- Fetch meeting detail (plan 정보 등 필요할 때) ----
-  //   useEffect(() => {
-  //     const fetchPlan = async () => {
-  //       if (!promiseId) return;
-
-  //       const res = await fetch(
-  //         `http://223.130.152.114:8001/meetings/${promiseId}`
-  //       );
-  //       //   const data: MeetingDetailResponse = await res.json();
-
-  //       //   setMeetingPlan(data.plan ?? null);
-  //     };
-
-  //     fetchPlan();
-  //   }, [promiseId]);
 
   // ---- participants 기반으로 날짜 → 참가자 ID 목록 맵 구성 ----
   const dateToParticipantIds = useMemo(() => {
@@ -146,8 +124,6 @@ export const CalendarDisplaySection = (): JSX.Element => {
     // 기본적으로 전체 참가자 수
     let base = participantCount;
 
-    // 혹시 participants가 아직 안 들어왔어도,
-    // dateToParticipantIds에서 최대값을 하나 더 보정할 수 있음
     const maxFromMap = Object.values(dateToParticipantIds).reduce(
       (max, ids) => (ids.length > max ? ids.length : max),
       0
@@ -179,11 +155,6 @@ export const CalendarDisplaySection = (): JSX.Element => {
   };
 
   const handleDayClick = (day: number) => {
-    // 이 달력에서 색칠된 날(= map에 있는 날)만 클릭 가능
-    if (currentMonthAvailability[day] == null) {
-      setClickedDay(null);
-      return;
-    }
     setClickedDay((prev) => (prev === day ? null : day));
   };
 
@@ -202,7 +173,7 @@ export const CalendarDisplaySection = (): JSX.Element => {
     ).padStart(2, "0")}`;
   }, [year, month, clickedDay]);
 
-  // ---- Find who is available on selected date (participants + dateToParticipantIds) ----
+  // ---- Find who is available on selected date ----
   const availableParticipantsForDay = useMemo(() => {
     if (!selectedDateISO) return [];
 
@@ -252,10 +223,12 @@ export const CalendarDisplaySection = (): JSX.Element => {
             <Calendar
               year={year}
               month={month}
-              interactive={false}
+              interactive={false} // 결과 페이지는 단일 선택 모드
               availability={currentMonthAvailability}
               maxAvailability={maxAvailability}
               onDayClick={handleDayClick}
+              selectedDays={clickedDay ? [clickedDay] : []} // 🔹 선택된 날 표시
+              dimPastDays // 🔹 과거 날짜 흐리게
             />
           </div>
         </div>

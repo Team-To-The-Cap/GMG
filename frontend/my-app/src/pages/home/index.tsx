@@ -1,18 +1,18 @@
 // src/pages/home/index.tsx
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import HomeView from "./index.view";
 import {
   getPromiseList,
   deletePromise,
 } from "@/services/promise/promise.service";
 import type { PromiseDetail } from "@/types/promise";
-import { sortPromisesByDday } from "@/utils/sortPromisesByDday"; // ✅ 추가
+import { sortPromisesByDday } from "@/utils/sortPromisesByDday";
 import { DRAFT_PROMISE_ID_KEY } from "@/assets/constants/storage";
 
 // 홈에서 사용할 아이템 = 상세 그대로
 export type HomeItem = PromiseDetail;
 
-// dday가 없을 때만 meeting date로 보정 계산 (안 쓰면 제거해도 됨)
+// dday가 없을 때만 meeting date로 보정 계산
 function calcDdayFromISO(isoDate?: string): number {
   if (!isoDate) return 0;
   const today = new Date();
@@ -22,6 +22,26 @@ function calcDdayFromISO(isoDate?: string): number {
   const diffMs = target.getTime() - today.getTime();
   return Math.round(diffMs / (1000 * 60 * 60 * 24));
 }
+
+/** 참가자 응답률 계산용 타입 (available_times 가 있을 수도, 없을 수도 있으므로 느슨하게 잡음) */
+type ParticipantWithTimes = {
+  available_times?: { start_time: string; end_time: string }[];
+};
+
+/** 홈 요약 위젯 데이터 */
+export type HomeSummary = {
+  todoScheduleCount: number; // 일정/장소 미정 약속 수
+  upcomingThisWeekCount: number; // 이번 주(7일 내) 약속 수
+  thisMonthCount: number; // 이번 달 약속 수
+  avgResponseRate: number | null; // 참가자 응답률 (0~100) 없으면 null
+};
+
+/** 홈에서 쓸 약속 그룹 */
+export type GroupedMeetings = {
+  unscheduled: HomeItem[];
+  upcoming: HomeItem[];
+  past: HomeItem[];
+};
 
 export default function Home() {
   const [loading, setLoading] = useState(true);
@@ -34,10 +54,8 @@ export default function Home() {
       setError(undefined);
       const res = await getPromiseList(); // PromiseDetail[]
 
-      // ✅ 초안 약속 ID 가져오기
       const draftId = localStorage.getItem(DRAFT_PROMISE_ID_KEY);
 
-      // dday가 누락된 경우만 보정
       const normalized = res.map((x) => ({
         ...x,
         dday:
@@ -46,10 +64,8 @@ export default function Home() {
             : calcDdayFromISO(x.schedule?.dateISO),
       }));
 
-      // ✅ dday 기준 정렬
       const sorted = sortPromisesByDday(normalized);
 
-      // ✅ localStorage에 저장된 draft 약속은 리스트에서 제거
       const filtered =
         draftId != null ? sorted.filter((item) => item.id !== draftId) : sorted;
 
@@ -71,10 +87,7 @@ export default function Home() {
     if (!ok) return;
 
     try {
-      // 1) 서버에서 삭제
       await deletePromise(id);
-
-      // 2) UI에서 목록 업데이트
       setItems((prev) => prev.filter((item) => item.id !== id));
     } catch (e: any) {
       console.error(e);
@@ -82,11 +95,101 @@ export default function Home() {
     }
   }, []);
 
+  // ───────────────── 약속 그룹 나누기 ─────────────────
+  const grouped: GroupedMeetings = useMemo(() => {
+    const unscheduled: HomeItem[] = [];
+    const upcoming: HomeItem[] = [];
+    const past: HomeItem[] = [];
+
+    items.forEach((item) => {
+      const hasSchedule = !!item.schedule?.dateISO;
+      const d = typeof item.dday === "number" ? item.dday : 0;
+
+      if (!hasSchedule) {
+        unscheduled.push(item);
+      } else if (d < 0) {
+        past.push(item);
+      } else {
+        upcoming.push(item);
+      }
+    });
+
+    return { unscheduled, upcoming, past };
+  }, [items]);
+
+  // ───────────────── 위젯용 요약 데이터 계산 ─────────────────
+  const summary: HomeSummary = useMemo(() => {
+    if (!items.length) {
+      return {
+        todoScheduleCount: 0,
+        upcomingThisWeekCount: 0,
+        thisMonthCount: 0,
+        avgResponseRate: null,
+      };
+    }
+
+    const today = new Date();
+    const thisYear = today.getFullYear();
+    const thisMonth = today.getMonth(); // 0~11
+
+    let todoScheduleCount = 0;
+    let upcomingThisWeekCount = 0;
+    let thisMonthCount = 0;
+
+    let responseRateSum = 0;
+    let responseRateCnt = 0;
+
+    items.forEach((item) => {
+      const hasSchedule = !!item.schedule?.dateISO;
+      const d = typeof item.dday === "number" ? item.dday : 0;
+
+      if (!hasSchedule) {
+        todoScheduleCount += 1;
+      }
+
+      if (hasSchedule && d >= 0 && d <= 7) {
+        upcomingThisWeekCount += 1;
+      }
+
+      if (hasSchedule && item.schedule?.dateISO) {
+        const dt = new Date(item.schedule.dateISO);
+        if (dt.getFullYear() === thisYear && dt.getMonth() === thisMonth) {
+          thisMonthCount += 1;
+        }
+      }
+
+      // 참가자 응답률 (available_times 를 1개라도 넣은 참가자 / 전체 참가자)
+      const participants = item.participants as ParticipantWithTimes[];
+      if (participants && participants.length > 0) {
+        const answered = participants.filter(
+          (p) => p.available_times && p.available_times.length > 0
+        ).length;
+        const rate = (answered / participants.length) * 100;
+        responseRateSum += rate;
+        responseRateCnt += 1;
+      }
+    });
+
+    const avgResponseRate =
+      responseRateCnt > 0
+        ? Math.round(responseRateSum / responseRateCnt)
+        : null;
+
+    return {
+      todoScheduleCount,
+      upcomingThisWeekCount,
+      thisMonthCount,
+      avgResponseRate,
+    };
+  }, [items]);
+
   return (
     <HomeView
       loading={loading}
       error={error}
       items={items}
+      grouped={grouped}
+      summary={summary}
       onRetry={fetchList}
       onDelete={handleDelete}
     />

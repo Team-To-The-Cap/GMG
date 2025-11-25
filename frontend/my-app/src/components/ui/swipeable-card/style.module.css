@@ -4,6 +4,7 @@
   position: relative;
   width: 100%;
   overflow: hidden;
+  z-index: 0; /* ✅ 기본은 0으로 명시 */
 }
 
 /* 오른쪽 액션 영역 (기본: 삭제) */
@@ -32,7 +33,7 @@
 /* 실제 카드 영역 */
 .swipeContent {
   position: relative;
-  z-index: 1;
-  touch-action: pan-y; /* 수직 스크롤은 유지, 좌우는 우리가 처리 */
+  z-index: 0; /* ✅ 1 → 0 (또는 아예 z-index 줄 삭제) */
+  touch-action: pan-y;
   transition: transform 150ms ease-out;
 }
