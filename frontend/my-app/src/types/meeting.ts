@@ -32,11 +32,11 @@ export type MeetingPlace = {
   id: number;
   meeting_id: number;
   name: string;
-  address: string;
   latitude: number;
   longitude: number;
-  category: string;
-  duration: number;
+  address: string;
+  category?: string | null;
+  duration?: number | null;
 };
 
 /** 서버 Must-Visit Place 타입 */

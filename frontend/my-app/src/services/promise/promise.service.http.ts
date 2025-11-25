@@ -8,7 +8,11 @@ import type {
   Course,
 } from "@/types/promise";
 import type { Participant, ParticipantTime } from "@/types/participant";
-import type { MeetingPlan, MeetingResponse } from "@/types/meeting";
+import type {
+  MeetingPlace,
+  MeetingPlan,
+  MeetingResponse,
+} from "@/types/meeting";
 
 /**
  * 🔹 백엔드에서 내려주는 MeetingResponse.places 배열을
@@ -410,5 +414,41 @@ export async function deleteMustVisitPlace(
 
   await http.request(`/meetings/${mid}/must-visit-places/${pid}`, {
     method: "DELETE",
+  });
+}
+// 🔹 약속에 연결된 장소(코스 장소) 목록 조회
+export async function getMeetingPlaces(
+  promiseId: string | number
+): Promise<MeetingPlace[]> {
+  const mid = Number(promiseId);
+  if (Number.isNaN(mid)) {
+    throw new Error(`잘못된 meeting id: ${promiseId}`);
+  }
+
+  const places = await http.request<MeetingPlace[]>(`/meetings/${mid}/places`);
+  return places;
+}
+
+// 🔹 선택한 장소를 MeetingPlan의 확정 장소로 반영
+export async function setMeetingFinalPlace(
+  promiseId: string | number,
+  payload: { address: string; lat: number; lng: number }
+): Promise<void> {
+  const mid = Number(promiseId);
+  if (Number.isNaN(mid)) {
+    throw new Error(`잘못된 meeting id: ${promiseId}`);
+  }
+
+  await http.request(`/meetings/${mid}/plans`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      address: payload.address,
+      latitude: payload.lat,
+      longitude: payload.lng,
+      // meeting_time, total_time 등은 건드리지 않으면 기존 값 유지
+    }),
   });
 }
