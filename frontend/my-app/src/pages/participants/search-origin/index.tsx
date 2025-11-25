@@ -55,23 +55,16 @@ export default function SearchOriginPage() {
     [location.pathname]
   );
 
-  // ───────────────── 참가자별 storage ID 계산 ─────────────────
-  // - 기존 참가자 수정: editParticipantId → "id-<서버ID>"
-  // - 신규 참가자: participantDraftId (없으면 여기서 새로 생성)
-  const [localDraftId] = useState(() => {
-    if (baseState.participantDraftId) return baseState.participantDraftId;
-    if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-      return crypto.randomUUID();
-    }
-    return `draft-${Math.random().toString(36).slice(2)}`;
-  });
-
+  // ───────────────── 참가자별 storage ID 계산 (state만 사용) ─────────────────
   const participantStorageId = useMemo(() => {
     if (baseState.editParticipantId != null) {
       return `id-${baseState.editParticipantId}`;
     }
-    return localDraftId;
-  }, [baseState.editParticipantId, localDraftId]);
+    if (baseState.participantDraftId) {
+      return baseState.participantDraftId;
+    }
+    return "draft-unknown";
+  }, [baseState.editParticipantId, baseState.participantDraftId]);
 
   // ───────────────── 디바운스 검색 ─────────────────
   useEffect(() => {

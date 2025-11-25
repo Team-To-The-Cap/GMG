@@ -1,4 +1,3 @@
-// src/pages/participants/add-origin/index.tsx
 import { useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { MapPin, ChevronRight, CheckCircle2 } from "lucide-react";
@@ -26,24 +25,19 @@ export default function AddParticipantOriginPage() {
   const nameDraft = state.nameDraft ?? "";
   const effectivePromiseId = promiseId ?? "no-meeting";
 
-  // 🔹 이 화면 안에서 "신규 참가자용 draft id"를 한 번만 만든다
-  const [localDraftId] = useState(() => {
-    if (state.participantDraftId) return state.participantDraftId;
-    if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-      return crypto.randomUUID();
-    }
-    return `draft-${Math.random().toString(36).slice(2)}`;
-  });
-
-  // 🔹 참가자별 storage ID
+  // 🔹 참가자별 storage ID (절대 새로 만들지 않고 state만 사용)
   // - 기존 참가자 수정: "id-<서버ID>"
-  // - 신규 참가자: 위에서 만든 localDraftId
+  // - 신규 참가자: AddParticipantStartPage 에서 만든 participantDraftId
+  // - 둘 다 없으면 fallback "draft-unknown" (이 경우에는 기록이 공유될 수 있으니 이론상 거의 안 타야 함)
   const participantStorageId = useMemo(() => {
     if (state.editParticipantId != null) {
       return `id-${state.editParticipantId}`;
     }
-    return localDraftId;
-  }, [state.editParticipantId, localDraftId]);
+    if (state.participantDraftId) {
+      return state.participantDraftId;
+    }
+    return "draft-unknown";
+  }, [state.editParticipantId, state.participantDraftId]);
 
   // ───────────────── 저장된 장소 목록 (참가자별) ─────────────────
   const baseSaved = useMemo<SavedPlace[]>(() => {
@@ -84,7 +78,7 @@ export default function AddParticipantOriginPage() {
       };
     }
 
-    return raw;
+    return raw as SavedPlace;
   }, [state.selectedOrigin, baseSaved]);
 
   // ───────────────── 화면에 보여줄 saved 리스트 ─────────────────
@@ -138,7 +132,7 @@ export default function AddParticipantOriginPage() {
         ...state,
         savedPlaces: saved,
         selectedOrigin: selectedPlace ?? normalizedSelected ?? null,
-        // ✅ 여기서도 항상 동일한 participantDraftId를 넘겨준다
+        // ✅ 여기서도 항상 동일한 participantDraftId를 넘겨준다 (신규 참가자일 때)
         participantDraftId: state.participantDraftId ?? participantStorageId,
       },
     });
@@ -166,10 +160,11 @@ export default function AddParticipantOriginPage() {
       state: {
         ...state,
         nameDraft,
-        selectedOrigin: selectedPlace.address,
+        // SavedPlace 객체 그대로 넘김
+        selectedOrigin: selectedPlace,
         selectedTransportation: transportation,
         savedPlaces: saved,
-        // ✅ 여기서도 같은 draftId를 넘겨준다
+        // ✅ 같은 draftId 유지
         participantDraftId: state.participantDraftId ?? participantStorageId,
       },
     });
