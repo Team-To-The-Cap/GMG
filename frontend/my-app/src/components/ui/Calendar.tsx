@@ -68,6 +68,13 @@ export function Calendar({
   const [dragMode, setDragMode] = useState<DragMode>("idle");
   const isPointerDown = useRef(false);
 
+  // 오늘(00:00 기준) — 지난 날짜 회색 처리용
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+
   React.useEffect(() => {
     // initialSelected가 변경될 때마다 상태를 재설정
     setSelected(new Set(initialSelected));
@@ -86,12 +93,12 @@ export function Calendar({
     return Math.max(...values);
   }, [availability, maxAvailability]);
 
-  // ✅ 인원 수에 따른 색상 (모두 가능 / 일부 가능)
+  // ✅ 인원 수에 따른 색상 (결과 화면용)
   const colorFor = (day: number) => {
     if (!availability || maxAvail <= 0) return null;
 
     const cnt = availability[day] ?? 0;
-    if (cnt <= 0) return null; // 아무도 불가능 → 색 없음
+    if (cnt <= 0) return null;
 
     const ratio = cnt / maxAvail; // 0~1
     // base: 연한 파랑, ratio 높을수록 진하게
@@ -179,14 +186,46 @@ export function Calendar({
           <div key={rIdx} className="grid grid-cols-7 gap-px">
             {row.map((cell, cIdx) => {
               const day = cell.day ?? 0;
-              const isSelected = !!cell.day && selected.has(day);
               const isDisabled = !!cell.disabled;
+
+              const cellDate =
+                cell.day != null ? new Date(year, month, day) : undefined;
+
+              if (cellDate) {
+                cellDate.setHours(0, 0, 0, 0);
+              }
+
+              // ✅ 오늘 기준 이전 날짜?
+              const isPast = !!cellDate && cellDate.getTime() < today.getTime();
+
+              const isSelected = !!cell.day && !isDisabled && selected.has(day);
 
               // interactive=false일 때 availability 정보 사용
               const paint = !canInteract ? colorFor(day) : null;
 
               // 해당 날짜 가능 인원 수 (결과 표시 모드에서 뱃지)
               const cnt = availability?.[day] ?? 0;
+
+              // 스타일 계산
+              let bgColor = "transparent";
+              let textColor = "#111111";
+              let boxShadow = "none";
+
+              if (isPast) {
+                // 1) 지난 날짜: 회색 처리 (선택 가능은 유지)
+                bgColor = "#e5e7eb";
+                textColor = "#9ca3af";
+              } else if (paint) {
+                // 2) 결과 모드에서의 파랑 그라데이션
+                bgColor = paint.bg;
+                textColor = paint.fg;
+                boxShadow = "0 2px 6px rgba(0,0,0,.12)";
+              } else if (canInteract && isSelected) {
+                // 3) 드래그 선택 모드에서 선택된 날
+                bgColor = "#3e93fa";
+                textColor = "#ffffff";
+                boxShadow = "0 2px 6px rgba(0,0,0,.12)";
+              }
 
               return (
                 <div
@@ -228,30 +267,14 @@ export function Calendar({
                           ? "opacity-40 pointer-events-none"
                           : canInteract
                           ? "hover:bg-blue-100"
-                          : "",
-                        canInteract
-                          ? isSelected
-                            ? "bg-[#3e93fa] text-white"
-                            : "bg-transparent text-[#111]"
-                          : "bg-transparent"
+                          : ""
                       )}
                       style={{
                         border: "0 none",
                         outline: "none",
-                        backgroundColor: paint
-                          ? paint.bg
-                          : canInteract && isSelected
-                          ? "#3e93fa"
-                          : "transparent",
-                        color: paint
-                          ? paint.fg
-                          : canInteract && isSelected
-                          ? "#fff"
-                          : undefined,
-                        boxShadow:
-                          paint || (canInteract && isSelected)
-                            ? "0 2px 6px rgba(0,0,0,.12)"
-                            : "none",
+                        backgroundColor: bgColor,
+                        color: textColor,
+                        boxShadow,
                         cursor: canInteract ? "pointer" : "default",
                       }}
                     >

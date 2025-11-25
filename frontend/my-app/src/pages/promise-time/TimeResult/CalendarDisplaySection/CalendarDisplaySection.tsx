@@ -180,10 +180,10 @@ export const CalendarDisplaySection = (): JSX.Element => {
 
   const handleDayClick = (day: number) => {
     // 이 달력에서 색칠된 날(= map에 있는 날)만 클릭 가능
-    if (currentMonthAvailability[day] == null) {
-      setClickedDay(null);
-      return;
-    }
+    // if (currentMonthAvailability[day] == null) {
+    //   setClickedDay(null);
+    //   return;
+    // }
     setClickedDay((prev) => (prev === day ? null : day));
   };
 
