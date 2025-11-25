@@ -16,6 +16,9 @@ import {
 import { usePromiseMainController } from "@/pages/promise-main/index";
 import type { Participant } from "@/types/participant";
 
+// 🔹 새로 추가: 출발 장소 캐시 정리 유틸
+import { clearAllPlacesForPromise } from "@/utils/participant-place-storage";
+
 export default function CreatePromiseMain() {
   const { promiseId } = useParams();
   const navigate = useNavigate();
@@ -86,7 +89,6 @@ export default function CreatePromiseMain() {
 
             finalData = {
               // 1) 서버에서 온 최신 데이터 기준
-              //    (mustVisitPlaces, plan, places 등 서버 필드 유지)
               ...res,
               // 2) 그 위에 클라에서 임시로 수정해 둔 필드만 얹기
               ...draftRest,
@@ -185,11 +187,8 @@ export default function CreatePromiseMain() {
     if (!promiseId) return;
 
     try {
-      // 공통 컨트롤러 로직 사용 (여기서 성공/실패 알럿, calculatingPlan 토글까지 처리됨)
       await baseOnCalculatePlan();
 
-      // baseOnCalculatePlan이 에러 없이 끝났다면,
-      // 최신 data를 draft에만 동기화
       setData((prev) => {
         if (!prev) return prev;
         persistDraft(prev);
@@ -215,7 +214,10 @@ export default function CreatePromiseMain() {
       localStorage.removeItem(DRAFT_PROMISE_DATA_PREFIX + savedDraftId);
     }
 
-    // 3) BottomNav의 handleCreateClick 로직과 동일하게,
+    // 🔹 3) 이 약속 관련 출발 장소 캐시도 정리
+    clearAllPlacesForPromise(currentId);
+
+    // 4) BottomNav의 handleCreateClick 로직과 동일하게,
     //    "약속 추가" 화면을 다시 띄우기
 
     // 혹시 남아 있는 draft 가 있다면 그걸로 이동
@@ -244,6 +246,10 @@ export default function CreatePromiseMain() {
       const cleared = await resetPromiseOnServer(data);
       setData(cleared);
       persistDraft(cleared);
+
+      // 🔹 초기화되었으니까 출발 장소 캐시도 함께 정리
+      clearAllPlacesForPromise(cleared.id);
+
       alert("약속 내용이 모두 초기화되었습니다.");
     } catch (e: any) {
       console.error(e);

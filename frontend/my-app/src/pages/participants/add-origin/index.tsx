@@ -4,12 +4,14 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { MapPin, ChevronRight, CheckCircle2 } from "lucide-react";
 import Button from "@/components/ui/button";
 
-import {
-  loadSavedPlacesForParticipant,
-  saveSavedPlacesForParticipant,
-  type SavedPlace,
-} from "@/lib/user-storage";
 import type { ParticipantLocationState } from "@/types/participant";
+
+// 🔹 새 참가자별 출발지 스토리지 유틸
+import {
+  loadParticipantPlaces,
+  saveParticipantPlaces,
+  type StoredParticipantPlace as SavedPlace,
+} from "@/utils/participant-place-storage";
 
 export default function AddParticipantOriginPage() {
   const navigate = useNavigate();
@@ -18,35 +20,38 @@ export default function AddParticipantOriginPage() {
 
   const state = (location.state || {}) as ParticipantLocationState & {
     participantDraftId?: string | null;
+    savedPlaces?: SavedPlace[];
   };
-  const nameDraft = state.nameDraft ?? "";
 
-  // 🔹 참가자 구분용 key base
-  //   - 기존 참가자 수정: state.editParticipantId 사용 → "id-111"
-  //   - 신규 참가자: participantDraftId 사용 → "draft-xxxx"
-  const participantKeyBase = useMemo(() => {
+  const nameDraft = state.nameDraft ?? "";
+  const effectivePromiseId = promiseId ?? "no-meeting";
+
+  // 🔹 이 화면 안에서 "신규 참가자용 draft id"를 한 번만 만든다
+  const [localDraftId] = useState(() => {
+    if (state.participantDraftId) return state.participantDraftId;
+    if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+      return crypto.randomUUID();
+    }
+    return `draft-${Math.random().toString(36).slice(2)}`;
+  });
+
+  // 🔹 참가자별 storage ID
+  // - 기존 참가자 수정: "id-<서버ID>"
+  // - 신규 참가자: 위에서 만든 localDraftId
+  const participantStorageId = useMemo(() => {
     if (state.editParticipantId != null) {
       return `id-${state.editParticipantId}`;
     }
-    if (state.participantDraftId) {
-      return state.participantDraftId;
-    }
-    return "draft-unknown";
-  }, [state.editParticipantId, state.participantDraftId]);
-
-  // 최종 localStorage key: meetingId + participantKeyBase
-  const participantKey = useMemo(() => {
-    const baseMeetingId = promiseId ?? "no-meeting";
-    return `${baseMeetingId}:${participantKeyBase}`;
-  }, [promiseId, participantKeyBase]);
+    return localDraftId;
+  }, [state.editParticipantId, localDraftId]);
 
   // ───────────────── 저장된 장소 목록 (참가자별) ─────────────────
   const baseSaved = useMemo<SavedPlace[]>(() => {
     if (state.savedPlaces && state.savedPlaces.length) {
       return state.savedPlaces;
     }
-    return loadSavedPlacesForParticipant(participantKey);
-  }, [state.savedPlaces, participantKey]);
+    return loadParticipantPlaces(effectivePromiseId, participantStorageId);
+  }, [state.savedPlaces, effectivePromiseId, participantStorageId]);
 
   // 🔹 selectedOrigin: string | SavedPlace | null → SavedPlace | null 로 정규화
   const normalizedSelected = useMemo<SavedPlace | null>(() => {
@@ -71,6 +76,7 @@ export default function AddParticipantOriginPage() {
 
       if (found) return found;
 
+      // 문자열만 넘어왔고, 기존 saved 에 없으면 ad-hoc SavedPlace 로 취급
       return {
         id: norm,
         name: norm,
@@ -132,7 +138,8 @@ export default function AddParticipantOriginPage() {
         ...state,
         savedPlaces: saved,
         selectedOrigin: selectedPlace ?? normalizedSelected ?? null,
-        participantDraftId: state.participantDraftId ?? null,
+        // ✅ 여기서도 항상 동일한 participantDraftId를 넘겨준다
+        participantDraftId: state.participantDraftId ?? participantStorageId,
       },
     });
   };
@@ -146,7 +153,7 @@ export default function AddParticipantOriginPage() {
     if (!selectedPlace) return;
 
     // ✅ 참가자별 저장소에 현재 saved 리스트 저장
-    saveSavedPlacesForParticipant(participantKey, saved);
+    saveParticipantPlaces(effectivePromiseId, participantStorageId, saved);
 
     const segments = location.pathname.split("/");
     const mode = segments[1];
@@ -162,7 +169,8 @@ export default function AddParticipantOriginPage() {
         selectedOrigin: selectedPlace.address,
         selectedTransportation: transportation,
         savedPlaces: saved,
-        participantDraftId: state.participantDraftId ?? participantKeyBase,
+        // ✅ 여기서도 같은 draftId를 넘겨준다
+        participantDraftId: state.participantDraftId ?? participantStorageId,
       },
     });
   };

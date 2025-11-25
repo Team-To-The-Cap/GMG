@@ -4,16 +4,21 @@ import { useEffect, useRef, useState, useMemo } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Search, MapPin } from "lucide-react";
 import styles from "./style.module.css";
-import {
-  loadSavedPlacesForParticipant,
-  saveSavedPlacesForParticipant,
-  type SavedPlace,
-  MAX_SAVED_PLACES,
-} from "@/lib/user-storage";
+
 import type { ParticipantLocationState } from "@/types/participant";
 import { addMustVisitPlace } from "@/services/promise/promise.service";
 
+// 🔹 새 참가자별 출발지 스토리지 유틸
+import {
+  loadParticipantPlaces,
+  saveParticipantPlaces,
+  type StoredParticipantPlace as SavedPlace,
+} from "@/utils/participant-place-storage";
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
+
+// 🔹 참가자별 저장소에서도 최대 몇 개까지 유지할지 (MyPage 쪽과 맞춤)
+const MAX_SAVED_PLACES = 3;
 
 type Item = {
   title: string;
@@ -28,7 +33,10 @@ export default function SearchOriginPage() {
   const navigate = useNavigate();
   const { promiseId } = useParams();
   const location = useLocation();
-  const baseState = (location.state || {}) as ParticipantLocationState;
+  const baseState = (location.state || {}) as ParticipantLocationState & {
+    participantDraftId?: string | null;
+    savedPlaces?: SavedPlace[];
+  };
 
   const [q, setQ] = useState("");
   const [items, setItems] = useState<Item[]>([]);
@@ -36,6 +44,8 @@ export default function SearchOriginPage() {
   const [err, setErr] = useState<string | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
+
+  const effectivePromiseId = promiseId ?? "no-meeting";
 
   const onBack = () => navigate(-1);
 
@@ -45,20 +55,23 @@ export default function SearchOriginPage() {
     [location.pathname]
   );
 
-  // 🔹 참가자 구분용 key
-  //   - 원칙: AddParticipantOriginPage 에서 만든 participantKey를 그대로 사용
-  //   - 혹시나 없는 상태로 진입했다면, meetingId + draft-unknown 으로 최소한 분리
-  const participantKey = useMemo(() => {
-    if (baseState.participantKey) return baseState.participantKey;
+  // ───────────────── 참가자별 storage ID 계산 ─────────────────
+  // - 기존 참가자 수정: editParticipantId → "id-<서버ID>"
+  // - 신규 참가자: participantDraftId (없으면 여기서 새로 생성)
+  const [localDraftId] = useState(() => {
+    if (baseState.participantDraftId) return baseState.participantDraftId;
+    if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+      return crypto.randomUUID();
+    }
+    return `draft-${Math.random().toString(36).slice(2)}`;
+  });
 
-    const baseMeetingId = promiseId ?? "no-meeting";
-    const participantIdPart =
-      baseState.editParticipantId != null
-        ? `id-${baseState.editParticipantId}`
-        : "draft-unknown";
-
-    return `${baseMeetingId}:${participantIdPart}`;
-  }, [baseState.participantKey, baseState.editParticipantId, promiseId]);
+  const participantStorageId = useMemo(() => {
+    if (baseState.editParticipantId != null) {
+      return `id-${baseState.editParticipantId}`;
+    }
+    return localDraftId;
+  }, [baseState.editParticipantId, localDraftId]);
 
   // ───────────────── 디바운스 검색 ─────────────────
   useEffect(() => {
@@ -140,7 +153,7 @@ export default function SearchOriginPage() {
     const prevSaved: SavedPlace[] =
       baseState.savedPlaces && baseState.savedPlaces.length
         ? baseState.savedPlaces
-        : loadSavedPlacesForParticipant(participantKey);
+        : loadParticipantPlaces(effectivePromiseId, participantStorageId);
 
     // 🔹 중복 제거 후 맨 앞에 새 place 추가
     let nextSaved = prevSaved.filter((p) => p.id !== place.id);
@@ -152,7 +165,7 @@ export default function SearchOriginPage() {
     }
 
     // 🔹 참가자별 localStorage 에도 반영
-    saveSavedPlacesForParticipant(participantKey, nextSaved);
+    saveParticipantPlaces(effectivePromiseId, participantStorageId, nextSaved);
 
     navigate(originPath, {
       replace: true,
@@ -160,7 +173,9 @@ export default function SearchOriginPage() {
         ...baseState,
         selectedOrigin: place,
         savedPlaces: nextSaved, // ✅ 참가자 전용 리스트
-        participantKey, // ✅ 돌아가서도 동일 key 유지
+        // 돌아가서도 같은 참가자로 인식하도록
+        participantDraftId:
+          baseState.participantDraftId ?? participantStorageId,
       },
     });
   };
