@@ -156,12 +156,15 @@ class MeetingPlanUpdate(BaseModel):
 # ================================
 
 class MeetingPlaceCreate(BaseModel):
-    name: str
+    name: str                               # 카드용 라벨 (자동 추천 만남 장소, 자동 추천 후보 #2 ...)
     latitude: float
     longitude: float
     address: str
     category: Optional[str] = None
     duration: Optional[int] = None
+
+    # ⭐ 추가: 지하철역/POI 이름 (네이버의 "이태원역 6호선" 같은 제목용)
+    poi_name: Optional[str] = None
 
 
 class MeetingPlaceResponse(MeetingPlaceCreate):
@@ -180,6 +183,8 @@ class MeetingPlaceUpdate(BaseModel):
     category: Optional[str] = None
     duration: Optional[int] = None
 
+    # ⭐ 추가
+    poi_name: Optional[str] = None
 
 # ================================
 # MeetingMustVisitPlace 스키마

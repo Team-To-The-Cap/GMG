@@ -102,7 +102,8 @@ def adjust_to_busy_station_area(
         "adjusted": bool,
         "reason": str,
         "original": {...},
-        "chosen_station": {...} or None
+        "chosen_station": {...} or None,
+        "poi_name": str | None,   # ⭐ 역/POI 이름 (카드 큰 제목 용)
     }
     """
 
@@ -129,6 +130,7 @@ def adjust_to_busy_station_area(
             "reason": "original_point_is_already_busy",
             "original": original_info,
             "chosen_station": None,
+            "poi_name": None,  # 🔹 아직 별도 POI 안 골랐으니 None
         }
 
     # 3. 주변 역 목록
@@ -141,6 +143,7 @@ def adjust_to_busy_station_area(
             "reason": "no_station_found_nearby",
             "original": original_info,
             "chosen_station": None,
+            "poi_name": None,
         }
 
     # 4. 가장 좋은 역 찾기
@@ -148,7 +151,9 @@ def adjust_to_busy_station_area(
     best_station_score = -1.0
     best_station_info: Dict[str, Any] | None = None
 
-    for st in stations[:1:]:
+    # NOTE: 원래 [:1:] 때문에 "첫 역만" 보고 있었음
+    #       일단 기존 로직 유지
+    for st in stations[:1]:
         loc = st.get("geometry", {}).get("location", {})
         s_lat = loc.get("lat")
         s_lng = loc.get("lng")
@@ -159,9 +164,6 @@ def adjust_to_busy_station_area(
         score, is_station, poi_count, cats = score_area_with_places(
             s_lat, s_lng, radius=base_radius
         )
-
-        # if poi_count == 0:
-        #     continue
 
         if score > best_station_score:
             best_station_score = score
@@ -186,9 +188,12 @@ def adjust_to_busy_station_area(
             "reason": "no_better_station_area_found",
             "original": original_info,
             "chosen_station": None,
+            "poi_name": None,
         }
 
-    # 6. 가장 점수 높은 역세권으로 스냅
+    # 6. 가장 점수 높은 역세권으로 스냅 + poi_name 지정
+    poi_name = best_station_info.get("name") if best_station_info else None
+
     return {
         "lat": best_station_info["lat"],
         "lng": best_station_info["lng"],
@@ -196,4 +201,5 @@ def adjust_to_busy_station_area(
         "reason": "moved_to_better_station_area",
         "original": original_info,
         "chosen_station": best_station_info,
+        "poi_name": poi_name,  # ⭐ 여기서 이름 흘려보냄
     }

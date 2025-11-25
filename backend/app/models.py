@@ -102,31 +102,22 @@ class MeetingPlan(Base):
 
 # -------------------------------------------------
 class MeetingPlace(Base):
-    """
-    Meeting_Place 테이블 모델
-    - 약속 장소(들)의 상세 정보를 저장합니다.
-    - (e.g., 코스의 각 경유지)
-    """
-    
-    # 이미지의 '테이블명' 컬럼 기준
-    __tablename__ = "Meeting_Places"
+    __tablename__ = "meeting_places"
 
-    # id (Primary Key)
     id = Column(Integer, primary_key=True, index=True)
-    meeting_id = Column(Integer, ForeignKey("meetings.id", ondelete="CASCADE"), nullable=False, index=True)
-    name = Column(VARCHAR(255), nullable=False)
+    meeting_id = Column(Integer, ForeignKey("meetings.id", ondelete="CASCADE"))
+
+    name = Column(String, nullable=False)          # 자동 추천 만남 장소, 자동 추천 후보 #2 ...
+    poi_name = Column(String, nullable=True)       # ⭐ 이태원역 6호선, 홍대입구역 9번 출구 등
+    address = Column(String, nullable=True)
+
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
-    address = Column(VARCHAR(255), nullable=False)
-    category = Column(VARCHAR(255), nullable=True)
+
+    category = Column(String, nullable=True)
     duration = Column(Integer, nullable=True)
 
-    # --- 관계 설정 ---
-
-    # MeetingPlace -> Meeting (N:1)
-    # 이 장소가 어떤 약속(Meeting)에 속하는지
     meeting = relationship("Meeting", back_populates="places")
-
 
 
 class Participant(Base):

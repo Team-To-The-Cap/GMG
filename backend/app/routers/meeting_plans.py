@@ -1,18 +1,16 @@
 # app/routers/meetings_plan.py
 
-
-# 1. [추가] HTTPException과 Eager Loading을 위한 joinedload 임포트
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload 
-from typing import List
+from typing import List, Tuple
+from datetime import datetime, date, time, timedelta  # ⬅️ 추가
 
 from ..database import get_db
 from .. import schemas
 from .. import models
-from .calc_func import *
+from .calc_func import *  # (나중에 정리해도 되지만 지금은 이대로 ok)
 from typing import Optional
 import requests
-
 
 NAVER_MAP_CLIENT_ID = "o3qhd1pz6i"
 NAVER_MAP_CLIENT_SECRET = "CgU14l9YJBqqNetcd8KiZ0chNLJmYBwmy9HkAjg5"
@@ -110,6 +108,17 @@ def create_plan_for_meeting(
     """
     meeting = (
         db.query(models.Meeting)
+        .options(
+            # 참가자 + 참가자별 available_times 까지 한번에 로드하고 싶으면:
+            joinedload(models.Meeting.participants).joinedload(
+                models.Participant.available_times
+            ),
+
+            # Meeting.plan + plan.available_dates 까지 eager load
+            joinedload(models.Meeting.plan).joinedload(
+                models.MeetingPlan.available_dates
+            ),
+        )
         .filter(models.Meeting.id == meeting_id)
         .first()
     )
@@ -177,8 +186,6 @@ def update_meeting_plan(
     return db_plan
 
 
-
-
 @router.post(
     "/{meeting_id}/plans/calculate",
     response_model=schemas.MeetingPlanResponse,
@@ -192,16 +199,18 @@ def create_auto_plan_for_meeting(
 
     1) Meeting + Participant + ParticipantTime 조회
     2) 공통 가능한 날짜(date 리스트) 계산
-    3) 출발 좌표 있는 참가자만 모아서 중간 지점 계산 (없으면 장소 미정)
+    3) 출발 좌표 있는 참가자만 모아서 도로 그래프 중간 지점 + 후보 장소 계산
     4) MeetingPlan + MeetingPlanAvailableDate 저장
-    5) 최종 MeetingPlan 반환
+    5) MeetingPlace(places) 저장
+    6) 최종 MeetingPlan(available_dates 포함)을 반환
     """
 
+    # 1. Meeting + 참가자 + 참가자별 available_times 로드
     meeting = (
         db.query(models.Meeting)
         .options(
-            joinedload(models.Meeting.participants),
-            joinedload(models.Meeting.participant_times),
+            joinedload(models.Meeting.participants)
+                .joinedload(models.Participant.available_times),
         )
         .filter(models.Meeting.id == meeting_id)
         .first()
@@ -211,57 +220,108 @@ def create_auto_plan_for_meeting(
         raise HTTPException(status_code=404, detail="Meeting not found")
 
     if not meeting.participants:
-        raise HTTPException(status_code=400, detail="참석자가 없습니다.")
+        raise HTTPException(status_code=400, detail="No participants in this meeting")
 
-    # 1) 공통 가능한 날짜 계산
+    # 2. 공통 가능한 날짜 계산
     common_dates = get_common_available_dates_for_meeting(meeting)
 
-    # 공통 날짜가 있으면 가장 이른 날짜 + 19:00, 없으면 일정 미정
     if common_dates:
         earliest_date = common_dates[0]
         meeting_time = datetime.combine(earliest_date, time(hour=19, minute=0))
     else:
+        # 공통 날짜가 전혀 없는 경우: 시간 미정으로 두고 계속 진행
         meeting_time = None
 
-    # 2) 출발 좌표 있는 참가자만 모음
+    # 3. 출발 좌표 모으기 (lon, lat)
     coords: List[Tuple[float, float]] = []
     for p in meeting.participants:
         if p.start_latitude is None or p.start_longitude is None:
             continue
-        # (lon, lat)
         coords.append((p.start_longitude, p.start_latitude))
 
-    # 기본값: 장소 미정
     center_lat: float | None = None
     center_lon: float | None = None
     addr: str = ""
 
-    # 3) 좌표가 하나라도 있으면 중간지점 계산
+    candidates: list[dict] = []  # MeetingPlace로 저장할 후보들
+
     if coords:
+        # 도로 그래프 위 minimax center + top_k 후보 계산
         center_result = find_road_center_node(
             G,
             coords_lonlat=coords,
             weight="length",
             return_paths=True,
-            top_k=3,
+            top_k=3,  # 상위 3개 후보까지
         )
         print(center_result)
 
-        center_lat = float(center_result["lat"])
-        center_lon = float(center_result["lon"])
+        # 대표 center (보정 전)
+        raw_center_lat = float(center_result["lat"])
+        raw_center_lon = float(center_result["lon"])
 
-        # 네이버 Reverse Geocode로 주소 가져오기 (없으면 fallback)
+        # 대표 center에 대해 한 번 보정
+        adjusted_main = center_result.get("adjusted_point") or {}
+        center_lat = float(adjusted_main.get("lat", raw_center_lat))
+        center_lon = float(adjusted_main.get("lng", raw_center_lon))
+
+        # 대표 center 기준으로 한 번만 역지오코딩 수행
         resolved = reverse_geocode_naver(center_lon, center_lat)
         addr = resolved or "자동 계산된 중간 지점"
+
+        # top_k 후보들
+        top_candidates = center_result.get("top_candidates") or []
+
+        if top_candidates:
+            for idx, cand in enumerate(top_candidates):
+                adj = cand.get("adjusted_point") or {}
+                lat = float(adj.get("lat", cand["lat"]))
+                lng = float(adj.get("lng", cand["lon"]))
+
+                # 🔹 역/POI 이름(없으면 None)
+                poi_name = adj.get("poi_name")
+
+                # 이름(라벨)
+                if idx == 0:
+                    place_name = "자동 추천 만남 장소"
+                else:
+                    place_name = f"자동 추천 후보 #{idx+1}"
+
+                # ✅ 모든 후보에 대표 addr 공통 사용
+                place_addr = addr
+
+                candidates.append(
+                    {
+                        "name": place_name,         # UI 라벨
+                        "poi_name": poi_name,       # ⭐ 카드 큰 제목용
+                        "address": place_addr,
+                        "lat": lat,
+                        "lng": lng,
+                        "category": "meeting_point",
+                        "duration": None,
+                    }
+                )
+        else:
+            # fallback: 대표 center 하나만 후보로
+            candidates.append(
+                {
+                    "name": "자동 추천 만남 장소",
+                    "poi_name": adjusted_main.get("poi_name"),
+                    "address": addr,
+                    "lat": center_lat,
+                    "lng": center_lon,
+                    "category": "meeting_point",
+                    "duration": None,
+                }
+            )
     else:
-        # 🔹 좌표가 하나도 없으면: 장소 미정
-        #    - address: "" (프론트에서 '장소 미정'으로 표시됨)
-        #    - latitude/longitude: None
+        # 출발 좌표가 하나도 없으면 장소/후보 없음
         addr = ""
         center_lat = None
         center_lon = None
+        candidates = []
 
-    # 4) MeetingPlan 생성 or 업데이트
+    # 4. MeetingPlan 생성 or 업데이트
     db_plan = (
         db.query(models.MeetingPlan)
         .filter(models.MeetingPlan.meeting_id == meeting_id)
@@ -271,8 +331,8 @@ def create_auto_plan_for_meeting(
     if db_plan is None:
         db_plan = models.MeetingPlan(
             meeting_id=meeting_id,
-            meeting_time=meeting_time,   # None 가능
-            address=addr,                # "" 이면 장소 미정
+            meeting_time=meeting_time,
+            address=addr,
             latitude=center_lat,
             longitude=center_lon,
             total_time=None,
@@ -288,13 +348,12 @@ def create_auto_plan_for_meeting(
         db.commit()
         db.refresh(db_plan)
 
-    # 5) MeetingPlanAvailableDate 갱신
+    # 5. MeetingPlanAvailableDate 갱신
     db.query(models.MeetingPlanAvailableDate).filter(
         models.MeetingPlanAvailableDate.meeting_plan_id == db_plan.id
     ).delete()
     db.commit()
 
-    # 공통 날짜가 있을 때만 available_dates 채움
     if common_dates:
         for d in common_dates:
             db_date = models.MeetingPlanAvailableDate(
@@ -302,8 +361,21 @@ def create_auto_plan_for_meeting(
                 date=d,
             )
             db.add(db_date)
-
         db.commit()
-        db.refresh(db_plan)
 
-    return db_plan
+    # 6. 계산된 후보들로 MeetingPlace 테이블 채우기
+    if candidates:
+        # 기존 places 삭제 + 새 후보들 insert
+        save_calculated_places(db, meeting_id, candidates)
+
+    # 7. available_dates까지 포함해서 MeetingPlan 다시 로딩해서 반환
+    plan_full = (
+        db.query(models.MeetingPlan)
+        .options(
+            joinedload(models.MeetingPlan.available_dates),
+        )
+        .filter(models.MeetingPlan.meeting_id == meeting_id)
+        .first()
+    )
+
+    return plan_full
