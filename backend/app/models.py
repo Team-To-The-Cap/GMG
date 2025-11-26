@@ -12,6 +12,13 @@ class Meeting(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(VARCHAR(255), nullable=True)
 
+    # ✨ 약속의 분위기 / 목적 컬럼들 (전부 nullable)
+    with_whom = Column(String(50), nullable=True)       # friends / coworkers / ...
+    purpose = Column(String(50), nullable=True)         # casual_talk / meeting / ...
+    vibe = Column(String(50), nullable=True)            # quiet / relaxed / ...
+    budget = Column(String(50), nullable=True)          # under_10 / 10_20 / ...
+    profile_memo = Column(String(1000), nullable=True)  # 자유 텍스트 메모
+
     participants = relationship(
         "Participant",
         back_populates="meeting",
@@ -34,7 +41,6 @@ class Meeting(Base):
         cascade="all, delete-orphan",
     )
 
-    # ★ 새로 추가: 반드시 가고 싶은 장소들
     must_visit_places = relationship(
         "MeetingMustVisitPlace",
         back_populates="meeting",

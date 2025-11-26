@@ -99,15 +99,27 @@ class ParticipantUpdate(BaseModel):
 class MeetingBase(BaseModel):
     name: Optional[str] = None
 
+    # ✨ 약속의 분위기/목적 관련 공통 필드
+    with_whom: Optional[str] = None   # friends, coworkers, family, couple, club ...
+    purpose: Optional[str] = None     # casual_talk, meeting, celebration ...
+    vibe: Optional[str] = None        # quiet, relaxed, lively, party ...
+    budget: Optional[str] = None      # under_10, 10_20, 20_30, 30_50, over_50
+    profile_memo: Optional[str] = None  # 자유 메모
+
 
 class MeetingCreate(MeetingBase):
-    # 'name' 필드를 MeetingBase로부터 상속받으므로 추가 내용 없음
+    # name + 위 필드들로 생성 가능
     pass
 
 
 class MeetingUpdate(BaseModel):
+    # 부분 업데이트용: 전부 Optional
     name: Optional[str] = None
-
+    with_whom: Optional[str] = None
+    purpose: Optional[str] = None
+    vibe: Optional[str] = None
+    budget: Optional[str] = None
+    profile_memo: Optional[str] = None
 
 # ==========================
 # Meeting_Plan 스키마
@@ -223,14 +235,10 @@ class MeetingResponse(MeetingBase):
     name: Optional[str] = None  # (MeetingBase에서 상속받았지만 명시적으로 다시 작성)
 
     participants: List[ParticipantResponse] = []
-
     plan: Optional[MeetingPlanResponse] = None
-
     places: List[MeetingPlaceResponse] = []
 
-    # ★ 새로 추가: 반드시 가고 싶은 장소들
     must_visit_places: List[MeetingMustVisitPlaceResponse] = []
 
     class Config:
-        # SQLAlchemy 모델 객체를 Pydantic 모델로 자동 변환
         from_attributes = True
