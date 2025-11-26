@@ -346,6 +346,30 @@ export async function calculateAutoPlan(
   return mapMeetingToPromiseDetail(meeting);
 }
 
+/**
+ * 🔹 코스 자동 계산
+ *   - POST /meetings/{id}/courses/auto
+ *   - 그 후 최신 Meeting 데이터를 다시 불러와서 PromiseDetail로 변환
+ */
+export async function calculateAutoCourse(
+  promiseId: string
+): Promise<PromiseDetail> {
+  const meetingId = Number(promiseId);
+  if (Number.isNaN(meetingId)) {
+    throw new Error(`잘못된 meeting id: ${promiseId}`);
+  }
+
+  // 1) 백엔드에 코스 자동 생성 요청
+  await http.request(`/meetings/${meetingId}/courses/auto`, {
+    method: "POST",
+  });
+
+  // 2) 코스가 MeetingPlace 테이블에 저장되었으므로,
+  //    최신 MeetingResponse를 다시 가져와서 프론트 구조로 매핑
+  const meeting = await http.request<MeetingResponse>(`/meetings/${meetingId}`);
+  return mapMeetingToPromiseDetail(meeting);
+}
+
 // 🔹 약속 이름만 수정 (HTTP 버전)
 export async function updateMeetingName(
   meetingId: string | number,

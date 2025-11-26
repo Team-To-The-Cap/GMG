@@ -50,12 +50,22 @@ export async function deleteParticipant(
     : httpImpl.deleteParticipant(promiseId, participantId);
 }
 
+/** 🔹 자동 일정/장소 계산 */
 export async function calculateAutoPlan(
   promiseId: string
 ): Promise<PromiseDetail> {
   return useMock
     ? mockImpl.calculateAutoPlan(promiseId)
     : httpImpl.calculateAutoPlan(promiseId);
+}
+
+/** 🔹 자동 코스 계산 */
+export async function calculateAutoCourse(
+  promiseId: string
+): Promise<PromiseDetail> {
+  return useMock
+    ? mockImpl.calculateAutoCourse(promiseId)
+    : httpImpl.calculateAutoCourse(promiseId);
 }
 
 export async function updateMeetingName(
@@ -95,6 +105,7 @@ export async function deleteMustVisitPlace(
     ? mockImpl.deleteMustVisitPlace(promiseId, placeId)
     : httpImpl.deleteMustVisitPlace(promiseId, placeId);
 }
+
 /** 🔹 약속에 연결된 장소(코스 장소) 목록 조회 */
 export async function getMeetingPlaces(
   promiseId: string

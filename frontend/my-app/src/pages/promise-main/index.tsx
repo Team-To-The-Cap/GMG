@@ -8,6 +8,7 @@ import {
   updateMeetingName,
   resetPromiseOnServer,
   deleteMustVisitPlace,
+  calculateAutoCourse, // ✅ 코스 자동 계산 함수 추가
 } from "@/services/promise/promise.service";
 import type { PromiseDetail, MeetingProfile } from "@/types/promise";
 
@@ -145,17 +146,27 @@ export function usePromiseMainController({
     }
   }, [promiseId, setData]);
 
-  // ✅ 코스 계산 (현재는 TODO)
+  // ✅ 코스 자동 계산
   const onCalculateCourse = useCallback(async () => {
+    if (!promiseId) return;
+
     try {
       setCalculatingCourse(true);
-      alert("코스 계산 기능은 아직 준비 중입니다.");
+
+      // 1) 백엔드에 코스 자동 생성 요청 + 최신 Meeting 불러오기
+      const updated = await calculateAutoCourse(promiseId);
+
+      // 2) 프론트 상태 갱신
+      setData(updated);
+
+      alert("코스가 계산되었습니다!");
     } catch (e: any) {
       console.error(e);
+      alert(e?.message ?? "코스 계산 중 오류가 발생했습니다.");
     } finally {
       setCalculatingCourse(false);
     }
-  }, []);
+  }, [promiseId, setData]);
 
   // ✅ 저장
   const onSave = useCallback(async () => {
