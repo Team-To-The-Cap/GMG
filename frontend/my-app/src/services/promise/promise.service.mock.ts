@@ -1,4 +1,5 @@
 // src/services/promise.service.mock.ts
+import type { MeetingPlace } from "@/types/meeting";
 import type { PromiseDetail } from "@/types/promise";
 
 export const MOCK_DB: Record<string, PromiseDetail> = {
@@ -495,4 +496,160 @@ export async function calculateAutoPlan(
 
   MOCK_DB[promiseId] = updated;
   return updated;
+}
+
+/**
+ * 🔹 약속 이름 수정 (Mock 버전)
+ */
+export async function updateMeetingName(
+  promiseId: string,
+  name: string
+): Promise<void> {
+  await delay(100);
+  const item = MOCK_DB[promiseId];
+  if (!item) {
+    throw new Error("Mock 데이터에 해당 약속이 없습니다.");
+  }
+  item.title = name;
+}
+
+// 🔹 약속 전체 초기화 (Mock 버전)
+// - 이름, 참가자, 일정, 장소, 코스 전부 비움
+export async function resetPromiseOnServer(
+  detail: PromiseDetail
+): Promise<PromiseDetail> {
+  await delay(200);
+
+  const existing = MOCK_DB[detail.id];
+  if (!existing) {
+    throw new Error("Mock 데이터에 해당 약속이 없습니다.");
+  }
+
+  const now = new Date().toISOString();
+
+  const cleared: PromiseDetail = {
+    ...existing,
+    title: "",
+    participants: [],
+    schedule: { dateISO: "" }, // 일정 미정
+    place: undefined,
+    mustVisitPlaces: [],
+    course: {
+      // 코스 구조는 유지하되 내용만 싹 비움
+      ...(existing.course ?? {
+        title: "추천 코스",
+        summary: {
+          totalMinutes: 0,
+          activityMinutes: 0,
+          travelMinutes: 0,
+        },
+        items: [],
+      }),
+      summary: {
+        totalMinutes: 0,
+        activityMinutes: 0,
+        travelMinutes: 0,
+      },
+      items: [],
+      generatedAtISO: now,
+      source: "mock-reset",
+    },
+  };
+
+  MOCK_DB[detail.id] = cleared;
+  return cleared;
+}
+// 🔹 반드시 가고 싶은 장소 추가 (Mock 버전)
+export async function addMustVisitPlace(
+  promiseId: string,
+  payload: { name: string; address?: string }
+): Promise<void> {
+  await delay(100);
+  const item = MOCK_DB[promiseId];
+  if (!item) return;
+
+  const list = item.mustVisitPlaces ?? [];
+  const id = `mv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  item.mustVisitPlaces = [
+    ...list,
+    {
+      id,
+      name: payload.name,
+      address: payload.address,
+    },
+  ];
+}
+
+// 🔹 반드시 가고 싶은 장소 삭제 (Mock 버전)
+export async function deleteMustVisitPlace(
+  promiseId: string,
+  placeId: string
+): Promise<void> {
+  await delay(100);
+  const item = MOCK_DB[promiseId];
+  if (!item || !item.mustVisitPlaces) return;
+
+  item.mustVisitPlaces = item.mustVisitPlaces.filter((p) => p.id !== placeId);
+}
+
+// 🔹 약속에 연결된 장소(코스 장소) 목록 조회 (Mock 버전)
+export async function getMeetingPlaces(
+  promiseId: string
+): Promise<MeetingPlace[]> {
+  await delay(200);
+
+  // 간단하게 약속 ID에 따라 고정된 mock 장소 몇 개 리턴
+  const mid = Number(promiseId) || 0;
+
+  return [
+    {
+      id: 1,
+      meeting_id: mid,
+      name: "강남역 2번 출구",
+      latitude: 37.498,
+      longitude: 127.028,
+      address: "서울 강남구 강남대로 396",
+      category: "activity",
+      duration: 60,
+    },
+    {
+      id: 2,
+      meeting_id: mid,
+      name: "신논현역 스타벅스",
+      latitude: 37.504,
+      longitude: 127.025,
+      address: "서울 강남구 강남대로 536",
+      category: "cafe",
+      duration: 45,
+    },
+    {
+      id: 3,
+      meeting_id: mid,
+      name: "역삼역 CGV",
+      latitude: 37.5,
+      longitude: 127.036,
+      address: "서울 강남구 테헤란로 134",
+      category: "activity",
+      duration: 120,
+    },
+  ];
+}
+
+// 🔹 선택한 장소를 MeetingPlan의 확정 장소로 반영 (Mock 버전)
+export async function setMeetingFinalPlace(
+  promiseId: string,
+  payload: { address: string; lat: number; lng: number }
+): Promise<void> {
+  await delay(100);
+  const item = MOCK_DB[promiseId];
+  if (!item) return;
+
+  // PromiseDetail.place 필드에 반영
+  item.place = {
+    name: payload.address,
+    address: payload.address,
+    lat: payload.lat,
+    lng: payload.lng,
+  };
 }
