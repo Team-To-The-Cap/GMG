@@ -13,9 +13,9 @@ import {
   ResultIcon,
   EditIcon,
 } from "@/assets/icons/icons";
-import { MapPin, ChevronRight } from "lucide-react"; // ⬅️ 추가
+import { MapPin, ChevronRight } from "lucide-react";
 import styles from "./style.module.css";
-import type { PromiseDetail } from "@/types/promise";
+import type { PromiseDetail, MeetingProfile } from "@/types/promise";
 import type { Participant } from "@/types/participant";
 import CourseSummaryCard from "@/components/ui/course-summary-card";
 import CourseDetailList from "@/components/ui/course-detail-list";
@@ -50,9 +50,19 @@ type Props = {
   isDraft?: boolean;
   onReset?: () => void;
 
-  // ⬇️ 새로 추가: 반드시 가고 싶은 장소들 (meeting 단위)
+  // 반드시 가고 싶은 장소들 (meeting 단위)
   mustVisitPlaces?: { id: string; name: string; address?: string | null }[];
   onEditMustVisitPlaces?: () => void;
+
+  // 약속 분위기 / 목적 / 예산
+  meetingProfile?: MeetingProfile;
+  onChangeMeetingProfile?: (patch: Partial<MeetingProfile>) => void;
+
+  // 🔹 프로필 칩 토글 핸들러 (컨테이너에서 주입)
+  onToggleMeetingProfileChip?: (
+    field: keyof MeetingProfile,
+    value: string
+  ) => void;
 };
 
 type State = {
@@ -95,6 +105,46 @@ function toYMD(iso?: string): string {
   const day = `${d.getDate()}`.padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
+
+// 프로필 chip 공통 타입
+type ProfileChip = {
+  label: string;
+  value: string;
+  description?: string;
+};
+
+// withWhom 칩 목록
+const WITH_WHOM_CHIPS: ProfileChip[] = [
+  { label: "친구랑", value: "friends" },
+  { label: "직장 동료랑", value: "coworkers" },
+  { label: "가족끼리", value: "family" },
+  { label: "연인이랑", value: "couple" },
+];
+
+// 목적 칩 목록
+const PURPOSE_CHIPS: ProfileChip[] = [
+  { label: "밥 먹으려고", value: "meal" },
+  { label: "술 한잔", value: "drinks" },
+  { label: "카페/수다", value: "cafe" },
+  { label: "활동/체험", value: "activity" },
+  { label: "회의/미팅", value: "meeting" },
+];
+
+// 분위기 칩 목록 (➡️ 복수 선택 허용)
+const VIBE_CHIPS: ProfileChip[] = [
+  { label: "깔깔 떠들기 좋은", value: "noisy-fun" },
+  { label: "조용하고 편안한", value: "calm" },
+  { label: "분위기 좋은", value: "mood" },
+  { label: "가성비 위주", value: "cheap" },
+];
+
+// 예산 칩 목록
+const BUDGET_CHIPS: ProfileChip[] = [
+  { label: "1만 원대", value: "1" },
+  { label: "2만 원대", value: "2" },
+  { label: "3만 원대", value: "3" },
+  { label: "4만 원 이상", value: "4" },
+];
 
 export default class PromiseMainView extends React.PureComponent<Props, State> {
   state: State = {
@@ -248,7 +298,6 @@ export default class PromiseMainView extends React.PureComponent<Props, State> {
               </div>
               <span className={styles.participantItemName}>{p.name}</span>
 
-              {/* ⬇️ 수정 버튼 */}
               <button
                 type="button"
                 className={styles.editParticipantBtn}
@@ -275,8 +324,72 @@ export default class PromiseMainView extends React.PureComponent<Props, State> {
     );
   }
 
-  // ===== 반드시 가고 싶은 장소 =====
+  // ===== 약속 분위기 / 목적 / 예산 섹션 =====
+  private renderMeetingProfileSection() {
+    const { meetingProfile, onToggleMeetingProfileChip } = this.props;
 
+    const selected = meetingProfile ?? {};
+
+    const renderChipRow = (
+      label: string,
+      field: keyof MeetingProfile,
+      chips: ProfileChip[]
+    ) => (
+      <div className={styles.profileRow}>
+        <div className={styles.profileRowLabel}>{label}</div>
+        <div className={styles.profileChipRow}>
+          {chips.map((chip) => {
+            const rawValue = selected[field] as any;
+            let isSelected = false;
+
+            // 🔹 purpose, budget, vibe 는 복수 선택 필드
+            if (field === "purpose" || field === "budget" || field === "vibe") {
+              const arr = (rawValue as string[] | undefined) ?? [];
+              isSelected = arr.includes(chip.value);
+            } else {
+              // withWhom 은 단일 선택
+              isSelected = rawValue === chip.value;
+            }
+
+            return (
+              <button
+                key={chip.value}
+                type="button"
+                className={`${styles.profileChip} ${
+                  isSelected ? styles.profileChipSelected : ""
+                }`}
+                onClick={() => onToggleMeetingProfileChip?.(field, chip.value)}
+              >
+                <span className={styles.profileChipLabel}>{chip.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+
+    return (
+      <section className={styles.section}>
+        <SectionHeader
+          icon={<ResultIcon />}
+          title="약속의 분위기와 목적"
+          size="sm"
+        />
+        <div className={styles.profileCard}>
+          {renderChipRow("누구와 모이나요?", "withWhom", WITH_WHOM_CHIPS)}
+          {renderChipRow("어떤 목적의 자리인가요?", "purpose", PURPOSE_CHIPS)}
+          {renderChipRow("어떤 분위기를 원하나요?", "vibe", VIBE_CHIPS)}
+          {renderChipRow(
+            "1인당 예산은 어느 정도인가요?",
+            "budget",
+            BUDGET_CHIPS
+          )}
+        </div>
+      </section>
+    );
+  }
+
+  // ===== 반드시 가고 싶은 장소 =====
   private renderMustVisitPlacesSection() {
     const {
       data,
@@ -285,7 +398,6 @@ export default class PromiseMainView extends React.PureComponent<Props, State> {
       onDeleteMustVisitPlace,
     } = this.props;
 
-    // 우선순위: props.mustVisitPlaces ▶ data.mustVisitPlaces ▶ []
     const rawPlaces: {
       id?: string | number;
       name: string;
@@ -295,14 +407,13 @@ export default class PromiseMainView extends React.PureComponent<Props, State> {
       ((data as any)?.mustVisitPlaces as any[]) ??
       ([] as any[]);
 
-    // ✅ (1) 중복 제거: name + address 기준으로만 유니크 처리
     const dedupedPlaces = Array.from(
       new Map(
         rawPlaces.map((p) => {
           const key = `${(p.name ?? "").trim()}-${(
             p.address ?? ""
           ).trim()}`.toLowerCase();
-          return [key, { ...p }]; // id는 그대로 두고, key만 name+address 사용
+          return [key, { ...p }];
         })
       ).values()
     );
@@ -320,7 +431,6 @@ export default class PromiseMainView extends React.PureComponent<Props, State> {
         />
 
         <div className="px-1 py-1">
-          {/* 새로운 장소 검색하기 카드 (add-origin 스타일) */}
           <button
             type="button"
             onClick={handleClickSearch}
@@ -342,7 +452,6 @@ export default class PromiseMainView extends React.PureComponent<Props, State> {
             <ChevronRight size={18} className="text-slate-400" />
           </button>
 
-          {/* 저장된 장소 리스트 */}
           {dedupedPlaces.length === 0 ? (
             <div
               className={`${styles.inputLike} ${styles.staticField}`}
@@ -393,7 +502,6 @@ export default class PromiseMainView extends React.PureComponent<Props, State> {
     const { onEditSchedule, data } = this.props;
     const { scheduleDraft } = this.state;
 
-    // 🔎 백엔드에서 계산해준 plan 안의 available_dates 길이 확인
     const plan: any = (data as any)?.plan;
     const availableDates: any[] = Array.isArray(plan?.available_dates)
       ? plan.available_dates
@@ -405,17 +513,14 @@ export default class PromiseMainView extends React.PureComponent<Props, State> {
     let human: string;
 
     if (scheduleDraft) {
-      // ✅ 사용자가 최종 날짜를 선택해서 저장한 경우
       human = new Date(scheduleDraft).toLocaleDateString("ko-KR", {
         year: "numeric",
         month: "long",
         day: "numeric",
       });
     } else if (plan && hasParticipants && availableDates.length === 0) {
-      // ✅ plan은 존재하고, 참가자도 있는데 공통 가능한 날짜가 하나도 없을 때
       human = "모두가 함께 가능한 날짜가 없어요";
     } else {
-      // ✅ 아직 자동 계산을 안 했거나, 데이터가 거의 없는 상태
       human = "날짜 미정";
     }
 
@@ -547,7 +652,6 @@ export default class PromiseMainView extends React.PureComponent<Props, State> {
   private renderFinalSaveArea() {
     const { onSave, saving, isDraft, onReset } = this.props;
 
-    // ✅ onReset이 넘어오면: 두 개 버튼 (초기화 + 저장)
     if (onReset) {
       return (
         <div
@@ -604,8 +708,8 @@ export default class PromiseMainView extends React.PureComponent<Props, State> {
       <div className={styles.container}>
         {this.renderTitleSection()}
         {this.renderParticipantsSection(data.participants)}
+        {this.renderMeetingProfileSection()}
         {this.renderMustVisitPlacesSection()}
-        {/* ⬅️ 새 섹션 */}
         <section className={styles.section}>
           <SectionHeader icon={<ResultIcon />} title="결과" size="md" />
           <div className={styles.sectionInner}>
@@ -622,25 +726,20 @@ export default class PromiseMainView extends React.PureComponent<Props, State> {
     );
   }
 }
+
 type SwipeToDeleteItemProps = {
   children: React.ReactNode;
   onDelete?: () => void;
 };
 
-/**
- * 오른쪽 → 왼쪽으로 드래그하면 "삭제" 버튼이 오른쪽에서 나타나는 래퍼
- * - 모바일: 터치 드래그
- * - 데스크탑: 마우스 드래그
- */
 function SwipeToDeleteItem({ children, onDelete }: SwipeToDeleteItemProps) {
   const [translateX, setTranslateX] = React.useState(0);
   const [dragging, setDragging] = React.useState(false);
   const startXRef = React.useRef(0);
 
-  const MAX_LEFT = -80; // 왼쪽으로 최대 80px
-  const THRESHOLD = -40; // -40px 이상 드래그되면 열린 상태 유지
+  const MAX_LEFT = -80;
+  const THRESHOLD = -40;
 
-  // ───────── 터치 이벤트 ─────────
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     setDragging(true);
     startXRef.current = e.touches[0].clientX;
@@ -652,10 +751,8 @@ function SwipeToDeleteItem({ children, onDelete }: SwipeToDeleteItemProps) {
     const diff = currentX - startXRef.current;
 
     if (diff < 0) {
-      // 오른쪽 -> 왼쪽으로 드래그할 때만
       setTranslateX(Math.max(diff, MAX_LEFT));
     } else {
-      // 오른쪽으로 밀면 다시 닫힘
       setTranslateX(0);
     }
   };
@@ -669,7 +766,6 @@ function SwipeToDeleteItem({ children, onDelete }: SwipeToDeleteItemProps) {
     }
   };
 
-  // ───────── 마우스 이벤트 (데스크탑용) ─────────
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     setDragging(true);
     startXRef.current = e.clientX;
@@ -687,17 +783,7 @@ function SwipeToDeleteItem({ children, onDelete }: SwipeToDeleteItemProps) {
     }
   };
 
-  const handleMouseUp = () => {
-    if (!dragging) return;
-    setDragging(false);
-    if (translateX <= THRESHOLD) {
-      setTranslateX(MAX_LEFT);
-    } else {
-      setTranslateX(0);
-    }
-  };
-
-  const handleMouseLeave = () => {
+  const handleMouseUpOrLeave = () => {
     if (!dragging) return;
     setDragging(false);
     if (translateX <= THRESHOLD) {
@@ -709,7 +795,6 @@ function SwipeToDeleteItem({ children, onDelete }: SwipeToDeleteItemProps) {
 
   return (
     <div className={styles.swipeRow}>
-      {/* 뒤에 깔려있는 삭제 버튼 */}
       <button
         type="button"
         className={styles.swipeDeleteBtn}
@@ -718,7 +803,6 @@ function SwipeToDeleteItem({ children, onDelete }: SwipeToDeleteItemProps) {
         삭제
       </button>
 
-      {/* 실제 리스트 아이템 (좌우 슬라이드) */}
       <div
         className={styles.swipeContent}
         style={{ transform: `translateX(${translateX}px)` }}
@@ -727,8 +811,8 @@ function SwipeToDeleteItem({ children, onDelete }: SwipeToDeleteItemProps) {
         onTouchEnd={handleTouchEnd}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave}
+        onMouseUp={handleMouseUpOrLeave}
+        onMouseLeave={handleMouseUpOrLeave}
       >
         {children}
       </div>
