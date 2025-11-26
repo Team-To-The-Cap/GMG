@@ -375,32 +375,6 @@
   font-weight: 500;
 }
 
-/* 메모 영역 */
-.profileMemoRow {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-/* 메모 입력창 */
-.profileMemoTextarea {
-  width: 100%;
-  resize: vertical;
-  min-height: 60px;
-  padding: 8px 10px;
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
-  font-size: 13px;
-  line-height: 1.4;
-  outline: none;
-  background: #fff;
-}
-
-.profileMemoTextarea:focus-visible {
-  border-color: var(--primary, #3b82f6);
-  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--ring, rgba(59, 130, 246, 0.3));
-}
-
 /* (구버전 클래스들: 혹시 다른 곳에서 쓰고 있을 수 있어서 유지) */
 
 .profileSection {

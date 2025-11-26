@@ -88,6 +88,28 @@ function buildCourseFromPlaces(meeting: MeetingResponse): Course {
   };
 }
 
+/** 🔹 서버의 "a,b,c" 같은 string을 string[]로 파싱 */
+function parseMultiField(raw?: string | null): string[] {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => !!s);
+}
+
+/** 🔹 프론트의 string | string[] 값을 백엔드용 string으로 직렬화 */
+function serializeMultiField(val: unknown): string | null {
+  if (Array.isArray(val)) {
+    const arr = (val as string[]).map((s) => s.trim()).filter((s) => !!s);
+    return arr.length ? arr.join(",") : null;
+  }
+  if (typeof val === "string") {
+    const trimmed = val.trim();
+    return trimmed || null;
+  }
+  return null;
+}
+
 /**
  * 🔹 MeetingResponse -> PromiseDetail 매핑
  */
@@ -154,7 +176,7 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
 
   const course = buildCourseFromPlaces(meeting);
 
-  // 🔹 Must-Visit Place 매핑
+  // Must-Visit Place 매핑
   const mustVisitPlaces =
     (meeting.must_visit_places ?? []).map((p) => ({
       id: String(p.id),
@@ -162,30 +184,13 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
       address: p.address ?? undefined,
     })) ?? [];
 
-  // 🔹 서버 Meeting → 프론트 MeetingProfile 매핑
-  // purpose / budget는 "a,b,c" 형태의 문자열을 배열로 변환
-  const purposeRaw = meeting.purpose ?? "";
-  const purposeArr = purposeRaw
-    ? purposeRaw
-        .split(",")
-        .map((s) => s.trim())
-        .filter((s) => !!s)
-    : undefined;
-
-  const budgetRaw = meeting.budget ?? "";
-  const budgetArr = budgetRaw
-    ? budgetRaw
-        .split(",")
-        .map((s) => s.trim())
-        .filter((s) => !!s)
-    : undefined;
-
+  // ✨ 서버 Meeting → 프론트 MeetingProfile 매핑
+  //    서버는 string, 프론트는 purpose/vibe/budget를 배열로 사용
   const meetingProfile: MeetingProfile = {
     withWhom: meeting.with_whom ?? undefined,
-    purpose: purposeArr,
-    vibe: meeting.vibe ?? undefined,
-    budget: budgetArr,
-    profileMemo: meeting.profile_memo ?? undefined,
+    purpose: parseMultiField(meeting.purpose),
+    vibe: parseMultiField(meeting.vibe) as any, // vibe도 복수 선택
+    budget: parseMultiField(meeting.budget),
   };
 
   return {
@@ -240,16 +245,16 @@ export async function savePromiseDetail(
     throw new Error(`잘못된 meeting id: ${detail.id}`);
   }
 
-  const profile = detail.meetingProfile;
+  const profile: any = detail.meetingProfile ?? {};
 
-  // purpose / budget는 배열 → "a,b,c" 문자열로 인코딩해서 전달
-  const purposeStr =
-    profile?.purpose && profile.purpose.length
-      ? profile.purpose.join(",")
+  const withWhom =
+    typeof profile.withWhom === "string" && profile.withWhom.trim()
+      ? profile.withWhom.trim()
       : null;
 
-  const budgetStr =
-    profile?.budget && profile.budget.length ? profile.budget.join(",") : null;
+  const purpose = serializeMultiField(profile.purpose);
+  const vibe = serializeMultiField(profile.vibe); // 🔥 배열이 와도 string으로 직렬화
+  const budget = serializeMultiField(profile.budget);
 
   await http.request(`/meetings/${meetingId}`, {
     method: "PATCH",
@@ -258,11 +263,10 @@ export async function savePromiseDetail(
     },
     body: JSON.stringify({
       name: detail.title ?? "",
-      with_whom: profile?.withWhom ?? null,
-      purpose: purposeStr,
-      vibe: profile?.vibe ?? null,
-      budget: budgetStr,
-      profile_memo: profile?.profileMemo ?? null,
+      with_whom: withWhom,
+      purpose,
+      vibe,
+      budget,
     }),
   });
 

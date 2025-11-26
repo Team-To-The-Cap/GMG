@@ -18,9 +18,6 @@ export type MeetingProfile = {
 
   // 1인당 예산 → 복수 선택
   budget?: string[];
-
-  // 기타 메모
-  profileMemo?: string;
 };
 
 /**
