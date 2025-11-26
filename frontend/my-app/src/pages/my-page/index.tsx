@@ -1,9 +1,16 @@
+// src/pages/mypage/index.tsx (파일 경로는 네 프로젝트 구조에 맞게)
 import { useCallback, useEffect, useMemo, useState } from "react";
 import MyPageView from "./index.view";
 import {
-  loadProfile, loadSavedPlaces, loadSelectedCats,
-  saveProfile, savePlaces, saveSelectedCats,
-  type Profile, type PlaceCategory, type SavedPlace
+  loadProfile,
+  loadSavedPlaces,
+  loadSelectedCats,
+  saveProfile,
+  savePlaces,
+  saveSelectedCats,
+  type Profile,
+  type PlaceCategory,
+  type SavedPlace,
 } from "@/lib/user-storage";
 
 export type Place = SavedPlace; // 동일 필드이므로 그대로 alias
@@ -21,9 +28,15 @@ export default function MyPage() {
   const [placeName, setPlaceName] = useState("");
   const [placeQuery, setPlaceQuery] = useState("");
 
-  const [profile, setProfile] = useState<Profile>({ name: "홍길동", avatarUrl: "" });
+  const [profile, setProfile] = useState<Profile>({
+    name: "홍길동",
+    avatarUrl: "",
+  });
   const [places, setPlaces] = useState<Place[]>([]);
-  const [selectedCats, setSelectedCats] = useState<PlaceCategory[]>(["맛집", "카페"]);
+  const [selectedCats, setSelectedCats] = useState<PlaceCategory[]>([
+    "맛집",
+    "카페",
+  ]);
   const maxSelectable = 4;
 
   // 최초 로드
@@ -46,9 +59,9 @@ export default function MyPage() {
   );
 
   const onToggleCategory = useCallback((key: string) => {
-    setSelectedCats(prev => {
+    setSelectedCats((prev) => {
       const has = prev.includes(key as PlaceCategory);
-      if (has) return prev.filter(x => x !== key);
+      if (has) return prev.filter((x) => x !== key);
       if (prev.length >= maxSelectable) return prev;
       return [...prev, key as PlaceCategory];
     });
@@ -56,7 +69,7 @@ export default function MyPage() {
 
   // ===== 프로필 수정 =====
   const onProfileEdit = useCallback((next: Partial<Profile>) => {
-    setProfile(prev => ({ ...prev, ...next }));
+    setProfile((prev) => ({ ...prev, ...next }));
   }, []);
 
   // ===== 장소 추가 (즉시 저장) =====
@@ -65,11 +78,11 @@ export default function MyPage() {
       alert("장소 이름과 주소를 모두 입력해 주세요.");
       return;
     }
-    setPlaces(prev => {
+    setPlaces((prev) => {
       const next = [
         ...prev,
         {
-          id: (crypto?.randomUUID?.() ?? String(Date.now())),
+          id: crypto?.randomUUID?.() ?? String(Date.now()),
           name: placeName.trim(),
           address: placeQuery.trim(),
         },
@@ -83,9 +96,9 @@ export default function MyPage() {
 
   // ===== 장소 삭제 (즉시 저장) =====
   const onRemovePlace = useCallback((id: string) => {
-    setPlaces(prev => {
-      const next = prev.filter(p => p.id !== id);
-      savePlaces(next); // ← 즉시 localStorage 저장
+    setPlaces((prev) => {
+      const next = prev.filter((p) => p.id !== id);
+      savePlaces(next);
       return next;
     });
   }, []);
@@ -99,30 +112,19 @@ export default function MyPage() {
 
   return (
     <MyPageView
-      /* 헤더 문구 */
       title="My"
-      description="자주 가는 장소와 취향을 관리해보세요."
-
-      /* 프로필 */
+      description="자주 가는 장소와 취향을 관리해요."
       profile={profile}
       onProfileEdit={onProfileEdit}
-
-      /* 장소 입력 */
       placeName={placeName}
       onChangePlaceName={setPlaceName}
       placeQuery={placeQuery}
       onChangePlaceQuery={setPlaceQuery}
       onAddPlace={onAddPlace}
-
-      /* 저장된 장소 목록 */
       places={places}
       onRemovePlace={onRemovePlace}
-
-      /* 선호 카테고리 */
       categories={categories}
       onToggleCategory={onToggleCategory}
-
-      /* 저장 버튼 */
       onSave={onSave}
     />
   );
