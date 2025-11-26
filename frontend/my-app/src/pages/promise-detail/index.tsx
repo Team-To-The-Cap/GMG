@@ -37,6 +37,8 @@ export default function PromiseDetailPage() {
     onReset,
     onEditMustVisitPlaces,
     onDeleteMustVisitPlace,
+    onChangeMeetingProfile,
+    onToggleMeetingProfileChip,
   } = usePromiseMainController({ promiseId, data, setData });
 
   // 🔹 로딩 로직 (detail 전용: finalDate 패치)
@@ -84,9 +86,7 @@ export default function PromiseDetailPage() {
   // 🔹 필요하면 base 핸들러를 살짝 래핑해서 override 가능
   const onChangeTitle = useCallback(
     async (value: string) => {
-      // detail 페이지에서만 별도 로깅/추가 행동 넣고 싶으면 여기
       await baseOnChangeTitle(value);
-      // 예: 실패 시 재조회 등의 추가 처리도 가능
     },
     [baseOnChangeTitle]
   );
@@ -152,6 +152,10 @@ export default function PromiseDetailPage() {
       onReset={onReset}
       onEditMustVisitPlaces={onEditMustVisitPlaces}
       onDeleteMustVisitPlace={onDeleteMustVisitPlace}
+      // 🔹 프로필 섹션 연결
+      meetingProfile={data?.meetingProfile}
+      onChangeMeetingProfile={onChangeMeetingProfile}
+      onToggleMeetingProfileChip={onToggleMeetingProfileChip}
     />
   );
 }
