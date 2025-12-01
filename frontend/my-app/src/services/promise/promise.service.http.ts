@@ -6,6 +6,7 @@ import type {
   CourseVisit,
   CourseTransfer,
   Course,
+  MeetingProfile,
 } from "@/types/promise";
 import type { Participant, ParticipantTime } from "@/types/participant";
 import type {
@@ -40,7 +41,7 @@ function buildCourseFromPlaces(meeting: MeetingResponse): Course {
   let travelMinutes = 0;
 
   places.forEach((pl, idx) => {
-    // 🔹 (1) 이전 장소 → 현재 장소로의 이동 단계
+    // (1) 이전 장소 → 현재 장소로의 이동 단계
     if (idx > 0) {
       const transferMinutes = 10; // TODO: 나중에 실제 이동시간 계산으로 교체 가능
 
@@ -54,7 +55,7 @@ function buildCourseFromPlaces(meeting: MeetingResponse): Course {
       travelMinutes += transferMinutes;
     }
 
-    // 🔹 (2) 현재 장소 방문 단계
+    // (2) 현재 장소 방문 단계
     const stay = pl.duration ?? 60; // duration을 체류시간으로 사용
 
     items.push({
@@ -85,6 +86,28 @@ function buildCourseFromPlaces(meeting: MeetingResponse): Course {
     generatedAtISO: new Date().toISOString(),
     source: "auto-from-backend-places",
   };
+}
+
+/** 🔹 서버의 "a,b,c" 같은 string을 string[]로 파싱 */
+function parseMultiField(raw?: string | null): string[] {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => !!s);
+}
+
+/** 🔹 프론트의 string | string[] 값을 백엔드용 string으로 직렬화 */
+function serializeMultiField(val: unknown): string | null {
+  if (Array.isArray(val)) {
+    const arr = (val as string[]).map((s) => s.trim()).filter((s) => !!s);
+    return arr.length ? arr.join(",") : null;
+  }
+  if (typeof val === "string") {
+    const trimmed = val.trim();
+    return trimmed || null;
+  }
+  return null;
 }
 
 /**
@@ -153,13 +176,22 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
 
   const course = buildCourseFromPlaces(meeting);
 
-  // 🔹 Must-Visit Place 매핑
+  // Must-Visit Place 매핑
   const mustVisitPlaces =
     (meeting.must_visit_places ?? []).map((p) => ({
       id: String(p.id),
       name: p.name,
       address: p.address ?? undefined,
     })) ?? [];
+
+  // ✨ 서버 Meeting → 프론트 MeetingProfile 매핑
+  //    서버는 string, 프론트는 purpose/vibe/budget를 배열로 사용
+  const meetingProfile: MeetingProfile = {
+    withWhom: meeting.with_whom ?? undefined,
+    purpose: parseMultiField(meeting.purpose),
+    vibe: parseMultiField(meeting.vibe) as any, // vibe도 복수 선택
+    budget: parseMultiField(meeting.budget),
+  };
 
   return {
     id: String(meeting.id),
@@ -169,10 +201,10 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
     participants,
     place: primaryPlace,
     course,
-    plan: meeting.plan, // MeetingResponse.plan 그대로 실어보내기 (available_dates 포함)
+    plan: meeting.plan, // MeetingPlan(available_dates 포함)
 
-    // ⬇️ 새 필드
     mustVisitPlaces,
+    meetingProfile,
   } as PromiseDetail;
 }
 
@@ -203,6 +235,7 @@ export async function getPromiseList(): Promise<PromiseDetail[]> {
 
 /**
  * 🔹 약속 저장 (HTTP 버전)
+ *   - MeetingProfile 포함해서 PATCH
  */
 export async function savePromiseDetail(
   detail: PromiseDetail
@@ -212,12 +245,29 @@ export async function savePromiseDetail(
     throw new Error(`잘못된 meeting id: ${detail.id}`);
   }
 
+  const profile: any = detail.meetingProfile ?? {};
+
+  const withWhom =
+    typeof profile.withWhom === "string" && profile.withWhom.trim()
+      ? profile.withWhom.trim()
+      : null;
+
+  const purpose = serializeMultiField(profile.purpose);
+  const vibe = serializeMultiField(profile.vibe); // 🔥 배열이 와도 string으로 직렬화
+  const budget = serializeMultiField(profile.budget);
+
   await http.request(`/meetings/${meetingId}`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ name: detail.title }),
+    body: JSON.stringify({
+      name: detail.title ?? "",
+      with_whom: withWhom,
+      purpose,
+      vibe,
+      budget,
+    }),
   });
 
   return detail;
@@ -296,6 +346,30 @@ export async function calculateAutoPlan(
   return mapMeetingToPromiseDetail(meeting);
 }
 
+/**
+ * 🔹 코스 자동 계산
+ *   - POST /meetings/{id}/courses/auto
+ *   - 그 후 최신 Meeting 데이터를 다시 불러와서 PromiseDetail로 변환
+ */
+export async function calculateAutoCourse(
+  promiseId: string
+): Promise<PromiseDetail> {
+  const meetingId = Number(promiseId);
+  if (Number.isNaN(meetingId)) {
+    throw new Error(`잘못된 meeting id: ${promiseId}`);
+  }
+
+  // 1) 백엔드에 코스 자동 생성 요청
+  await http.request(`/meetings/${meetingId}/courses/auto`, {
+    method: "POST",
+  });
+
+  // 2) 코스가 MeetingPlace 테이블에 저장되었으므로,
+  //    최신 MeetingResponse를 다시 가져와서 프론트 구조로 매핑
+  const meeting = await http.request<MeetingResponse>(`/meetings/${meetingId}`);
+  return mapMeetingToPromiseDetail(meeting);
+}
+
 // 🔹 약속 이름만 수정 (HTTP 버전)
 export async function updateMeetingName(
   meetingId: string | number,
@@ -361,13 +435,20 @@ export async function resetPromiseOnServer(
     body: JSON.stringify([]),
   });
 
-  // 4) 약속 이름 비우기
+  // 4) 약속 이름/프로필 비우기
   await http.request(`/meetings/${meetingId}`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ name: "" }),
+    body: JSON.stringify({
+      name: "",
+      with_whom: null,
+      purpose: null,
+      vibe: null,
+      budget: null,
+      profile_memo: null,
+    }),
   });
 
   const meeting = await http.request<MeetingResponse>(`/meetings/${meetingId}`);
@@ -375,7 +456,6 @@ export async function resetPromiseOnServer(
 }
 
 // 🔹 반드시 가고 싶은 장소 추가
-// FastAPI: POST /api/meetings/{meeting_id}/must-visit-places/
 export async function addMustVisitPlace(
   promiseId: string | number,
   payload: { name: string; address?: string }
@@ -398,7 +478,6 @@ export async function addMustVisitPlace(
 }
 
 // 🔹 반드시 가고 싶은 장소 삭제
-// FastAPI: DELETE /api/meetings/{meeting_id}/must-visit-places/{place_id}`
 export async function deleteMustVisitPlace(
   promiseId: string | number,
   placeId: string | number
@@ -416,6 +495,7 @@ export async function deleteMustVisitPlace(
     method: "DELETE",
   });
 }
+
 // 🔹 약속에 연결된 장소(코스 장소) 목록 조회
 export async function getMeetingPlaces(
   promiseId: string | number

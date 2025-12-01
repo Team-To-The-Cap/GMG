@@ -7,7 +7,7 @@ import {
   resetPromiseOnServer,
   createEmptyPromise,
 } from "@/services/promise/promise.service";
-import type { PromiseDetail } from "@/types/promise";
+import type { PromiseDetail, MeetingProfile } from "@/types/promise";
 import { DEFAULT_PROMISE_ID } from "@/config/runtime";
 import {
   DRAFT_PROMISE_DATA_PREFIX,
@@ -41,6 +41,8 @@ export default function CreatePromiseMain() {
     onSave: baseOnSave,
     onEditMustVisitPlaces,
     onDeleteMustVisitPlace,
+    onChangeMeetingProfile: baseOnChangeMeetingProfile,
+    onToggleMeetingProfileChip,
   } = usePromiseMainController({ promiseId, data, setData });
 
   // 🔹 draft 헬퍼
@@ -110,23 +112,19 @@ export default function CreatePromiseMain() {
         // ✅ 서버에 Meeting 이 없는 경우(404) → 깨진 드래프트로 보고 새 약속 생성
         if (msg.includes("404") && msg.includes("Meeting not found")) {
           try {
-            // 기존 드래프트 키가 현재 ID와 같다면 정리
             const savedDraftId = localStorage.getItem(DRAFT_PROMISE_ID_KEY);
             if (savedDraftId && savedDraftId === promiseId) {
               localStorage.removeItem(DRAFT_PROMISE_ID_KEY);
               localStorage.removeItem(DRAFT_PROMISE_DATA_PREFIX + savedDraftId);
             }
 
-            // 새 약속 하나 생성
             const newMeeting = await createEmptyPromise();
             if (!alive) return;
 
-            // 새 약속을 드래프트로 저장
             localStorage.setItem(DRAFT_PROMISE_ID_KEY, newMeeting.id);
             setData(newMeeting);
             setError(undefined);
 
-            // URL 의 promiseId 와 다르면 새 ID로 교체
             if (newMeeting.id !== promiseId) {
               navigate(`/create/${newMeeting.id}`, { replace: true });
             }
@@ -138,7 +136,6 @@ export default function CreatePromiseMain() {
               );
           }
         } else {
-          // 그 외 에러는 기존처럼 메시지만 보여줌
           setError(msg || "데이터 불러오기 실패");
         }
       } finally {
@@ -173,7 +170,9 @@ export default function CreatePromiseMain() {
         if (!prev) return prev;
         const next: PromiseDetail = {
           ...prev,
-          participants: (prev.participants ?? []).filter((p) => p.id !== id),
+          participants: (prev.participants ?? []).filter(
+            (p) => String(p.id) !== String(id)
+          ),
         };
         persistDraft(next);
         return next;
@@ -199,14 +198,36 @@ export default function CreatePromiseMain() {
     }
   }, [promiseId, baseOnCalculatePlan, setData, persistDraft]);
 
+  // ✅ create 전용: 약속 프로필 변경 + draft 반영
+  const onChangeMeetingProfile = useCallback(
+    (patch: Partial<MeetingProfile>) => {
+      // 1) 공통 컨트롤러 로직으로 state 변경
+      baseOnChangeMeetingProfile(patch);
+
+      // 2) draft에도 반영
+      setData((prev) => {
+        if (!prev) return prev;
+        const prevProfile: MeetingProfile = prev.meetingProfile ?? {};
+        const next: PromiseDetail = {
+          ...prev,
+          meetingProfile: {
+            ...prevProfile,
+            ...patch,
+          },
+        };
+        persistDraft(next);
+        return next;
+      });
+    },
+    [baseOnChangeMeetingProfile, setData, persistDraft]
+  );
+
   // ✅ create 전용: 저장 후, 새 "약속 추가" 화면으로 다시 진입
   const onSave = useCallback(async () => {
     if (!data) return;
 
-    // 1) 서버에 현재 약속 저장
     await baseOnSave();
 
-    // 2) 이 약속이 draft였다면 draft 정보 정리
     const currentId = data.id;
     const savedDraftId = localStorage.getItem(DRAFT_PROMISE_ID_KEY);
     if (savedDraftId && savedDraftId === currentId) {
@@ -214,20 +235,14 @@ export default function CreatePromiseMain() {
       localStorage.removeItem(DRAFT_PROMISE_DATA_PREFIX + savedDraftId);
     }
 
-    // 🔹 3) 이 약속 관련 출발 장소 캐시도 정리
     clearAllPlacesForPromise(currentId);
 
-    // 4) BottomNav의 handleCreateClick 로직과 동일하게,
-    //    "약속 추가" 화면을 다시 띄우기
-
-    // 혹시 남아 있는 draft 가 있다면 그걸로 이동
     const draftId = localStorage.getItem(DRAFT_PROMISE_ID_KEY);
     if (draftId) {
       navigate(`/create/${draftId}`);
       return;
     }
 
-    // 없으면 새 약속 하나 만들고 그 쪽으로 이동
     const draft = await createEmptyPromise();
     localStorage.setItem(DRAFT_PROMISE_ID_KEY, draft.id);
     navigate(`/create/${draft.id}`);
@@ -247,7 +262,6 @@ export default function CreatePromiseMain() {
       setData(cleared);
       persistDraft(cleared);
 
-      // 🔹 초기화되었으니까 출발 장소 캐시도 함께 정리
       clearAllPlacesForPromise(cleared.id);
 
       alert("약속 내용이 모두 초기화되었습니다.");
@@ -316,6 +330,10 @@ export default function CreatePromiseMain() {
       calculatingCourse={calculatingCourse}
       onEditMustVisitPlaces={onEditMustVisitPlaces}
       onDeleteMustVisitPlace={onDeleteMustVisitPlace}
+      // 🔹 프로필 섹션 연결
+      meetingProfile={data?.meetingProfile}
+      onChangeMeetingProfile={onChangeMeetingProfile}
+      onToggleMeetingProfileChip={onToggleMeetingProfileChip}
     />
   );
 }

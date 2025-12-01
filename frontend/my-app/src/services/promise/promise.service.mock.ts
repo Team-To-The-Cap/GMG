@@ -490,7 +490,51 @@ export async function calculateAutoPlan(
         activityMinutes: 120,
         travelMinutes: 60,
       },
-      source: "mock-calculate",
+      source: "mock-calculate-plan",
+    },
+  };
+
+  MOCK_DB[promiseId] = updated;
+  return updated;
+}
+
+/**
+ * 🔹 코스 자동 계산 (Mock 버전)
+ * - 실제 서버에서는 MeetingPlace를 새로 만들고, 다시 Meeting을 조회하지만
+ *   여기서는 단순히 코스 요약/타임라인만 살짝 바꿔서 리턴
+ */
+export async function calculateAutoCourse(
+  promiseId: string
+): Promise<PromiseDetail> {
+  await delay(300);
+
+  const item = MOCK_DB[promiseId];
+  if (!item) {
+    throw new Error("Mock 데이터에 해당 약속이 없습니다.");
+  }
+
+  // 코스를 살짝 바꾸는 예시 (실제 로직은 서버 버전에 맞춰 자유롭게 수정 가능)
+  const now = new Date().toISOString();
+
+  const updated: PromiseDetail = {
+    ...item,
+    course: {
+      ...(item.course ?? {
+        title: "추천 코스",
+        summary: {
+          totalMinutes: 0,
+          activityMinutes: 0,
+          travelMinutes: 0,
+        },
+        items: [],
+      }),
+      summary: {
+        totalMinutes: 200,
+        activityMinutes: 140,
+        travelMinutes: 60,
+      },
+      generatedAtISO: now,
+      source: "mock-calculate-course",
     },
   };
 
@@ -559,6 +603,7 @@ export async function resetPromiseOnServer(
   MOCK_DB[detail.id] = cleared;
   return cleared;
 }
+
 // 🔹 반드시 가고 싶은 장소 추가 (Mock 버전)
 export async function addMustVisitPlace(
   promiseId: string,
