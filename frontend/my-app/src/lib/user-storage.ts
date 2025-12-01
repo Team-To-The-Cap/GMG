@@ -2,18 +2,25 @@
 
 export type SavedPlace = { id: string; name: string; address: string };
 export type Profile = { name: string; avatarUrl?: string };
+export type SelectedSubcats = {
+  [K in PlaceCategory]?: string[];
+};
 export type PlaceCategory =
   | "맛집"
   | "카페"
   | "액티비티"
-  | "소품샵"
+  | "소품샵"    // 예전 데이터 호환용으로 그대로 두고
+  | "휴식"      // ✅ 추가
+  | "쇼핑"      // ✅ 추가
   | "문화시설"
-  | "자연관광";
+  | "자연관광"
+  | "술자리";   // ✅ 추가
 
 export const STORAGE_KEYS = {
   profile: "mypage.profile.v1",
   places: "mypage.places.v1",
   cats: "mypage.selectedCats.v1",
+  subcats: "mypage.selectedSubcats.v1",
 } as const;
 
 export const MAX_SAVED_PLACES = 3;
@@ -71,6 +78,14 @@ export function loadSelectedCats(): PlaceCategory[] {
   ]);
 }
 
+export function loadSelectedSubcats(): SelectedSubcats {
+  return safeParse<SelectedSubcats>(
+    localStorage.getItem(STORAGE_KEYS.subcats),
+    {}
+  );
+}
+
+
 // ===== 저장 함수들 =====
 export function saveProfile(p: Profile) {
   localStorage.setItem(STORAGE_KEYS.profile, JSON.stringify(p));
@@ -117,12 +132,18 @@ export function saveSelectedCats(cats: PlaceCategory[]) {
   localStorage.setItem(STORAGE_KEYS.cats, JSON.stringify(cats));
 }
 
+export function saveSelectedSubcats(map: SelectedSubcats) {
+  localStorage.setItem(STORAGE_KEYS.subcats, JSON.stringify(map));
+}
+
 /* ============================================================
  * 🔹 참가자별 저장 장소 관리 함수들
  *    - participantKey 예:
  *      - "98:id-111"      (기존 참가자)
  *      - "98:draft-xxxx"  (새 참가자 플로우)
  * ========================================================== */
+
+// ===== 세부 카테고리 로드/저장 =====
 
 function getParticipantPlacesKey(participantKey: string): string {
   return `${PARTICIPANT_PLACES_PREFIX}:${participantKey}`;

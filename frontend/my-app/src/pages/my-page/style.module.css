@@ -159,3 +159,86 @@
   padding: 6px 10px;
   font-size: 12px;
 }
+
+/* 선호 카테고리(아코디언) */
+.prefHelper {
+  font-size: 12px;
+  color: #6b7280;
+  margin: -4px 0 8px;
+}
+
+.prefList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prefItem {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.prefCatBtn {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 0;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.prefCatBtnSelected {
+  background: #5b74ff;
+  color: #fff;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.12);
+}
+
+.prefCatLeft {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.prefEmoji {
+  font-size: 18px;
+}
+
+.prefCount {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.prefChevron {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.subWrap {
+  margin-left: 10px;
+  padding-left: 10px;
+  border-left: 2px solid #e5e7eb;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.subChip {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.subChipSelected {
+  border-color: #5b74ff;
+  color: #5b74ff;
+  background: #eef2ff;
+}
+

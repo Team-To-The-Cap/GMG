@@ -1,15 +1,15 @@
 /* src/pages/participants/add-preferences/style.module.css */
 
-/* ===== 전체 컨테이너 ===== */
+/* ===== 전체 컨테이너 (My의 .page 느낌) ===== */
 .container {
-  padding: 0 16px 32px;
+  padding: 0 16px 48px;
 }
 
-/* ===== 제목 ===== */
+/* ===== 제목 (My의 .title 느낌) ===== */
 .title {
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 700;
-  margin: 20px 0 16px;
+  margin: 4px 0 16px;
 }
 
 /* ===== 상단 설명 영역 ===== */
@@ -17,7 +17,7 @@
   display: flex;
   align-items: baseline;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .subtitle {
@@ -31,64 +31,101 @@
   color: #9ca3af;
 }
 
-/* ===== 카테고리 카드 전체 박스 (rowBtn 느낌 카드) ===== */
+/* ===== 선호 카드 (My의 .section 느낌) ===== */
 .prefCard {
+  background: #fff;
   border-radius: 16px;
-  border: 1px solid #eef1f4;
-  background: #f9fafb;
   padding: 16px;
-  margin-bottom: 16px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  margin-bottom: 12px;
 }
 
-/* ===== 카테고리 버튼 그리드 ===== */
-.catGrid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-/* ===== 개별 카테고리 버튼 ===== */
-.catBtn {
-  height: 72px;
-  border-radius: 16px;
-  border: 1px solid #eef1f4;
-  background: #ffffff;
+/* ===== 선호 카테고리(아코디언) – MyPage 그대로 ===== */
+.prefList {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  gap: 8px;
+}
+
+.prefItem {
+  display: flex;
+  flex-direction: column;
   gap: 6px;
-  font-size: 13px;
+}
+
+/* 메인 카테고리 버튼 (My의 .prefCatBtn 스타일을 catBtn에 매핑) */
+.catBtn {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 0;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 500;
   cursor: pointer;
-  transition: transform 0.02s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.02);
 }
 
-.catBtn:hover {
-  border-color: #e5e7eb;
-  box-shadow: 0 4px 18px rgba(17, 24, 39, 0.06);
-}
-
-.catBtn:active {
-  transform: translateY(1px);
-}
-
+/* 선택된 메인 카테고리 (My의 .prefCatBtnSelected) */
 .catBtnActive {
-  background: #eef1ff;
-  border-color: #6d7bff;
-  color: #4b57d8;
+  background: #5b74ff;
+  color: #fff;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.12);
 }
 
+/* 버튼 내부: 이모지 + 라벨 + 개수 */
+.catBtnInner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 이모지 (My의 .prefEmoji) */
 .catEmoji {
-  font-size: 20px;
+  font-size: 18px;
 }
 
+/* 라벨 텍스트 */
 .catLabel {
-  font-size: 13px;
+  font-size: 14px;
 }
 
-/* ===== 내 선호 불러오기 버튼 ===== */
-/* ===== 내 선호 불러오기 버튼 ===== */
+/* 선택된 서브카테 개수 (My의 .prefCount) */
+.prefCount {
+  font-size: 12px;
+  opacity: 0.8;
+  margin-left: 2px;
+}
+
+/* 서브카테 감싸는 래퍼 (My의 .subWrap) */
+.subWrap {
+  margin-left: 10px;
+  padding-left: 10px;
+  border-left: 2px solid #e5e7eb;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* 서브카테 칩 (My의 .subChip) */
+.subChip {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* 서브카테 선택 상태 (My의 .subChipSelected) */
+.subChipSelected {
+  border-color: #5b74ff;
+  color: #5b74ff;
+  background: #eef2ff;
+}
+
+/* ===== 내 선호 불러오기 버튼 (중앙 작은 버튼) ===== */
 .myPrefWrapper {
   display: flex;
   justify-content: center;
