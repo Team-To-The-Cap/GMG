@@ -4,7 +4,9 @@ import PreferenceChip from "@/components/ui/preference-chip";
 import { PinIcon2, TrashIcon } from "@/assets/icons/icons";
 import { useRef } from "react";
 
-type CatVM = { key: string; label: string; emoji: string; selected: boolean };
+type CatVM = { key: string; label: string; emoji: string; selected: boolean; subcategories: string[];
+  selectedSubs: string[];
+  expanded?: boolean; };
 
 type Props = {
   title: string;
@@ -24,7 +26,7 @@ type Props = {
 
   categories: CatVM[];
   onToggleCategory: (key: string) => void;
-
+  onToggleSubcategory: (key: string, sub: string) => void;
   onSave: () => void;
 };
 
@@ -42,6 +44,7 @@ export default function MyPageView({
   onRemovePlace,
   categories = [],
   onToggleCategory,
+  onToggleSubcategory,
   onSave,
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -185,31 +188,65 @@ export default function MyPageView({
         </div>
       </section>
 
-      {/* 선호 카테고리 */}
-      <section className={styles.cardSection}>
-        <div className={styles.cardHeader}>
-          <h3 className={styles.cardTitle}>선호하는 장소 유형</h3>
-        </div>
-        <p className={styles.cardDescription}>
-          최대 <span className={styles.accent}>4개까지</span> 선택할 수 있어요.
-          선택한 유형을 기반으로 만남 장소 추천에 활용돼요.
+            {/* 선호 카테고리 */}
+      <section className={styles.section}>
+        <h3 className={styles.h3}>
+          내가 선호하는 장소 유형
+          <em className={styles.helper}>최대 4개까지 선택 가능합니다.</em>
+        </h3>
+        <p className={styles.prefHelper}>
+          카테고리를 클릭하면 세부 유형을 선택할 수 있어요.
         </p>
 
-        <div className={styles.emojiGrid}>
-          {categories.map((c) => (
-            <PreferenceChip
-              key={c.key}
-              label={c.label}
-              emoji={c.emoji}
-              selected={c.selected}
-              variant="stack"
-              onClick={() => onToggleCategory(c.key)}
-            />
+        <div className={styles.prefList}>
+          {categories.map(c => (
+            <div key={c.key} className={styles.prefItem}>
+              {/* 메인 카테고리 버튼 */}
+              <button
+                type="button"
+                className={`${styles.prefCatBtn} ${
+                  c.selected ? styles.prefCatBtnSelected : ""
+                }`}
+                onClick={() => onToggleCategory(c.key)}
+              >
+                <div className={styles.prefCatLeft}>
+                  <span className={styles.prefEmoji}>{c.emoji}</span>
+                  <span>{c.label}</span>
+                  {c.selectedSubs.length > 0 && (
+                    <span className={styles.prefCount}>({c.selectedSubs.length})</span>
+                  )}
+                </div>
+                <span className={styles.prefChevron}>
+                  {c.selected ? "▲" : "▼"}
+                </span>
+              </button>
+
+              {/* 서브카테고리 칩들 */}
+              {c.selected && (
+                <div className={styles.subWrap}>
+                  {c.subcategories.map(sub => {
+                    const isSelected = c.selectedSubs.includes(sub);
+                    return (
+                      <button
+                        key={sub}
+                        type="button"
+                        className={`${styles.subChip} ${
+                          isSelected ? styles.subChipSelected : ""
+                        }`}
+                        onClick={() => onToggleSubcategory(c.key, sub)}
+                      >
+                        {sub}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           ))}
         </div>
       </section>
 
-      {/* 하단 저장 바 */}
+
       <div className={styles.saveBar}>
         <button type="button" className={styles.primaryBtn} onClick={onSave}>
           변경사항 저장하기
