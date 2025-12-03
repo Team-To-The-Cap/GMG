@@ -13,6 +13,16 @@ export type MeetingParticipant = {
   name: string;
   // 백엔드에 프로필 이미지 필드가 있으면 여기에 추가
   avatar_url?: string | null;
+
+  // 아래는 ParticipantResponse에 맞게 필요한 경우 확장 가능
+  start_address?: string | null;
+  transportation?: string | null;
+  fav_activity?: string | null;
+  available_times?: {
+    id: number;
+    start_time: string;
+    end_time: string;
+  }[];
 };
 
 /** 서버 MeetingPlan 타입 (Swagger 기준) */
@@ -51,11 +61,18 @@ export type MeetingMustVisitPlace = {
 export type MeetingResponse = {
   id: number;
   name: string;
+
+  // ✨ 백엔드 MeetingBase 확장 필드들
+  with_whom?: string | null;
+  purpose?: string | null;
+  vibe?: string | null;
+  budget?: string | null;
+  profile_memo?: string | null;
+
   participants: MeetingParticipant[];
 
   plan?: MeetingPlan;
   places?: MeetingPlace[];
 
-  // ⬇️ 이 줄 추가
   must_visit_places?: MeetingMustVisitPlace[];
 };

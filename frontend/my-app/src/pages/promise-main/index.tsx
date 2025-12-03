@@ -8,8 +8,9 @@ import {
   updateMeetingName,
   resetPromiseOnServer,
   deleteMustVisitPlace,
+  calculateAutoCourse, // ✅ 코스 자동 계산 함수 추가
 } from "@/services/promise/promise.service";
-import type { PromiseDetail } from "@/types/promise";
+import type { PromiseDetail, MeetingProfile } from "@/types/promise";
 
 export type PromiseMainHandlers = {
   onChangeTitle: (value: string) => Promise<void>;
@@ -19,9 +20,18 @@ export type PromiseMainHandlers = {
   onSave: () => Promise<void>;
   onReset: () => Promise<void>;
 
-  // ⬇️ 반드시 가고 싶은 장소 편집/관리 화면으로 이동
+  // 반드시 가고 싶은 장소 편집/관리 화면으로 이동
   onEditMustVisitPlaces: () => Promise<void>;
   onDeleteMustVisitPlace: (id: string) => Promise<void>;
+
+  // 약속 분위기/목적 등 프로필 변경 (직접 patch)
+  onChangeMeetingProfile: (patch: Partial<MeetingProfile>) => void;
+
+  // 🔹 프로필 칩 토글 (뷰에서 호출)
+  onToggleMeetingProfileChip: (
+    field: keyof MeetingProfile,
+    value: string
+  ) => void;
 };
 
 export type PromiseMainController = {
@@ -41,6 +51,20 @@ type UsePromiseMainControllerArgs = {
   data?: PromiseDetail;
   setData: React.Dispatch<React.SetStateAction<PromiseDetail | undefined>>;
 };
+
+// 🔹 단일 문자열 / 배열 / 빈값 모두 배열로 정규화
+function normalizeMultiValue(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed) return [];
+    return trimmed
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => !!s);
+  }
+  return [];
+}
 
 export function usePromiseMainController({
   promiseId,
@@ -90,7 +114,9 @@ export function usePromiseMainController({
       // UI 먼저 제거
       setData((prev) => {
         if (!prev) return prev;
-        const next = (prev.participants ?? []).filter((p) => p.id !== id);
+        const next = (prev.participants ?? []).filter(
+          (p) => String(p.id) !== String(id)
+        );
         return { ...prev, participants: next };
       });
 
@@ -120,17 +146,27 @@ export function usePromiseMainController({
     }
   }, [promiseId, setData]);
 
-  // ✅ 코스 계산 (현재는 TODO)
+  // ✅ 코스 자동 계산
   const onCalculateCourse = useCallback(async () => {
+    if (!promiseId) return;
+
     try {
       setCalculatingCourse(true);
-      alert("코스 계산 기능은 아직 준비 중입니다.");
+
+      // 1) 백엔드에 코스 자동 생성 요청 + 최신 Meeting 불러오기
+      const updated = await calculateAutoCourse(promiseId);
+
+      // 2) 프론트 상태 갱신
+      setData(updated);
+
+      alert("코스가 계산되었습니다!");
     } catch (e: any) {
       console.error(e);
+      alert(e?.message ?? "코스 계산 중 오류가 발생했습니다.");
     } finally {
       setCalculatingCourse(false);
     }
-  }, []);
+  }, [promiseId, setData]);
 
   // ✅ 저장
   const onSave = useCallback(async () => {
@@ -205,10 +241,70 @@ export function usePromiseMainController({
       } catch (e: any) {
         console.error(e);
         alert(e?.message ?? "장소 삭제 중 오류가 발생했습니다.");
-        // 필요하면 여기서 다시 fetch 해서 상태 복구도 가능
       }
     },
     [promiseId, setData]
+  );
+
+  // ✅ MeetingProfile 직접 patch
+  const onChangeMeetingProfile = useCallback(
+    (patch: Partial<MeetingProfile>) => {
+      setData((prev) => {
+        if (!prev) return prev;
+        const prevProfile: MeetingProfile = prev.meetingProfile ?? {};
+        return {
+          ...prev,
+          meetingProfile: {
+            ...prevProfile,
+            ...patch,
+          },
+        };
+      });
+    },
+    [setData]
+  );
+
+  // ✅ 프로필 칩 토글 로직 (단일/복수 선택 처리 + vibe까지 포함)
+  const onToggleMeetingProfileChip = useCallback(
+    (field: keyof MeetingProfile, value: string) => {
+      setData((prev) => {
+        if (!prev) return prev;
+
+        const prevProfile: MeetingProfile = prev.meetingProfile ?? {};
+        const isMultiField =
+          field === "purpose" || field === "budget" || field === "vibe";
+
+        if (!isMultiField) {
+          // 단일 선택 필드 (예: withWhom)
+          const currentVal = prevProfile[field] as string | undefined;
+          const nextVal = currentVal === value ? undefined : value;
+
+          return {
+            ...prev,
+            meetingProfile: {
+              ...prevProfile,
+              [field]: nextVal,
+            } as MeetingProfile,
+          };
+        } else {
+          // 복수 선택 필드 (purpose, budget, vibe)
+          const currentArr = normalizeMultiValue(prevProfile[field]);
+          const exists = currentArr.includes(value);
+          const nextArr = exists
+            ? currentArr.filter((v) => v !== value)
+            : [...currentArr, value];
+
+          return {
+            ...prev,
+            meetingProfile: {
+              ...prevProfile,
+              [field]: nextArr,
+            } as MeetingProfile,
+          };
+        }
+      });
+    },
+    [setData]
   );
 
   return {
@@ -229,5 +325,7 @@ export function usePromiseMainController({
     onReset,
     onEditMustVisitPlaces,
     onDeleteMustVisitPlace,
+    onChangeMeetingProfile,
+    onToggleMeetingProfileChip,
   };
 }
