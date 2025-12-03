@@ -1,16 +1,18 @@
-# app/routers/meetings_plan.py
+# app/routers/meeting_plans.py
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload 
 from typing import List, Tuple
-from datetime import datetime, date, time, timedelta  # ⬅️ 추가
+from datetime import datetime, date, time, timedelta  # ⬅️ 사용 중
 
 from ..database import get_db
 from .. import schemas
 from .. import models
-from .calc_func import *  # (나중에 정리해도 되지만 지금은 이대로 ok)
+from .calc_func import *  # find_road_center_node, save_calculated_places 등
 from typing import Optional
 import requests
+
+from ..services.google_distance_matrix import compute_minimax_travel_times
 
 NAVER_MAP_CLIENT_ID = "o3qhd1pz6i"
 NAVER_MAP_CLIENT_SECRET = "CgU14l9YJBqqNetcd8KiZ0chNLJmYBwmy9HkAjg5"
@@ -22,7 +24,6 @@ router = APIRouter(
     prefix="/meetings",
     tags=["Meeting-Plans"]
 )
-
 
 
 def reverse_geocode_naver(lon: float, lat: float) -> Optional[str]:
@@ -135,6 +136,7 @@ def create_plan_for_meeting(
     db.refresh(db_plan)
     return db_plan
 
+
 @router.get("/{meeting_id}/plans", response_model=schemas.MeetingPlanResponse) 
 def get_plans_for_meeting(
     meeting_id: int, 
@@ -186,6 +188,64 @@ def update_meeting_plan(
     return db_plan
 
 
+def get_common_available_dates_for_meeting(meeting: models.Meeting) -> List[date]:
+    """
+    특정 Meeting에 대해, 각 참가자의 ParticipantTime(start_time ~ end_time)을
+    날짜 단위로 풀어서(set으로) 만든 뒤, 그 교집합(공통 날짜)만 반환한다.
+
+    예)
+    - P1: 18~20 → {18,19,20}
+    - P2: 19~20 → {19,20}
+      => 공통: {19,20}
+    """
+
+    # 참가자별 가능한 날짜 집합
+    from typing import Dict, Set
+    dates_by_participant: Dict[int, Set[date]] = {}
+
+    for p in meeting.participants:
+        dates: Set[date] = set()
+
+        for t in p.available_times:
+            start_d = t.start_time.date()
+            end_d = t.end_time.date()
+            # 안전장치: 혹시 end < start 로 들어오면 swap
+            if end_d < start_d:
+                start_d, end_d = end_d, start_d
+
+            d = start_d
+            while d <= end_d:
+                dates.add(d)
+                d = d + timedelta(days=1)
+
+        if dates:
+            dates_by_participant[p.id] = dates
+
+    # 이 미팅에서 실제로 "시간을 입력한" 참가자가 한 명도 없으면 공통 날짜 없음
+    if not dates_by_participant:
+        return []
+
+    participant_ids_with_times = list(dates_by_participant.keys())
+
+    # 한 명만 시간 입력한 경우: 그 사람 날짜를 그대로 반환
+    if len(participant_ids_with_times) == 1:
+        only_pid = participant_ids_with_times[0]
+        return sorted(dates_by_participant[only_pid])
+
+    # 두 명 이상인 경우: 날짜 교집합
+    common: Set[date] | None = None
+    for pid in participant_ids_with_times:
+        ds = dates_by_participant[pid]
+        if common is None:
+            common = set(ds)
+        else:
+            common &= ds
+        if not common:
+            break
+
+    return sorted(common) if common else []
+
+
 @router.post(
     "/{meeting_id}/plans/calculate",
     response_model=schemas.MeetingPlanResponse,
@@ -200,6 +260,7 @@ def create_auto_plan_for_meeting(
     1) Meeting + Participant + ParticipantTime 조회
     2) 공통 가능한 날짜(date 리스트) 계산
     3) 출발 좌표 있는 참가자만 모아서 도로 그래프 중간 지점 + 후보 장소 계산
+       (1차: OSMnx minimax / 2차: Google Distance Matrix로 공평성 보정)
     4) MeetingPlan + MeetingPlanAvailableDate 저장
     5) MeetingPlace(places) 저장
     6) 최종 MeetingPlan(available_dates 포함)을 반환
@@ -232,12 +293,22 @@ def create_auto_plan_for_meeting(
         # 공통 날짜가 전혀 없는 경우: 시간 미정으로 두고 계속 진행
         meeting_time = None
 
-    # 3. 출발 좌표 모으기 (lon, lat)
+    # 3. 출발 좌표 모으기 (lon, lat) + 하이브리드용 participant 정보
     coords: List[Tuple[float, float]] = []
+    participant_for_matrix: List[dict] = []
+
     for p in meeting.participants:
         if p.start_latitude is None or p.start_longitude is None:
             continue
-        coords.append((p.start_longitude, p.start_latitude))
+
+        coords.append((p.start_longitude, p.start_latitude))  # (lon, lat)
+        participant_for_matrix.append(
+            {
+                "lat": p.start_latitude,
+                "lng": p.start_longitude,
+                "transportation": p.transportation,
+            }
+        )
 
     center_lat: float | None = None
     center_lon: float | None = None
@@ -246,7 +317,7 @@ def create_auto_plan_for_meeting(
     candidates: list[dict] = []  # MeetingPlace로 저장할 후보들
 
     if coords:
-        # 도로 그래프 위 minimax center + top_k 후보 계산
+        # 3-1. 도로 그래프 위 minimax center + top_k 후보 계산 (1차 후보 생성)
         center_result = find_road_center_node(
             G,
             coords_lonlat=coords,
@@ -262,54 +333,83 @@ def create_auto_plan_for_meeting(
 
         # 대표 center에 대해 한 번 보정
         adjusted_main = center_result.get("adjusted_point") or {}
-        center_lat = float(adjusted_main.get("lat", raw_center_lat))
-        center_lon = float(adjusted_main.get("lng", raw_center_lon))
+        raw_adjusted_lat = float(adjusted_main.get("lat", raw_center_lat))
+        raw_adjusted_lon = float(adjusted_main.get("lng", raw_center_lon))
+
+        # top_k 후보들
+        top_candidates_raw = center_result.get("top_candidates") or []
+
+        # 3-2. 각 후보를 "보정된 좌표" 기준으로 center 후보 리스트로 구성
+        center_candidates: List[dict] = []
+
+        if top_candidates_raw:
+            for cand in top_candidates_raw:
+                adj = cand.get("adjusted_point") or {}
+                lat = float(adj.get("lat", cand["lat"]))
+                lng = float(adj.get("lng", cand["lon"]))
+                poi_name = adj.get("poi_name")
+
+                center_candidates.append(
+                    {
+                        "lat": lat,
+                        "lng": lng,
+                        "poi_name": poi_name,
+                    }
+                )
+        else:
+            # fallback: 대표 center 하나만 후보로
+            center_candidates.append(
+                {
+                    "lat": raw_adjusted_lat,
+                    "lng": raw_adjusted_lon,
+                    "poi_name": adjusted_main.get("poi_name"),
+                }
+            )
+
+        # 3-3. Google Distance Matrix로 공평한 center 재선택 (하이브리드)
+        best_center_lat = raw_adjusted_lat
+        best_center_lon = raw_adjusted_lon
+        best_index = 0
+
+        if participant_for_matrix and center_candidates:
+            dm_result = compute_minimax_travel_times(
+                participants=participant_for_matrix,
+                candidates=center_candidates,
+            )
+            if dm_result is not None:
+                best_index = dm_result["best_index"]
+                chosen = center_candidates[best_index]
+                best_center_lat = float(chosen["lat"])
+                best_center_lon = float(chosen["lng"])
+
+        # 최종 center 좌표
+        center_lat = best_center_lat
+        center_lon = best_center_lon
 
         # 대표 center 기준으로 한 번만 역지오코딩 수행
         resolved = reverse_geocode_naver(center_lon, center_lat)
         addr = resolved or "자동 계산된 중간 지점"
 
-        # top_k 후보들
-        top_candidates = center_result.get("top_candidates") or []
+        # 3-4. MeetingPlace candidates 생성
+        #     - Google minimax 기준으로 고른 best_index가 "주요 만남 장소"
+        #     - 나머지는 후보 #2, #3 ...
+        for idx, c in enumerate(center_candidates):
+            lat = float(c["lat"])
+            lng = float(c["lng"])
+            poi_name = c.get("poi_name")
 
-        if top_candidates:
-            for idx, cand in enumerate(top_candidates):
-                adj = cand.get("adjusted_point") or {}
-                lat = float(adj.get("lat", cand["lat"]))
-                lng = float(adj.get("lng", cand["lon"]))
+            if idx == best_index:
+                place_name = "자동 추천 만남 장소"
+            else:
+                place_name = f"자동 추천 후보 #{idx+1}"
 
-                # 🔹 역/POI 이름(없으면 None)
-                poi_name = adj.get("poi_name")
-
-                # 이름(라벨)
-                if idx == 0:
-                    place_name = "자동 추천 만남 장소"
-                else:
-                    place_name = f"자동 추천 후보 #{idx+1}"
-
-                # ✅ 모든 후보에 대표 addr 공통 사용
-                place_addr = addr
-
-                candidates.append(
-                    {
-                        "name": place_name,         # UI 라벨
-                        "poi_name": poi_name,       # ⭐ 카드 큰 제목용
-                        "address": place_addr,
-                        "lat": lat,
-                        "lng": lng,
-                        "category": "meeting_point",
-                        "duration": None,
-                    }
-                )
-        else:
-            # fallback: 대표 center 하나만 후보로
             candidates.append(
                 {
-                    "name": "자동 추천 만남 장소",
-                    "poi_name": adjusted_main.get("poi_name"),
-                    "address": addr,
-                    "lat": center_lat,
-                    "lng": center_lon,
+                    "name": place_name,         # UI 라벨
+                    "poi_name": poi_name,       # 카드 큰 제목용
+                    "address": addr,            # 대표 center 기준 주소 공통 사용
+                    "lat": lat,
+                    "lng": lng,
                     "category": "meeting_point",
                     "duration": None,
                 }
