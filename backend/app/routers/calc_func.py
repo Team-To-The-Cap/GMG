@@ -19,17 +19,14 @@ import networkx as nx
 G = G.to_undirected()   # 또는 nx.MultiGraph(G_directed)
 
 MODE_SPEED_KMPH = {
-    # 도보
-    "도": 4.5,
-    "도보": 4.5,
-    "walk": 4.5,
-    "WALK": 4.5,
-
-    # 자동차
-    "차": 30.0,
-    "자동차": 30.0,
-    "drive": 30.0,
-    "DRIVE": 30.0,
+    # 1) 도보: 시속 4.5km
+    "도": 4.5, "도보": 4.5, "walk": 4.5, "WALK": 4.5,
+    
+    # 2) 자동차: 시속 30km (도심 평균 서행 기준)
+    "차": 30.0, "자동차": 30.0, "drive": 30.0, "DRIVE": 30.0, "car": 30.0,
+    
+    # 3) 대중교통: 일단 자동차와 동일하게 취급 (요청사항 반영)
+    "대중교통": 30.0, "public": 30.0, "PUBLIC": 30.0, "transit": 30.0, "bus": 30.0, "subway": 30.0
 }
 
 def mode_to_speed_kph(mode: str) -> float:
@@ -174,112 +171,146 @@ import networkx as nx
 
 def find_road_center_node_multi_mode(
     G: nx.MultiGraph,
-    coords_lonlat: List[Tuple[float, float]],  # [(lon, lat), ...]
-    modes: List[str],                          # 참가자별 교통수단
+    coords_lonlat: List[Tuple[float, float]], 
+    modes: List[str],             # 참가자별 교통수단 ['walk', 'public', 'drive', ...]
     return_paths: bool = True,
+    top_k: int = 3
 ) -> Dict[str, Any]:
     """
-    1번 방식:
-    - 그래프는 drive 하나
-    - 각 참가자마다 속도(도보/자동차 등)만 다르게 해서
-      '소요 시간' 기준 minimax center를 찾는다.
+    [멀티 모드 중간 지점 계산]
+    - 참가자별로 속도가 다르므로, '거리(m)'가 아닌 '시간(s)'을 기준으로 Minimax 지점을 찾습니다.
+    - Public은 Drive와 동일 속도로 계산됩니다.
     """
-
     if not coords_lonlat:
         raise ValueError("coords_lonlat is empty")
 
-    if len(coords_lonlat) != len(modes):
-        raise ValueError("coords_lonlat and modes must have same length")
+    # 모드 리스트 길이 맞추기 (부족하면 'drive'로 채움)
+    if len(modes) < len(coords_lonlat):
+        modes.extend(["drive"] * (len(coords_lonlat) - len(modes)))
 
     sources = snap_points_to_nodes(G, coords_lonlat)
     k = len(sources)
 
-    # v별 통계
-    counts: Dict[int, int] = {}      # v를 도달한 참가자 수
-    max_costs: Dict[int, float] = {} # v에서의 최대 소요시간(sec)
-    argmax_src: Dict[int, int] = {}  # 그 최대시간을 만든 참가자 출발노드
-    all_paths: Dict[int, Dict[int, List[int]]] = {}
+    # v별 통계 저장소
+    counts: Dict[int, int] = {}      # 해당 노드에 도달 가능한 참가자 수
+    max_costs: Dict[int, float] = {} # 해당 노드까지 걸리는 '가장 오래 걸리는 사람의 시간(초)'
+    
+    # 참가자별(source) 노드까지의 거리(m)를 저장해두는 딕셔너리 (나중에 상세 정보 출력용)
+    # dist_matrix[source_idx][target_node_id] = distance_meters
+    dist_matrix: Dict[int, Dict[int, float]] = {} 
 
-    # 참가자별로 Dijkstra 수행
-    for s, mode in zip(sources, modes):
+    # --- 1. 참가자별 다익스트라 수행 ---
+    for idx, (s, mode) in enumerate(zip(sources, modes)):
         speed_kph = mode_to_speed_kph(mode)
+        
+        # 1-1. 거리(meter) 기준 다익스트라
+        # 그래프에 'travel_time'이 있더라도, 도보/차량이 섞여 있으므로 
+        # 일단 거리(length)를 구하고 속도로 나누는 것이 정확합니다.
+        dists_m = nx.single_source_dijkstra_path_length(G, s, weight="length")
+        
+        dist_matrix[idx] = dists_m # 저장
 
-        # 1) 거리 기준 최단경로 (m)
-        dists_m, paths = nx.single_source_dijkstra(G, s, weight="length")
-        all_paths[s] = paths
-
+        # 1-2. 시간(seconds) 변환 및 집계
         for v, dist_m in dists_m.items():
-            # 2) 이 참가자의 v까지 시간(sec) = (m -> km) / km/h -> h -> sec
-            t_sec = (dist_m / 1000.0) / max(speed_kph, 1e-6) * 3600.0
+            # 시간(초) = (거리km / 속도km/h) * 3600
+            # speed_kph가 0일 경우 대비 max(speed, 0.1)
+            t_sec = (dist_m / 1000.0) / max(speed_kph, 0.1) * 3600.0
 
-            # 도달한 사람 수
             counts[v] = counts.get(v, 0) + 1
 
-            # v에서의 "최대 시간" 갱신
+            # Minimax 로직: v지점에서의 "최악의 시간(=가장 늦게 도착하는 사람)" 갱신
             if v not in max_costs or t_sec > max_costs[v]:
                 max_costs[v] = t_sec
-                argmax_src[v] = s
 
     if not counts:
         raise RuntimeError("No reachable nodes from any source.")
 
-    # 3) 모든 참가자에게서 도달 가능한 노드를 우선 후보로,
-    #    없으면 "가장 많은 참가자가 도달한" 노드들만 후보로 사용.
+    # --- 2. 후보군 선정 ---
+    # 전원이 도달 가능한 노드 우선
     max_reach = max(counts.values())
-    candidates = [v for v, c in counts.items() if c == k] or [
-        v for v, c in counts.items() if c == max_reach
-    ]
+    candidates = [v for v, c in counts.items() if c == k]
+    if not candidates:
+        # 전원 도달 불가시, 최대한 많이 만날 수 있는 곳들
+        candidates = [v for v, c in counts.items() if c == max_reach]
 
-    # 4) 후보 중에서 "최대 소요시간(max_costs[v])"이 최소인 노드 선택
-    best = min(candidates, key=lambda v: max_costs.get(v, float("inf")))
-    worst_src = argmax_src.get(best)
-    worst_cost = max_costs.get(best, float("inf"))  # sec
-
-    center_node = best
-    center_lon = float(G.nodes[center_node]["x"])
-    center_lat = float(G.nodes[center_node]["y"])
-
-    res: Dict[str, Any] = {
-        "node": int(center_node),
-        "lon": center_lon,
-        "lat": center_lat,
-        "max_travel_time_s": float(worst_cost),
-        "n_reached": int(counts[center_node]),
-        "n_sources": int(k),
-        "worst_source_node": int(worst_src) if worst_src is not None else None,
-        "worst_cost": float(worst_cost),
-    }
+    # --- 3. 최적 노드 정렬 (소요 시간 짧은 순) ---
+    # max_costs(가장 늦게 오는 사람의 시간)가 최소인 곳이 중간 지점
+    sorted_candidates = sorted(
+        candidates,
+        key=lambda v: max_costs.get(v, float("inf"))
+    )
     
-    # 5) per_person 정보까지 넣고 싶으면
+    top_nodes = sorted_candidates[:top_k]
+    best_node = top_nodes[0]
+    worst_cost = max_costs.get(best_node, float("inf"))
+
+    # --- 4. 결과 JSON 구성 ---
+    res: Dict[str, Any] = {
+        "node": int(best_node),
+        "lon": float(G.nodes[best_node]["x"]),
+        "lat": float(G.nodes[best_node]["y"]),
+        "max_travel_time_s": float(worst_cost), # 가장 오래 걸리는 사람의 시간
+        "n_reached": int(counts[best_node]),
+        "n_sources": int(k),
+        "top_candidates": []
+    }
+
+    # (1) Best Node 상권 보정
+    res["adjusted_point"] = adjust_to_busy_station_area(
+        lat=res["lat"], lng=res["lon"],
+        base_radius=400, station_search_radius=1500,
+        min_score=5.0, min_poi_count=8
+    )
+
+    # (2) Top K Candidates 정보 (+상권 보정)
+    for node in top_nodes:
+        lon = float(G.nodes[node]["x"])
+        lat = float(G.nodes[node]["y"])
+        cost = max_costs.get(node, float("inf"))
+        
+        cand_obj = {
+            "node": int(node),
+            "lon": lon,
+            "lat": lat,
+            "max_travel_time_s": float(cost),
+            "n_reached": int(counts[node]),
+        }
+        # 후보지 각각 보정 좌표 계산
+        cand_obj["adjusted_point"] = adjust_to_busy_station_area(
+            lat=lat, lng=lon,
+            base_radius=400, station_search_radius=1500,
+            min_score=5.0, min_poi_count=8
+        )
+        res["top_candidates"].append(cand_obj)
+
+    # (3) 참가자별 상세 정보 (per_person)
     if return_paths:
         per: List[Dict[str, Any]] = []
-
         for idx, (s, mode) in enumerate(zip(sources, modes)):
             speed_kph = mode_to_speed_kph(mode)
-            path_nodes = all_paths.get(s, {}).get(center_node)
-
-            if path_nodes is None:
+            
+            # 이 참가자가 best_node까지 가는 거리 가져오기
+            d_m = dist_matrix.get(idx, {}).get(best_node)
+            
+            if d_m is None:
                 per.append({
                     "index": idx,
                     "source_node": int(s),
                     "reachable": False,
                     "transportation": mode,
+                    "distance_m": None,
+                    "travel_time_s": None
                 })
             else:
-                # 경로 거리/시간 계산
-                dist_m = float(nx.path_weight(G, path_nodes, weight="length"))
-                t_sec = (dist_m / 1000.0) / max(speed_kph, 1e-6) * 3600.0
-
+                t_sec = (d_m / 1000.0) / max(speed_kph, 0.1) * 3600.0
                 per.append({
                     "index": idx,
                     "source_node": int(s),
                     "reachable": True,
                     "transportation": mode,
-                    # "path_nodes": list(map(int, path_nodes)),
-                    "distance_m": dist_m,
-                    "travel_time_s": t_sec,
+                    "distance_m": float(d_m),
+                    "travel_time_s": float(t_sec)
                 })
-
         res["per_person"] = per
 
     return res
@@ -290,27 +321,45 @@ def find_road_center_node_multi_mode(
 def get_meeting_point(
     lons: List[float] = Query(...),
     lats: List[float] = Query(...),
-    weight: str = Query("length", pattern="^(length|travel_time)$"),
-    mode: Literal["full", "point", "geojson"] = "full",  # ← 추가
+    # modes: ?modes=walk&modes=public&modes=drive ... 순서대로 매핑
+    modes: List[str] = Query(None), 
+    weight: str = Query("time", description="내부적으로 multi-mode일 때는 무조건 time 기준입니다."),
+    mode: Literal["full", "point", "geojson"] = "full",
 ):
+    """
+    [API] 중간 지점 찾기
+    - modes가 주어지지 않으면 모두 'drive'로 가정합니다.
+    - 'public'이 입력되면 'drive'와 동일한 속도로 계산합니다.
+    """
     if len(lons) != len(lats):
-        return {"error": "lons, lats 길이가 다릅니다."}
+        raise HTTPException(status_code=400, detail="lons와 lats의 길이가 다릅니다.")
+    
+    # modes 기본값 처리
+    if not modes:
+        modes = ["drive"] * len(lons)
+    
+    # 개수가 안 맞을 경우 채우기 (Safe guard)
+    if len(modes) < len(lons):
+         modes.extend(["drive"] * (len(lons) - len(modes)))
+    # 넘치면 자르기
+    modes = modes[:len(lons)]
+
     coords: List[Tuple[float, float]] = list(zip(lons, lats))
-    result = find_road_center_node(
-    G,
-    coords,
-    weight=weight,
-    return_paths=True,
-    top_k=3,   # 👈 추가: 상위 3개까지 계산
+    
+    # 멀티 모드 계산 호출
+    result = find_road_center_node_multi_mode(
+        G,
+        coords,
+        modes=modes,
+        return_paths=True,
+        top_k=3
     )
 
-    # ↓↓↓ 얇은 응답 분기 ↓↓↓
+    # 응답 형식 분기 (기존 유지)
     if mode == "point":
-        # 좌표만
         return {"lon": result["lon"], "lat": result["lat"]}
 
     if mode == "geojson":
-        # GeoJSON Point
         return {
             "type": "Feature",
             "geometry": {
@@ -318,13 +367,11 @@ def get_meeting_point(
                 "coordinates": [result["lon"], result["lat"]]
             },
             "properties": {
-                "weight": weight,
-                "n_sources": result["n_sources"],
-                "max_cost": result["max_distance_m"] or result["max_travel_time_s"],
+                "max_travel_time_s": result["max_travel_time_s"],
+                "n_sources": result["n_sources"]
             }
         }
 
-    # 기본(full)
     return result
 
 
