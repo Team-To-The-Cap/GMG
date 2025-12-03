@@ -42,6 +42,7 @@ def list_must_visit_places(
 
 # app/routers/meeting_must_visit_place.py
 
+
 @router.post(
     "/{meeting_id}/must-visit-places",
     response_model=schemas.MeetingMustVisitPlaceResponse,
