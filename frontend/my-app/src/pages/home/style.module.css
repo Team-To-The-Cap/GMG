@@ -1,0 +1,174 @@
+/* src/pages/home/style.module.css */
+
+/* 전체 컨테이너 */
+.wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 12px 16px calc(var(--bottom-nav-h) + 20px);
+  gap: 16px;
+}
+
+/* 약속이 하나도 없을 때 */
+.emptyWrap {
+  padding: 40px 20px calc(var(--bottom-nav-h) + 20px);
+  text-align: left;
+}
+
+/* 상단 헤더 */
+.headerSection {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.headerAvatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.35);
+}
+
+.headerTexts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.headerTextMain {
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.headerTextSub {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.highlight {
+  font-weight: 600;
+  color: #4f46e5;
+}
+
+/* 위젯 섹션 */
+.widgetsSection {
+  margin-top: 4px;
+}
+
+.widgetsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.widgetCard {
+  border-radius: 16px;
+  padding: 10px 12px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
+}
+
+.widgetEmoji {
+  font-size: 16px;
+}
+
+.widgetLabel {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.widgetValue {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+}
+
+/* 섹션 공통 */
+.section {
+  margin-top: 8px;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.sectionTitleWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sectionIcon {
+  font-size: 16px;
+}
+
+.sectionTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.sectionBadge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4f46e5;
+  font-weight: 600;
+}
+
+/* 섹션 리스트: 2열 그리드 */
+.sectionList {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 360px) {
+  .sectionList {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 카드 폭 */
+.card {
+  width: 100%;
+}
+
+/* 상태/재시도 버튼 */
+.state {
+  padding: 40px 16px;
+  text-align: center;
+  color: #666;
+}
+
+.retryBtn {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: none;
+  background: #4f46e5;
+  color: white;
+  font-size: 13px;
+}
+
+/* "약속 없음" 헤더 텍스트 공용 */
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bottomSpacer {
+  height: var(--bottom-nav-h);
+}

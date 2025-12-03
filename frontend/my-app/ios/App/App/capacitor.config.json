@@ -1,0 +1,8 @@
+{
+	"appId": "com.gmg.app",
+	"appName": "GMG",
+	"webDir": "dist",
+	"packageClassList": [
+		"SharePlugin"
+	]
+}

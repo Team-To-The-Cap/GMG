@@ -1,0 +1,425 @@
+/* src/pages/promise-main/style.module.css */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 16px calc(var(--bottom-nav-h) + 20px);
+  gap: 20px;
+}
+
+/* ─────────── Hero 카드 ─────────── */
+.heroCard {
+  width: 100%;
+  text-align: left;
+  background: linear-gradient(135deg, #f9fafb, #fff);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.badgeWrap {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.heroTitle {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 12px 0;
+}
+
+.avatars {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+
+.more {
+  background: #e5e7eb;
+  border-radius: 9999px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: #374151;
+}
+
+/* ─────────── Section ─────────── */
+.section {
+  width: 100%;
+}
+
+.participantGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 2fr));
+  gap: 12px;
+  margin-top: 10px;
+  padding: 12px 0px;
+  list-style: none;
+}
+
+/* 아바타/이름 하나의 아이템 */
+.participantItem {
+  --avatar: 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+/* 아바타를 감싸는 래퍼: 삭제 버튼의 기준점 */
+.avatarWrap {
+  position: relative;
+  width: var(--avatar);
+  height: var(--avatar);
+  display: grid;
+  place-items: center;
+}
+
+.avatarWrap :global(img),
+.avatarWrap img {
+  width: 100%;
+  height: 100%;
+  border-radius: 9999px;
+  display: block;
+  object-fit: cover;
+}
+
+/* 좌상단 겹치는 삭제 버튼 */
+.removeBtn {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  z-index: 1;
+
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 9999px;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  color: #111;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  transition: transform 0.12s ease, box-shadow 0.12s ease,
+    background-color 0.12s ease, opacity 0.12s ease;
+
+  opacity: 0.92;
+
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  will-change: transform;
+}
+
+.participantItem:hover .removeBtn,
+.removeBtn:focus-visible {
+  opacity: 1;
+}
+
+.removeBtn:hover {
+  transform: scale(1.06);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.16);
+  background: #f8fafc;
+}
+
+.removeBtn:active {
+  transform: scale(0.92);
+  background-color: #eef2f7;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.12), 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.removeBtn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--ring, rgba(62, 147, 250, 0.4));
+}
+
+.removeBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .removeBtn {
+    transition: none;
+  }
+}
+
+.participantItemName {
+  text-align: center;
+  word-break: break-word;
+  line-height: 1.2;
+}
+
+.scheduleText {
+  font-size: 15px;
+  color: #374151;
+  margin-top: 8px;
+}
+
+.courseCard {
+  margin-top: 8px;
+  text-align: center;
+  font-size: 14px;
+  color: #4b5563;
+}
+
+/* ─────────── 여백 ─────────── */
+.bottomSpacer {
+  height: var(--bottom-nav-h);
+}
+
+.sectionTitle {
+  margin: 16px 0 8px;
+  font-size: 25px;
+  font-weight: 700;
+  text-align: left;
+  width: 100%;
+}
+
+/* 결과 블록 내부 간격 */
+.sectionInner {
+  padding: 0px 7px;
+  display: grid;
+  grid-auto-flow: row;
+  gap: 20px;
+  align-content: start;
+}
+
+@media (max-width: 400px) {
+  .sectionInner {
+    gap: 16px;
+  }
+}
+
+.inputLike {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+  color: #111;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.2;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.inputLike:focus-visible {
+  outline: none;
+  border-color: var(--primary, #3e93fa);
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--ring, rgba(62, 147, 250, 0.4));
+}
+
+.inputReset {
+  border: 1px solid #e5e7eb;
+  background-color: #fff;
+  color: #111;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.2;
+
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 12px;
+
+  outline: none;
+  box-shadow: none;
+  appearance: none;
+}
+
+.inputReset:focus-visible {
+  border-color: var(--primary, #3e93fa);
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--ring, rgba(62, 147, 250, 0.4));
+}
+
+.placeholder {
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+.staticField {
+  cursor: default;
+  pointer-events: auto;
+  user-select: text;
+}
+
+/* 참가자 수정 버튼 */
+.editParticipantBtn {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #555;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* ───────── 반드시 가고 싶은 장소: 스와이프 삭제 행 ───────── */
+
+.swipeRow {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+}
+
+.swipeDeleteBtn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+
+  width: 80px;
+  border: none;
+  outline: none;
+
+  background: #f97373;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  cursor: pointer;
+}
+
+.swipeContent {
+  position: relative;
+  z-index: 1;
+  transition: transform 0.2s ease-out;
+  touch-action: pan-y;
+}
+
+/* ───────── 약속 분위기 / 목적 섹션 ───────── */
+
+/* 섹션 전체 카드 */
+.profileCard {
+  margin-top: 8px;
+  padding: 10px 12px 12px;
+  border-radius: 16px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 한 줄(질문 + 칩들) */
+.profileRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* 질문 라벨 */
+.profileRowLabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: #131517;
+}
+
+/* 칩 나열 영역 */
+.profileChipRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* 기본 칩 스타일 */
+.profileChip {
+  border-radius: 9999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  color: #4b5563;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, border-color 0.15s ease,
+    color 0.15s ease, transform 0.08s ease;
+}
+
+.profileChip:hover {
+  background: #f3f4f6;
+}
+
+/* 선택된 칩 */
+.profileChipSelected {
+  border-color: var(--primary, #3b82f6);
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+/* 칩 안 텍스트 */
+.profileChipLabel {
+  font-weight: 500;
+}
+
+/* (구버전 클래스들: 혹시 다른 곳에서 쓰고 있을 수 있어서 유지) */
+
+.profileSection {
+  padding: 8px 4px 0 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chipGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chipUnselected,
+.chipSelected {
+  border-radius: 9999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  color: #4b5563;
+  cursor: pointer;
+}
+
+.chipSelected {
+  border-color: var(--primary, #3b82f6);
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.memoTextarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 60px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  font-size: 13px;
+  line-height: 1.4;
+  outline: none;
+}
+
+.memoTextarea:focus-visible {
+  border-color: var(--primary, #3b82f6);
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--ring, rgba(59, 130, 246, 0.3));
+}

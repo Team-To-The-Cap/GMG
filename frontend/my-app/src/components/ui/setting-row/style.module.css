@@ -1,0 +1,10 @@
+.row {
+  display:flex; align-items:center; justify-content:space-between;
+  gap:12px; padding:12px 8px; background:#fff; border:0; text-align:left;
+  border-bottom:1px solid #f3f4f6;
+}
+.row:last-child { border-bottom:0; }
+.texts { flex:1; min-width:0; }
+.label { font-weight:600; }
+.desc { color:#6b7280; font-size:12px; margin-top:2px; }
+.chev { color:#9ca3af; font-size:20px; padding-left:8px; }

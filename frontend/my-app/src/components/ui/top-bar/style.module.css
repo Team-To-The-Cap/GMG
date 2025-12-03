@@ -1,0 +1,110 @@
+.topbar {
+  /* 기본(sm) 변수값 (조금 줄임) */
+  --h: 44px;
+  --icon: 32px;
+  --pad-y: 6px;
+  --pad-x: 4px;
+  --gap: 6px;
+  --title-size: 17px;
+
+  position: sticky;
+  top: 0;
+
+  /* 🔥 카드보다 확실히 위로 올리기 */
+  z-index: 9999;
+
+  /* tone에서 --bg를 바꿈 (기본 default) */
+  /* background-color를 명시해서 완전 불투명 레이어로 */
+  background-color: var(--topbar-bg, #f7f7f9);
+
+  display: grid;
+  grid-template-columns: var(--icon) 1fr var(--icon);
+  align-items: center;
+  gap: var(--gap);
+
+  padding-right: var(--pad-x);
+  padding-bottom: var(--pad-y);
+  padding-left: var(--pad-x);
+
+  padding-top: calc(var(--pad-y) + constant(safe-area-inset-top, 0px));
+  padding-top: calc(var(--pad-y) + env(safe-area-inset-top, 0px));
+
+  width: 100%;
+  min-height: calc(var(--h) + constant(safe-area-inset-top, 0px));
+  min-height: calc(var(--h) + env(safe-area-inset-top, 0px));
+
+  margin-bottom: 16px;
+
+  /* 선택: 아래쪽에 살짝 그림자 넣어서 구분감 주기 */
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
+}
+
+/* ===== Size variants ===== */
+.size-sm {
+  /* 위의 기본값이 sm */
+}
+
+.size-md {
+  --h: 50px;
+  --icon: 34px;
+  --pad-y: 7px;
+  --pad-x: 8px;
+  --gap: 8px;
+  --title-size: 18px;
+}
+
+.size-lg {
+  --h: 56px;
+  --icon: 38px;
+  --pad-y: 8px;
+  --pad-x: 12px;
+  --gap: 10px;
+  --title-size: 20px;
+}
+
+/* ===== Tone variants ===== */
+/* 🔹 둘 다 공통 배경 = 앱 전체 배경 */
+.tone-default {
+  --bg: var(--app-bg);
+}
+
+.tone-white {
+  --bg: var(--app-bg);
+}
+
+.iconBtn {
+  width: var(--icon);
+  height: var(--icon);
+  border: none;
+  background: transparent;
+  border-radius: 9999px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  color: #333;
+}
+
+.spacer {
+  width: var(--icon);
+  height: var(--icon);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--title-size);
+  font-weight: 700;
+  text-align: center;
+  line-height: 1;
+}
+
+.right {
+  width: var(--icon);
+  height: var(--icon);
+  display: grid;
+  place-items: center;
+}
+
+.shareText {
+  font-size: 11px;
+  font-weight: 600;
+}

@@ -1,0 +1,389 @@
+/* src/pages/mypage/style.module.css */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 12px 16px calc(var(--bottom-nav-h) + 20px);
+  gap: 14px;
+  background: #f9fafb;
+}
+
+/* ───── 헤더 영역 (홈 화면과 유사) ───── */
+
+.headerSection {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.headerAvatarBtn {
+  border: none;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.headerAvatarImg,
+.headerAvatarFallback {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 18px;
+  color: #f9fafb;
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.35);
+  overflow: hidden;
+  object-fit: cover;
+}
+
+.headerTexts {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.headerTextMain {
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.headerTextSub {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* ───── 카드 공통 섹션 ───── */
+
+.cardSection {
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 16px 16px 14px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.cardHeaderBtn {
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  padding: 5px 10px;
+  font-size: 11px;
+  background: #ffffff;
+  color: #4b5563;
+  cursor: pointer;
+}
+
+.cardHeaderBtn:hover {
+  background: #f9fafb;
+}
+
+.cardBadge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4f46e5;
+  font-weight: 600;
+}
+
+.cardDescription {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+.accent {
+  font-weight: 600;
+  color: #4f46e5;
+}
+
+/* ───── 프로필 라인 ───── */
+
+.profileRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.profileTextBlock {
+  flex: 1;
+}
+
+.profileName {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.profileHint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* ───── 필드 그룹 (입력) ───── */
+
+.fieldGroup {
+  margin-top: 10px;
+}
+
+.fieldLabel {
+  display: block;
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.fieldInput {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  padding: 10px 12px;
+  font-size: 14px;
+  outline: none;
+  background: #f9fafb;
+}
+
+.fieldInput:focus {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 1px rgba(79, 70, 229, 0.15);
+  background: #ffffff;
+}
+
+/* 서브 프라이머리 버튼 (카드 내부 작은 버튼) */
+
+.subPrimaryBtn {
+  margin-top: 12px;
+  width: 100%;
+  border-radius: 12px;
+  border: none;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  background: #eef2ff;
+  color: #4f46e5;
+  cursor: pointer;
+}
+
+.subPrimaryBtn:hover {
+  background: #e0e7ff;
+}
+
+/* ───── 장소 리스트 ───── */
+
+.placeList {
+  margin-top: 12px;
+}
+
+.placeCard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 14px;
+  border: 1px solid #e5e7eb;
+  padding: 10px 10px;
+  margin-bottom: 8px;
+  background: #f9fafb;
+}
+
+.placeIcon {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #eef2ff;
+}
+
+.pinSvg {
+  color: #4f46e5;
+  width: 18px;
+  height: 18px;
+}
+
+.placeTexts {
+  flex: 1;
+  min-width: 0;
+}
+
+.placeName {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.placeAddr {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trashBtn {
+  background: #ffffff;
+  border-radius: 999px;
+  border: 1px solid #fee2e2;
+  padding: 6px;
+  cursor: pointer;
+}
+
+.trashBtn:hover {
+  background: #fef2f2;
+}
+
+.trashSvg {
+  color: #ef4444;
+  width: 18px;
+  height: 18px;
+}
+
+.empty {
+  margin-top: 4px;
+  padding: 10px;
+  font-size: 12px;
+  color: #9ca3af;
+  text-align: left;
+  background: #f9fafb;
+  border-radius: 12px;
+}
+
+/* ───── 카테고리(PreferenceChip) 그리드 ───── */
+
+.emojiGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+/* ───── 하단 저장 바 ───── */
+
+.saveBar {
+  position: sticky;
+  bottom: 12px;
+  margin-top: 4px;
+}
+
+.primaryBtn {
+  width: 100%;
+  border-radius: 999px;
+  border: none;
+  padding: 13px 16px;
+  font-size: 15px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
+  color: #ffffff;
+  box-shadow: 0 6px 14px rgba(79, 70, 229, 0.35);
+  cursor: pointer;
+}
+
+.primaryBtn:active {
+  transform: translateY(1px);
+  box-shadow: 0 4px 10px rgba(79, 70, 229, 0.25);
+}
+
+/* 선호 카테고리(아코디언) */
+.prefHelper {
+  font-size: 12px;
+  color: #6b7280;
+  margin: -4px 0 8px;
+}
+
+.prefList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prefItem {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.prefCatBtn {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 0;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.prefCatBtnSelected {
+  background: #5b74ff;
+  color: #fff;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.12);
+}
+
+.prefCatLeft {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.prefEmoji {
+  font-size: 18px;
+}
+
+.prefCount {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.prefChevron {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.subWrap {
+  margin-left: 10px;
+  padding-left: 10px;
+  border-left: 2px solid #e5e7eb;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.subChip {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.subChipSelected {
+  border-color: #5b74ff;
+  color: #5b74ff;
+  background: #eef2ff;
+}
+

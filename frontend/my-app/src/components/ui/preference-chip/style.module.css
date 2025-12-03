@@ -1,0 +1,12 @@
+.chip {
+  border:1px solid #e5e7eb; background:#fff; padding:8px 12px; border-radius:999px; font-size:14px;
+}
+.selected { border-color:#5b74ff; background:#eef0ff; color:#3949ab; }
+
+/* stack 모드(이모지형) */
+.stack {
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  border-radius:16px; padding:12px 8px; height:84px; /* 카드 느낌 */
+}
+.emoji { font-size:22px; line-height:1; }
+.label { margin-top:6px; font-size:14px; }

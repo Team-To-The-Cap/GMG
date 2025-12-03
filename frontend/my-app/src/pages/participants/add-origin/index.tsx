@@ -1,0 +1,306 @@
+import { useMemo, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { MapPin, ChevronRight, CheckCircle2 } from "lucide-react";
+import Button from "@/components/ui/button";
+
+import type { ParticipantLocationState } from "@/types/participant";
+
+// 🔹 새 참가자별 출발지 스토리지 유틸
+import {
+  loadParticipantPlaces,
+  saveParticipantPlaces,
+  type StoredParticipantPlace as SavedPlace,
+} from "@/utils/participant-place-storage";
+
+export default function AddParticipantOriginPage() {
+  const navigate = useNavigate();
+  const { promiseId } = useParams();
+  const location = useLocation();
+
+  const state = (location.state || {}) as ParticipantLocationState & {
+    participantDraftId?: string | null;
+    savedPlaces?: SavedPlace[];
+  };
+
+  const nameDraft = state.nameDraft ?? "";
+  const effectivePromiseId = promiseId ?? "no-meeting";
+
+  // 🔹 참가자별 storage ID (절대 새로 만들지 않고 state만 사용)
+  // - 기존 참가자 수정: "id-<서버ID>"
+  // - 신규 참가자: AddParticipantStartPage 에서 만든 participantDraftId
+  // - 둘 다 없으면 fallback "draft-unknown" (이 경우에는 기록이 공유될 수 있으니 이론상 거의 안 타야 함)
+  const participantStorageId = useMemo(() => {
+    if (state.editParticipantId != null) {
+      return `id-${state.editParticipantId}`;
+    }
+    if (state.participantDraftId) {
+      return state.participantDraftId;
+    }
+    return "draft-unknown";
+  }, [state.editParticipantId, state.participantDraftId]);
+
+  // ───────────────── 저장된 장소 목록 (참가자별) ─────────────────
+  const baseSaved = useMemo<SavedPlace[]>(() => {
+    if (state.savedPlaces && state.savedPlaces.length) {
+      return state.savedPlaces;
+    }
+    return loadParticipantPlaces(effectivePromiseId, participantStorageId);
+  }, [state.savedPlaces, effectivePromiseId, participantStorageId]);
+
+  // 🔹 selectedOrigin: string | SavedPlace | null → SavedPlace | null 로 정규화
+  const normalizedSelected = useMemo<SavedPlace | null>(() => {
+    const raw = state.selectedOrigin;
+    if (!raw) return null;
+
+    if (typeof raw === "string") {
+      const norm = raw.trim();
+
+      const found = baseSaved.find((p) => {
+        const name = (p.name ?? "").trim();
+        const addr = (p.address ?? "").trim();
+        return (
+          name === norm ||
+          addr === norm ||
+          name.includes(norm) ||
+          norm.includes(name) ||
+          addr.includes(norm) ||
+          norm.includes(addr)
+        );
+      });
+
+      if (found) return found;
+
+      // 문자열만 넘어왔고, 기존 saved 에 없으면 ad-hoc SavedPlace 로 취급
+      return {
+        id: norm,
+        name: norm,
+        address: norm,
+      };
+    }
+
+    return raw as SavedPlace;
+  }, [state.selectedOrigin, baseSaved]);
+
+  // ───────────────── 화면에 보여줄 saved 리스트 ─────────────────
+  const saved = useMemo<SavedPlace[]>(() => {
+    if (!normalizedSelected) return baseSaved;
+
+    const exists = baseSaved.some(
+      (p) =>
+        p.id === normalizedSelected.id ||
+        (p.address &&
+          normalizedSelected.address &&
+          p.address.trim() === normalizedSelected.address.trim())
+    );
+
+    if (exists) return baseSaved;
+
+    return [normalizedSelected, ...baseSaved];
+  }, [baseSaved, normalizedSelected]);
+
+  // 🔹 선택 상태
+  const [selectedId, setSelectedId] = useState<string | null>(
+    normalizedSelected?.id ?? null
+  );
+
+  const selectedPlace = useMemo(
+    () => saved.find((p) => p.id === selectedId) || null,
+    [saved, selectedId]
+  );
+
+  const [transportation, setTransportation] = useState<string>(
+    state.selectedTransportation ?? "대중교통"
+  );
+
+  const onBack = () => navigate(-1);
+
+  const toggleSelect = (p: SavedPlace) => {
+    setSelectedId((cur) => (cur === p.id ? null : p.id));
+  };
+
+  // ───────────────── “새로운 장소 검색하기” → 검색 페이지 ─────────────────
+  const openSearch = () => {
+    const segments = location.pathname.split("/");
+    const mode = segments[1]; // 'details' 또는 'create'
+
+    const path = promiseId
+      ? `/${mode}/${promiseId}/participants/new/origin/search`
+      : `/participants/new/origin/search`;
+
+    navigate(path, {
+      state: {
+        ...state,
+        savedPlaces: saved,
+        selectedOrigin: selectedPlace ?? normalizedSelected ?? null,
+        // ✅ 여기서도 항상 동일한 participantDraftId를 넘겨준다 (신규 참가자일 때)
+        participantDraftId: state.participantDraftId ?? participantStorageId,
+      },
+    });
+  };
+
+  const openAll = () => {
+    alert("전체보기로 이동 (라우트 연결 예정)");
+  };
+
+  // ───────────────── 확인 버튼: 이전 페이지로 선택 결과 반환 ─────────────────
+  const onConfirm = () => {
+    if (!selectedPlace) return;
+
+    // ✅ 참가자별 저장소에 현재 saved 리스트 저장
+    saveParticipantPlaces(effectivePromiseId, participantStorageId, saved);
+
+    const segments = location.pathname.split("/");
+    const mode = segments[1];
+
+    const path = promiseId
+      ? `/${mode}/${promiseId}/participants/new`
+      : `/participants/new`;
+
+    navigate(path, {
+      state: {
+        ...state,
+        nameDraft,
+        // SavedPlace 객체 그대로 넘김
+        selectedOrigin: selectedPlace,
+        selectedTransportation: transportation,
+        savedPlaces: saved,
+        // ✅ 같은 draftId 유지
+        participantDraftId: state.participantDraftId ?? participantStorageId,
+      },
+    });
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <div className="px-4 py-3">
+        {/* 저장된 장소 헤더 */}
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-semibold text-slate-900">
+            저장된 장소
+          </span>
+
+          <button
+            onClick={openAll}
+            className="text-indigo-500 text-xs font-medium px-2 py-1 rounded-full hover:bg-indigo-100"
+          >
+            전체보기
+          </button>
+        </div>
+
+        {/* 새로운 장소 검색하기 카드 */}
+        <button
+          onClick={openSearch}
+          className="w-full flex items-start gap-2 px-4 py-3.5 rounded-2xl shadow-md bg-white active:scale-[0.99] transition mb-6"
+        >
+          <div className="w-9 h-9 flex items-center justify-center rounded-full bg-indigo-50 text-indigo-500 mt-0.5">
+            <MapPin size={24} />
+          </div>
+
+          <div className="flex flex-col flex-1 text-left">
+            <div className="text-[15px] font-semibold text-gray-900">
+              새로운 장소 검색하기
+            </div>
+            <div className="text-[12px] text-gray-500">
+              지정된 장소 또는 검색으로 선택
+            </div>
+          </div>
+
+          <ChevronRight size={18} className="text-slate-400" />
+        </button>
+
+        {/* 저장된 장소 리스트 */}
+        <ul className="space-y-2">
+          {saved.map((p) => {
+            const active = selectedId === p.id;
+            return (
+              <li
+                key={p.id}
+                onClick={() => toggleSelect(p)}
+                className={`flex items-center gap-3 p-3.5 rounded-2xl border shadow-sm cursor-pointer 
+                active:scale-[0.99] transition
+                ${
+                  active
+                    ? "bg-indigo-50 border-indigo-200"
+                    : "bg-white border-slate-100"
+                }
+              `}
+              >
+                <div
+                  className={`w-9 h-9 grid place-items-center rounded-full
+                  ${
+                    active
+                      ? "bg-indigo-100 text-indigo-600"
+                      : "bg-indigo-50 text-indigo-500"
+                  }
+                `}
+                >
+                  <MapPin size={20} />
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="text-[15px] font-semibold text-slate-900 truncate">
+                    {p.name}
+                  </div>
+                  <div className="text-[12px] text-slate-500 truncate">
+                    {p.address}
+                  </div>
+                </div>
+
+                <div className="text-slate-400">
+                  {active ? (
+                    <CheckCircle2 size={20} className="text-indigo-600" />
+                  ) : (
+                    <ChevronRight size={18} />
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+
+        {/* 이동수단 선택 + 하단 버튼 */}
+        <div className="h-4" />
+
+        <div className="mt-4">
+          <div className="text-sm font-semibold text-gray-800 mb-2 px-1">
+            이동수단
+          </div>
+
+          <div className="flex items-center bg-white rounded-xl p-1 shadow-sm border border-gray-200 w-full">
+            {["대중교통", "자동차", "도보"].map((t) => {
+              const active = transportation === t;
+              return (
+                <button
+                  key={t}
+                  onClick={() => setTransportation(t)}
+                  className={[
+                    "flex-1 py-2 rounded-lg text-sm font-medium transition",
+                    active
+                      ? "bg-blue-400 text-white shadow-sm"
+                      : "text-gray-500 hover:bg-gray-100",
+                  ].join(" ")}
+                >
+                  {t}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="mt-6 grid grid-cols-2 gap-3 px-1 pb-10">
+          <Button variant="ghost" size="md" onClick={onBack}>
+            취소
+          </Button>
+          <Button
+            variant="primary"
+            size="md"
+            onClick={onConfirm}
+            disabled={!selectedPlace}
+          >
+            확인
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
