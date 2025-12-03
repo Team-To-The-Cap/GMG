@@ -246,7 +246,7 @@ export default function AddParticipantStartPage() {
         );
 
         res = await fetch(
-          `http://223.130.152.114:8001/meetings/${numericMeetingId}/participants/${numericParticipantId}`,
+          `http://211.188.55.98:8001/meetings/${numericMeetingId}/participants/${numericParticipantId}`,
           {
             method: "PATCH",
             headers: {
@@ -264,7 +264,7 @@ export default function AddParticipantStartPage() {
       } else {
         // 🔹 신규 생성 모드 → POST /meetings/{meeting_id}/participants/
         res = await fetch(
-          `http://223.130.152.114:8001/meetings/${numericMeetingId}/participants/`,
+          `http://211.188.55.98:8001/meetings/${numericMeetingId}/participants/`,
           {
             method: "POST",
             headers: {

@@ -51,7 +51,7 @@ export const CalendarDisplaySection = (): JSX.Element => {
       if (!promiseId) return;
 
       const res = await fetch(
-        `http://223.130.152.114:8001/meetings/${promiseId}/participants`
+        `http://211.188.55.98:8001/meetings/${promiseId}/participants`
       );
       const data = await res.json();
       console.log("participants:", data);
@@ -227,8 +227,7 @@ export const CalendarDisplaySection = (): JSX.Element => {
               availability={currentMonthAvailability}
               maxAvailability={maxAvailability}
               onDayClick={handleDayClick}
-              selectedDays={clickedDay ? [clickedDay] : []} // 🔹 선택된 날 표시
-              dimPastDays // 🔹 과거 날짜 흐리게
+              initialSelected={clickedDay ? [clickedDay] : []} // ✅ 기존 selectedDays 대신
             />
           </div>
         </div>
