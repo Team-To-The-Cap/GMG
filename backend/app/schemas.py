@@ -205,11 +205,11 @@ class MeetingPlaceUpdate(BaseModel):
 class MeetingMustVisitPlaceBase(BaseModel):
     name: str
     address: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 
 class MeetingMustVisitPlaceCreate(MeetingMustVisitPlaceBase):
-    # body 로 받을 때 meeting_id 를 같이 줄 수도 있고,
-    # path parameter 로 받을 수도 있음 (라우터 구현에 맞춰 사용)
     meeting_id: int
 
 
@@ -232,7 +232,7 @@ class MeetingMustVisitPlaceRead(MeetingMustVisitPlaceResponse):
 
 class MeetingResponse(MeetingBase):
     id: int
-    name: Optional[str] = None  # (MeetingBase에서 상속받았지만 명시적으로 다시 작성)
+    name: Optional[str] = None
 
     participants: List[ParticipantResponse] = []
     plan: Optional[MeetingPlanResponse] = None
