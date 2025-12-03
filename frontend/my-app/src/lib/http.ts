@@ -13,7 +13,7 @@ const isCapacitor =
 
 // 환경별 기본 BASE_URL
 const DEFAULT_BASE_URL = isCapacitor
-  ? "http://223.130.152.114:8001" // 🔥 iOS/Android에서 사용할 백엔드 주소
+  ? "http://211.188.55.98:8001" // 🔥 iOS/Android에서 사용할 백엔드 주소
   : "/api"; // 브라우저(dev/prod)에서는 기존처럼 프록시/리버스프록시 사용
 
 // 최종 BASE_URL: .env 값이 있으면 우선, 없으면 위 기본값 사용

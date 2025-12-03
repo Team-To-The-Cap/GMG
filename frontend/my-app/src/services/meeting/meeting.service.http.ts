@@ -2,7 +2,7 @@
 import type { Meeting } from "@/types/meeting";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ?? "http://223.130.152.114:8001";
+  import.meta.env.VITE_API_BASE_URL ?? "http://211.188.55.98:8001";
 
 /** FastAPI: POST /meetings */
 export async function createMeeting(name: string): Promise<Meeting> {
