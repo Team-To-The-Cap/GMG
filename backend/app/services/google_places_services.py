@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional
 
 import logging
 import requests
+import json  # ✅ 추가
 from core.config import GOOGLE_MAPS_API_KEY
 
 log = logging.getLogger(__name__)
@@ -50,34 +51,34 @@ def fetch_nearby_places(
         return []
 
     data = res.json()
-    return data.get("results", [])
 
+    # ✅ 여기만 임시로 print로 바꾸자
+    print(
+        "[PLACES] nearby result sample:",
+        json.dumps(data.get("results", [])[:3], ensure_ascii=False, indent=2),
+        flush=True,   # 버퍼링 방지
+    )
+
+    return data.get("results", [])
 
 def fetch_nearby_stations(
     lat: float,
     lng: float,
     radius: int = 1500,
 ) -> List[Dict[str, Any]]:
-    """
-    주변 역(지하철/기차/버스) 후보들만 필터링해서 반환.
-    -> 너무 많은 로그 안 찍게 요약만 출력
-    """
-    # 1) transit_station 기준으로만 한 번 호출 (심플하게)
     places = fetch_nearby_places(
         lat=lat,
         lng=lng,
         radius=radius,
-        type="transit_station",  # ★ 핵심: 역/환승 관련 장소만 가져오기
+        type="transit_station",
     )
 
-    # 2) 역 타입만 필터링
     stations = [
         p
         for p in places
         if any(t in STATION_TYPES for t in (p.get("types") or []))
     ]
 
-    # 3) 로그는 한 줄만 (몇 개 나왔는지만)
     log.info(
         "[GGL] stations search lat=%.6f, lng=%.6f, radius=%d -> %d stations",
         lat,

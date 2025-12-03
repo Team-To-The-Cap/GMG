@@ -1,8 +1,12 @@
-from pydantic import BaseModel
+# app/schemas.py
 from typing import Optional, List
 from datetime import datetime, date
+from pydantic import BaseModel
 
 
+# ================================
+# MeetingPlanAvailableDate 스키마
+# ================================
 
 class MeetingPlanAvailableDateBase(BaseModel):
     date: date
@@ -10,7 +14,7 @@ class MeetingPlanAvailableDateBase(BaseModel):
 
 class MeetingPlanAvailableDateCreate(MeetingPlanAvailableDateBase):
     pass
-    
+
 
 class MeetingPlanAvailableDateResponse(MeetingPlanAvailableDateBase):
     id: int
@@ -22,11 +26,9 @@ class MeetingPlanAvailableDateResponse(MeetingPlanAvailableDateBase):
         from_attributes = True
 
 
-
 # ================================
 # ParticipantTime (참가 가능 시간) 스키마
 # ================================
-
 
 class ParticipantTimeCreate(BaseModel):
     start_time: datetime
@@ -35,35 +37,44 @@ class ParticipantTimeCreate(BaseModel):
 
 class ParticipantTimeResponse(ParticipantTimeCreate):
     id: int
-    #participant_id: int # 이 시간이 어떤 참가자의 것인지
-    
+    # participant_id: int  # 이 시간이 어떤 참가자의 것인지 (필요하면 사용)
+
     class Config:
         from_attributes = True
 
 
+# ================================
+# Participant (참가자) 스키마
+# ================================
+
 class ParticipantCreate(BaseModel):
     name: str
     member_id: Optional[int] = None
-    # start_latitude: float
-    # start_longitude: float
-    start_address: str
-    transportation: str
+
+    # 🔹 출발 장소 / 교통수단 / 선호는 선택
+    start_address: Optional[str] = None
+    transportation: Optional[str] = None
     fav_activity: Optional[str] = None
-    
-    available_times: List[ParticipantTimeCreate]
+
+    # 🔹 일정도 선택 (없으면 빈 리스트)
+    available_times: List[ParticipantTimeCreate] = []
+
 
 class ParticipantResponse(BaseModel):
     id: int
     name: str
     member_id: Optional[int] = None
-    start_latitude: float 
-    start_longitude: float  
-    start_address: str
-    transportation: str
+
+    # 🔹 전부 Optional + 기본값 None
+    start_latitude: Optional[float] = None
+    start_longitude: Optional[float] = None
+    start_address: Optional[str] = None
+    transportation: Optional[str] = None
+
     fav_activity: Optional[str] = None
-    
-    available_times: List[ParticipantTimeResponse] = [] 
-    
+
+    available_times: List[ParticipantTimeResponse] = []
+
     class Config:
         from_attributes = True
 
@@ -76,7 +87,7 @@ class ParticipantUpdate(BaseModel):
     start_address: Optional[str] = None
     transportation: Optional[str] = None
     fav_activity: Optional[str] = None
-    
+
     # [추가] 참가 가능 시간 목록도 (덮어쓰기용으로) 선택적 입력
     available_times: Optional[List[ParticipantTimeCreate]] = None
 
@@ -88,75 +99,93 @@ class ParticipantUpdate(BaseModel):
 class MeetingBase(BaseModel):
     name: Optional[str] = None
 
+    # ✨ 약속의 분위기/목적 관련 공통 필드
+    with_whom: Optional[str] = None   # friends, coworkers, family, couple, club ...
+    purpose: Optional[str] = None     # casual_talk, meeting, celebration ...
+    vibe: Optional[str] = None        # quiet, relaxed, lively, party ...
+    budget: Optional[str] = None      # under_10, 10_20, 20_30, 30_50, over_50
+    profile_memo: Optional[str] = None  # 자유 메모
+
+
 class MeetingCreate(MeetingBase):
-    # 'name' 필드를 MeetingBase로부터 상속받으므로 추가 내용 없음
+    # name + 위 필드들로 생성 가능
     pass
 
 
-
 class MeetingUpdate(BaseModel):
+    # 부분 업데이트용: 전부 Optional
     name: Optional[str] = None
+    with_whom: Optional[str] = None
+    purpose: Optional[str] = None
+    vibe: Optional[str] = None
+    budget: Optional[str] = None
+    profile_memo: Optional[str] = None
 
 # ==========================
 # Meeting_Plan 스키마
 # ==========================
 
-# 1. MeetingPlan 생성(POST) 시 받을 입력 데이터
 class MeetingPlanCreate(BaseModel):
-    meeting_time: datetime
-    address: str
-    latitude: float
-    longitude: float
-    total_time: Optional[int] = None # 선택 사항
+    # ★ Optional 로 변경 (자동 계산에서 일정/장소 미정일 수 있음)
+    meeting_time: Optional[datetime] = None
+    address: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    total_time: Optional[int] = None  # 선택 사항
 
 
 class MeetingPlanResponse(BaseModel):
     id: int
     meeting_id: int
-    meeting_time: datetime
-    address: str
-    latitude: float
-    longitude: float
+
+    # ★ 일정 미정 허용
+    meeting_time: Optional[datetime] = None
+
+    # ★ 장소 / 좌표도 미정 허용
+    address: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
     total_time: Optional[int] = None
-    
+
     available_dates: List[MeetingPlanAvailableDateResponse] = []
 
     class Config:
-        from_attributes = True 
+        from_attributes = True
 
 
 class MeetingPlanUpdate(BaseModel):
+    # 부분 업데이트용: 전부 Optional
     meeting_time: Optional[datetime] = None
     address: Optional[str] = None
-    latitude: float
-    longitude: float
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     total_time: Optional[int] = None
 
 
-
-
-    
 # ================================
-# [신규] MeetingPlace (약속 코스/장소) 스키마
+# MeetingPlace (약속 코스/장소) 스키마
 # ================================
 
-# 1. MeetingPlace 생성(POST) 시 받을 입력 데이터
-#    (meeting_id는 URL에서 받으므로 여기서는 제외)
 class MeetingPlaceCreate(BaseModel):
-    name: str
+    name: str                               # 카드용 라벨 (자동 추천 만남 장소, 자동 추천 후보 #2 ...)
     latitude: float
     longitude: float
     address: str
     category: Optional[str] = None
     duration: Optional[int] = None
 
-# 2. API가 반환할 출력 데이터 (ID 포함)
+    # ⭐ 추가: 지하철역/POI 이름 (네이버의 "이태원역 6호선" 같은 제목용)
+    poi_name: Optional[str] = None
+
+
 class MeetingPlaceResponse(MeetingPlaceCreate):
     id: int
-    meeting_id: int # 어떤 약속에 속했는지
-    
+    meeting_id: int  # 어떤 약속에 속했는지
+
     class Config:
-        from_attributes = True # Pydantic V2
+        from_attributes = True  # Pydantic V2 호환
+
 
 class MeetingPlaceUpdate(BaseModel):
     name: Optional[str] = None
@@ -166,22 +195,50 @@ class MeetingPlaceUpdate(BaseModel):
     category: Optional[str] = None
     duration: Optional[int] = None
 
+    # ⭐ 추가
+    poi_name: Optional[str] = None
+
+# ================================
+# MeetingMustVisitPlace 스키마
+# ================================
+
+class MeetingMustVisitPlaceBase(BaseModel):
+    name: str
+    address: Optional[str] = None
 
 
+class MeetingMustVisitPlaceCreate(MeetingMustVisitPlaceBase):
+    # body 로 받을 때 meeting_id 를 같이 줄 수도 있고,
+    # path parameter 로 받을 수도 있음 (라우터 구현에 맞춰 사용)
+    meeting_id: int
 
-class MeetingResponse(MeetingBase):
+
+class MeetingMustVisitPlaceResponse(MeetingMustVisitPlaceBase):
     id: int
-    name : Optional[str] = None # (MeetingBase에서 상속받았지만 명시적으로 다시 작성)
+    meeting_id: int
 
-    participants: List[ParticipantResponse] = [] 
-
-    plan: Optional[MeetingPlanResponse] = None
-    
-    places: List[MeetingPlaceResponse] = []
-    
     class Config:
-        # SQLAlchemy 모델 객체를 Pydantic 모델로 자동 변환
         from_attributes = True
 
 
+# 라우터에서 쓰고 있는 이름을 위해 alias 하나 더 제공
+class MeetingMustVisitPlaceRead(MeetingMustVisitPlaceResponse):
+    pass
 
+
+# ================================
+# 최종 Meeting 응답 스키마
+# ================================
+
+class MeetingResponse(MeetingBase):
+    id: int
+    name: Optional[str] = None  # (MeetingBase에서 상속받았지만 명시적으로 다시 작성)
+
+    participants: List[ParticipantResponse] = []
+    plan: Optional[MeetingPlanResponse] = None
+    places: List[MeetingPlaceResponse] = []
+
+    must_visit_places: List[MeetingMustVisitPlaceResponse] = []
+
+    class Config:
+        from_attributes = True
