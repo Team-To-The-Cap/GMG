@@ -1,12 +1,11 @@
-# app/routers/course.py (예시 경로)
+# app/routers/course.py
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import List
 import math
 
-# google_api.py 위치에 맞게 import 경로 조정
-# 예: from api.v1.endpoints.google_api import get_nearby_places
-from .google_api import get_nearby_places  # 같은 폴더라면 이렇게
+# ✅ 서비스 레벨 Google Places 호출 사용 (파일 이름에 s 붙음!)
+from ..services.google_places_services import fetch_nearby_places
 
 router = APIRouter(prefix="/courses", tags=["Courses"])
 
@@ -15,7 +14,10 @@ router = APIRouter(prefix="/courses", tags=["Courses"])
 
 class StepInput(BaseModel):
     query: str = Field(..., description="검색어, 예: 영화관, 파스타, 카페")
-    type: str = Field("restaurant", description="Google Places type, 예: movie_theater, restaurant, cafe")
+    type: str = Field(
+        "restaurant",
+        description="Google Places type, 예: movie_theater, restaurant, cafe",
+    )
 
 
 class CourseRequest(BaseModel):
@@ -34,7 +36,7 @@ class PlaceCandidate(BaseModel):
     rating: float = 0.0
     user_ratings_total: int = 0
     address: str | None = None
-    step_index: int  # 0: 1단계(예: 영화), 1: 2단계(밥), 2: 3단계(카페)
+    step_index: int  # 0: 1단계, 1: 2단계, 2: 3단계
 
 
 class Course(BaseModel):
@@ -59,7 +61,10 @@ def haversine_distance(lat1: float, lng1: float, lat2: float, lng2: float) -> fl
     dphi = math.radians(lat2 - lat1)
     dlambda = math.radians(lng2 - lng1)
 
-    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    a = (
+        math.sin(dphi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    )
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
 
@@ -69,11 +74,11 @@ def to_candidates(
     step_index: int,
 ) -> List[PlaceCandidate]:
     """
-    /maps/places 응답의 cleaned place(dict)를 PlaceCandidate로 변환
+    fetch_nearby_places 응답의 place(dict)를 PlaceCandidate로 변환
     """
     candidates: List[PlaceCandidate] = []
     for p in raw_places:
-        loc = p.get("location") or {}
+        loc = p.get("geometry", {}).get("location", {})
         lat = loc.get("lat")
         lng = loc.get("lng")
         if lat is None or lng is None:
@@ -87,7 +92,7 @@ def to_candidates(
                 lng=lng,
                 rating=p.get("rating", 0.0) or 0.0,
                 user_ratings_total=p.get("user_ratings_total", 0) or 0,
-                address=p.get("address"),
+                address=p.get("vicinity"),  # google_api에서 쓰던 필드명 그대로
                 step_index=step_index,
             )
         )
@@ -99,18 +104,14 @@ def score_course(a: PlaceCandidate, b: PlaceCandidate, c: PlaceCandidate) -> Cou
     길이 3 코스의 점수를 계산한다.
     - 평점 보너스: rating 합
     - 이동 거리 패널티: 총 거리(m)에 -lambda 곱
-    (lambda는 경험적으로 조정)
     """
-    # a -> b -> c 거리
     d1 = haversine_distance(a.lat, a.lng, b.lat, b.lng)
     d2 = haversine_distance(b.lat, b.lng, c.lat, c.lng)
     total_d = d1 + d2
 
     rating_sum = a.rating + b.rating + c.rating
 
-    # 간단한 예시 스코어:
-    #   평점 1점 = +1
-    #   거리 100m당 0.05점 패널티
+    # 거리 패널티 정도는 나중에 튜닝 가능
     lambda_ = 0.05 / 100.0
     score = rating_sum - lambda_ * total_d
 
@@ -121,16 +122,13 @@ def score_course(a: PlaceCandidate, b: PlaceCandidate, c: PlaceCandidate) -> Cou
     )
 
 
-# ---------- Main Endpoint ----------
+# ---------- 내부 로직 함수 (서비스/다른 라우터에서 재사용용) ----------
 
-@router.post("/plan", response_model=CourseResponse)
-def plan_fixed_length_3_course(req: CourseRequest) -> CourseResponse:
+def plan_courses_internal(req: CourseRequest) -> CourseResponse:
     """
-    길이 3(예: 영화관 -> 밥집 -> 카페) 코스를 추천하는 API
-
-    - 내부적으로 기존 /maps/places(get_nearby_places)를 재사용
-    - 각 step마다 per_step_limit 개수만큼 후보를 가져와서
-      모든 조합을 완탐하여 점수가 높은 코스를 반환
+    실제 코스 생성 로직.
+    - FastAPI 의존성 없이 순수 Python 함수라
+      /courses/plan 이나 /meetings/{id}/courses/auto 에서 재사용 가능.
     """
     if len(req.steps) != 3:
         raise HTTPException(status_code=400, detail="steps must have length 3")
@@ -138,28 +136,19 @@ def plan_fixed_length_3_course(req: CourseRequest) -> CourseResponse:
     all_candidates: List[List[PlaceCandidate]] = []
 
     for idx, step in enumerate(req.steps):
-        # 기존 google_api.get_nearby_places 재사용
-        # get_nearby_places(
-        #   query, type, min_rating, limit, lat, lng, radius
-        # )
-        res = get_nearby_places(
-            query=step.query,
-            type=step.type,
-            min_rating=0.0,  # 여기서는 전체 후보를 보고 코스 차원에서 평가
-            limit=req.per_step_limit,
+        # ✅ 서비스 레벨 fetch_nearby_places 사용
+        places_raw = fetch_nearby_places(
             lat=req.center_lat,
             lng=req.center_lng,
             radius=req.radius,
+            keyword=step.query,
+            type=step.type,
         )
-        places_data = res.get("places", [])
 
-        if not places_data:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No candidates found for step {idx} (query={step.query}, type={step.type})",
-            )
+        # 평점/개수 필터 (필요하면 여기서 min_rating, sorting 등 추가)
+        filtered = places_raw[: req.per_step_limit]
+        step_candidates = to_candidates(filtered, step_index=idx)
 
-        step_candidates = to_candidates(places_data, step_index=idx)
         if not step_candidates:
             raise HTTPException(
                 status_code=404,
@@ -184,8 +173,17 @@ def plan_fixed_length_3_course(req: CourseRequest) -> CourseResponse:
     if not best_courses:
         raise HTTPException(status_code=404, detail="No course candidates generated")
 
-    # 점수 기준 내림차순, 상위 5개 반환
     best_courses.sort(key=lambda x: x.score, reverse=True)
     top_k = best_courses[:5]
 
     return CourseResponse(courses=top_k)
+
+
+# ---------- HTTP Endpoint (기존 기능 유지) ----------
+
+@router.post("/plan", response_model=CourseResponse)
+def plan_fixed_length_3_course(req: CourseRequest) -> CourseResponse:
+    """
+    기존 /courses/plan 엔드포인트 (그대로 유지)
+    """
+    return plan_courses_internal(req)

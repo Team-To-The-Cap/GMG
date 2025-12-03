@@ -1,12 +1,14 @@
-# routers/meeting_point.py
+# app/routers/calc_func.py
 # from ..services.place_hotspot import adjust_to_busy_station_area
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, HTTPException
 from typing import List, Tuple, Dict, Any, Literal
 import osmnx as ox
 import networkx as nx
 from .. import models
 from datetime import datetime, date, time, timedelta
 from ..services.place_hotspot import adjust_to_busy_station_area
+from sqlalchemy.orm import Session, joinedload
+from ..database import get_db  # 이미 다른 곳에서 쓰고 있다면 생략
 
 router = APIRouter(prefix="/api", tags=["meeting"])
 
@@ -605,3 +607,44 @@ def get_common_available_dates_for_meeting(meeting: models.Meeting) -> List[date
             break
 
     return sorted(common) if common else []
+
+
+def save_calculated_places(db: Session, meeting_id: int, candidates: list[dict]):
+    # 1) 기존 장소 삭제
+    db_meeting = (
+        db.query(models.Meeting)
+        .options(joinedload(models.Meeting.places))
+        .filter(models.Meeting.id == meeting_id)
+        .first()
+    )
+
+    if db_meeting is None:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+
+    # 기존 places 싹 비우기
+    db_meeting.places = []
+    db.commit()
+
+    # 2) 새 장소 추가
+    new_places: list[models.MeetingPlace] = []
+    for c in candidates:
+        db_place = models.MeetingPlace(
+            meeting_id=meeting_id,
+            name=c["name"],
+            latitude=c["lat"],
+            longitude=c["lng"],
+            address=c["address"],
+            category=c.get("category"),
+            duration=c.get("duration"),
+
+            # ⭐ 추가
+            poi_name=c.get("poi_name"),
+        )
+        db.add(db_place)
+        new_places.append(db_place)
+
+    db.commit()
+    for p in new_places:
+        db.refresh(p)
+
+    return new_places

@@ -1,18 +1,16 @@
-# app/routers/meetings.py
+# app/routers/meetings_plan.py
 
-
-# 1. [추가] HTTPException과 Eager Loading을 위한 joinedload 임포트
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload 
-from typing import List
+from typing import List, Tuple
+from datetime import datetime, date, time, timedelta  # ⬅️ 추가
 
 from ..database import get_db
 from .. import schemas
 from .. import models
-from .calc_func import *
+from .calc_func import *  # (나중에 정리해도 되지만 지금은 이대로 ok)
 from typing import Optional
 import requests
-
 
 NAVER_MAP_CLIENT_ID = "o3qhd1pz6i"
 NAVER_MAP_CLIENT_SECRET = "CgU14l9YJBqqNetcd8KiZ0chNLJmYBwmy9HkAjg5"
@@ -100,33 +98,41 @@ def reverse_geocode_naver(lon: float, lat: float) -> Optional[str]:
 
 @router.post("/{meeting_id}/plans", response_model=schemas.MeetingPlanResponse)
 def create_plan_for_meeting(
-    meeting_id: int,  # 1. URL 경로에서 meeting_id를 받음
-    plan_in: schemas.MeetingPlanCreate, # 2. Request Body에서 상세 일정 정보를 받음
-    db: Session = Depends(get_db)
+    meeting_id: int,
+    plan_in: schemas.MeetingPlanCreate,
+    db: Session = Depends(get_db),
 ):
     """
     특정 meeting_id에 연결된 새로운 Meeting_Plan (상세 일정)을 생성합니다.
+    - meeting_time 이 없어도(미정이어도) Plan 을 만들 수 있음.
     """
-    
-    # 1. (권장) 부모인 Meeting이 존재하는지 확인
-    meeting = db.query(models.Meeting).filter(models.Meeting.id == meeting_id).first()
+    meeting = (
+        db.query(models.Meeting)
+        .options(
+            # 참가자 + 참가자별 available_times 까지 한번에 로드하고 싶으면:
+            joinedload(models.Meeting.participants).joinedload(
+                models.Participant.available_times
+            ),
+
+            # Meeting.plan + plan.available_dates 까지 eager load
+            joinedload(models.Meeting.plan).joinedload(
+                models.MeetingPlan.available_dates
+            ),
+        )
+        .filter(models.Meeting.id == meeting_id)
+        .first()
+    )
     if meeting is None:
         raise HTTPException(status_code=404, detail="Meeting not found")
-        
-    # 2. Pydantic 모델을 SQLAlchemy 모델로 변환
-    #    plan_in.model_dump()로 딕셔너리를 만들고,
-    #    URL에서 받은 meeting_id를 추가합니다.
+
     db_plan = models.MeetingPlan(
-        **plan_in.model_dump(), 
-        meeting_id=meeting_id 
+        **plan_in.model_dump(),
+        meeting_id=meeting_id,
     )
-    
-    # 3. DB에 추가, 커밋, 새로고침 (INSERT 실행)
+
     db.add(db_plan)
     db.commit()
     db.refresh(db_plan)
-    
-    # 4. 생성된 객체 반환 (ID 포함)
     return db_plan
 
 @router.get("/{meeting_id}/plans", response_model=schemas.MeetingPlanResponse) 
@@ -254,7 +260,7 @@ def create_auto_plan_for_meeting(
         raw_center_lat = float(center_result["lat"])
         raw_center_lon = float(center_result["lon"])
 
-        # 대표 center에 대해 한 번 보정 (adjust_to_busy_station_area 사용)
+        # 대표 center에 대해 한 번 보정
         adjusted_main = center_result.get("adjusted_point") or {}
         center_lat = float(adjusted_main.get("lat", raw_center_lat))
         center_lon = float(adjusted_main.get("lng", raw_center_lon))
@@ -272,18 +278,22 @@ def create_auto_plan_for_meeting(
                 lat = float(adj.get("lat", cand["lat"]))
                 lng = float(adj.get("lng", cand["lon"]))
 
+                # 🔹 역/POI 이름(없으면 None)
+                poi_name = adj.get("poi_name")
+
                 # 이름(라벨)
                 if idx == 0:
                     place_name = "자동 추천 만남 장소"
                 else:
                     place_name = f"자동 추천 후보 #{idx+1}"
 
-                # ✅ 가장 간단한 방식: 모든 후보에 대표 addr 공통 사용
+                # ✅ 모든 후보에 대표 addr 공통 사용
                 place_addr = addr
 
                 candidates.append(
                     {
-                        "name": place_name,
+                        "name": place_name,         # UI 라벨
+                        "poi_name": poi_name,       # ⭐ 카드 큰 제목용
                         "address": place_addr,
                         "lat": lat,
                         "lng": lng,
@@ -296,6 +306,7 @@ def create_auto_plan_for_meeting(
             candidates.append(
                 {
                     "name": "자동 추천 만남 장소",
+                    "poi_name": adjusted_main.get("poi_name"),
                     "address": addr,
                     "lat": center_lat,
                     "lng": center_lon,
