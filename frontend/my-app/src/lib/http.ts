@@ -7,7 +7,17 @@
  * - 에러 상태시 예외 throw
  */
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
+// 캡시터(WebView)에서 돌고 있는지 간단히 판단
+const isCapacitor =
+  typeof window !== "undefined" && window.location.protocol === "capacitor:";
+
+// 환경별 기본 BASE_URL
+const DEFAULT_BASE_URL = isCapacitor
+  ? "http://223.130.152.114:8001" // 🔥 iOS/Android에서 사용할 백엔드 주소
+  : "/api"; // 브라우저(dev/prod)에서는 기존처럼 프록시/리버스프록시 사용
+
+// 최종 BASE_URL: .env 값이 있으면 우선, 없으면 위 기본값 사용
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? DEFAULT_BASE_URL;
 
 /** 공용 request 함수 */
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

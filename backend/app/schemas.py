@@ -1,12 +1,25 @@
 from pydantic import BaseModel
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, date
 
 
 
+class MeetingPlanAvailableDateBase(BaseModel):
+    date: date
 
 
+class MeetingPlanAvailableDateCreate(MeetingPlanAvailableDateBase):
+    pass
+    
 
+class MeetingPlanAvailableDateResponse(MeetingPlanAvailableDateBase):
+    id: int
+    meeting_plan_id: int
+    available_participant: List[int] = []
+    available_participant_number: int = 0
+
+    class Config:
+        from_attributes = True
 
 
 
@@ -31,15 +44,24 @@ class ParticipantTimeResponse(ParticipantTimeCreate):
 class ParticipantCreate(BaseModel):
     name: str
     member_id: Optional[int] = None
-    start_latitude: float
-    start_longitude: float
+    # start_latitude: float
+    # start_longitude: float
     start_address: str
     transportation: str
+    fav_activity: Optional[str] = None
     
     available_times: List[ParticipantTimeCreate]
 
-class ParticipantResponse(ParticipantCreate):
+class ParticipantResponse(BaseModel):
     id: int
+    name: str
+    member_id: Optional[int] = None
+    start_latitude: float 
+    start_longitude: float  
+    start_address: str
+    transportation: str
+    fav_activity: Optional[str] = None
+    
     available_times: List[ParticipantTimeResponse] = [] 
     
     class Config:
@@ -49,10 +71,11 @@ class ParticipantResponse(ParticipantCreate):
 class ParticipantUpdate(BaseModel):
     name: Optional[str] = None
     member_id: Optional[int] = None
-    start_latitude: Optional[float] = None
-    start_longitude: Optional[float] = None
+    # start_latitude: Optional[float] = None
+    # start_longitude: Optional[float] = None
     start_address: Optional[str] = None
     transportation: Optional[str] = None
+    fav_activity: Optional[str] = None
     
     # [추가] 참가 가능 시간 목록도 (덮어쓰기용으로) 선택적 입력
     available_times: Optional[List[ParticipantTimeCreate]] = None
@@ -63,21 +86,13 @@ class ParticipantUpdate(BaseModel):
 # ==========================
 
 class MeetingBase(BaseModel):
-    name: str
+    name: Optional[str] = None
 
 class MeetingCreate(MeetingBase):
     # 'name' 필드를 MeetingBase로부터 상속받으므로 추가 내용 없음
     pass
 
-class MeetingResponse(MeetingBase):
-    id: int
-    name: str # (MeetingBase에서 상속받았지만 명시적으로 다시 작성)
-    
-    participants: List[ParticipantResponse] = [] 
-    
-    class Config:
-        # SQLAlchemy 모델 객체를 Pydantic 모델로 자동 변환
-        from_attributes = True
+
 
 class MeetingUpdate(BaseModel):
     name: Optional[str] = None
@@ -104,6 +119,8 @@ class MeetingPlanResponse(BaseModel):
     longitude: float
     total_time: Optional[int] = None
     
+    available_dates: List[MeetingPlanAvailableDateResponse] = []
+
     class Config:
         from_attributes = True 
 
@@ -148,3 +165,23 @@ class MeetingPlaceUpdate(BaseModel):
     address: Optional[str] = None
     category: Optional[str] = None
     duration: Optional[int] = None
+
+
+
+
+class MeetingResponse(MeetingBase):
+    id: int
+    name : Optional[str] = None # (MeetingBase에서 상속받았지만 명시적으로 다시 작성)
+
+    participants: List[ParticipantResponse] = [] 
+
+    plan: Optional[MeetingPlanResponse] = None
+    
+    places: List[MeetingPlaceResponse] = []
+    
+    class Config:
+        # SQLAlchemy 모델 객체를 Pydantic 모델로 자동 변환
+        from_attributes = True
+
+
+

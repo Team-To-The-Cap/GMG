@@ -1,130 +1,161 @@
 // src/pages/promise-detail/index.tsx
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState, useCallback } from "react";
-import CreatePromiseMainView from "./index.view";
-import {
-  getPromiseDetail,
-  savePromiseDetail,
-} from "@/services/promise/promise.service";
+import PromiseMainView from "@/pages/promise-main/index.view";
+import { getPromiseDetail } from "@/services/promise/promise.service";
 import type { PromiseDetail } from "@/types/promise";
 import { DEFAULT_PROMISE_ID } from "@/config/runtime";
+import { usePromiseMainController } from "@/pages/promise-main/index";
+import type { Participant } from "@/types/participant";
 
 export default function PromiseDetailPage() {
   const { promiseId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false); // ✅ 저장 중 상태
-  const [error, setError] = useState<string>();
+  const navState = location.state as {
+    finalDate?: string;
+    finalDateDisplay?: string;
+  } | null;
+
   const [data, setData] = useState<PromiseDetail>();
 
+  // 🔹 공통 컨트롤러 사용
+  const {
+    loading,
+    setLoading,
+    error,
+    setError,
+    saving,
+    calculatingPlan,
+    calculatingCourse,
+    onChangeTitle: baseOnChangeTitle,
+    onRemoveParticipant,
+    onCalculatePlan,
+    onCalculateCourse,
+    onSave,
+    onReset,
+    onEditMustVisitPlaces,
+    onDeleteMustVisitPlace,
+    onChangeMeetingProfile,
+    onToggleMeetingProfileChip,
+  } = usePromiseMainController({ promiseId, data, setData });
+
+  // 🔹 로딩 로직 (detail 전용: finalDate 패치)
   useEffect(() => {
     if (!promiseId) {
-      // ✅ /details 페이지용 fallback 경로
       navigate(`/details/${DEFAULT_PROMISE_ID}`, { replace: true });
       return;
     }
+
     let alive = true;
+
     (async () => {
       try {
         setLoading(true);
         setError(undefined);
+
         const res = await getPromiseDetail(promiseId);
-        if (alive) setData(res);
+
+        const finalDate = navState?.finalDate;
+        let patched: PromiseDetail = res;
+
+        if (finalDate) {
+          patched = {
+            ...res,
+            schedule: {
+              ...res.schedule,
+              dateISO: finalDate,
+            },
+          };
+        }
+
+        if (alive) setData(patched);
       } catch (e: any) {
         if (alive) setError(e?.message ?? "알 수 없는 오류");
       } finally {
         if (alive) setLoading(false);
       }
     })();
+
     return () => {
       alive = false;
     };
-  }, [promiseId, navigate]);
+  }, [promiseId, navigate, navState?.finalDate, setLoading, setError]);
 
-  const onEditParticipants = useCallback(() => {
-    alert("참여자 수정 기능 준비 중!");
-  }, []);
+  // 🔹 필요하면 base 핸들러를 살짝 래핑해서 override 가능
+  const onChangeTitle = useCallback(
+    async (value: string) => {
+      await baseOnChangeTitle(value);
+    },
+    [baseOnChangeTitle]
+  );
 
   const onEditSchedule = useCallback(() => {
-    navigate("/time/timeresult");
-  }, [navigate]);
+    if (!promiseId) return;
+    navigate(`/time/timeresult/${promiseId}`);
+  }, [promiseId, navigate]);
 
   const onEditPlace = useCallback(() => {
-    alert("장소 수정 기능 준비 중!");
-  }, []);
+    if (!promiseId) return;
+    navigate(`/details/${promiseId}/place-calculation`);
+  }, [promiseId, navigate]);
 
   const onEditCourse = useCallback(() => {
     alert("코스 수정 기능 준비 중!");
   }, []);
 
-  // ✅ 새 인원 추가 버튼 핸들러
   const onAddParticipant = useCallback(() => {
-    if (!promiseId) return; // 혹시 모를 가드
-    navigate(`/create/${promiseId}/participants/new`);
+    if (!promiseId) return;
+
+    navigate(`/details/${promiseId}/participants/new`, {
+      state: { from: "details" },
+    });
   }, [promiseId, navigate]);
 
-  // 약속 이름 편집(또는 이동)
-  const onEditTitle = useCallback(() => {
-    alert("약속 이름 수정 기능 준비 중!");
-  }, []);
+  const onEditParticipant = useCallback(
+    (participant: Participant) => {
+      if (!promiseId) return;
 
-  // 제목 변경(낙관적 업데이트 예시)
-  const onChangeTitle = useCallback((value: string) => {
-    setData((prev) => (prev ? { ...prev, title: value } : prev));
-    // TODO: API PATCH (부분 저장 필요하면 여기에)
-  }, []);
-
-  // 참여자 삭제(낙관적 업데이트 예시)
-  const onRemoveParticipant = useCallback((id: string) => {
-    setData((prev) => {
-      if (!prev) return prev;
-      const next = (prev.participants ?? []).filter((p) => p.id !== id);
-      return { ...prev, participants: next };
-    });
-    // TODO: API DELETE (부분 저장 필요하면 여기에)
-  }, []);
-
-  // ✅ 계산 버튼 액션
-  const onCalculate = useCallback(() => {
-    console.log("calculate with", data);
-    alert("일정/장소/코스 계산 로직을 연결하세요!");
-  }, [data]);
-
-  // ✅ 저장 버튼 액션 (실제 서비스 호출)
-  const onSave = useCallback(async () => {
-    if (!data) return;
-    try {
-      setSaving(true);
-      const saved = await savePromiseDetail(data);
-      setData(saved); // mock 환경에서는 업데이트된 상태 반영
-      alert("저장되었습니다!");
-      // 필요하면 여기서 navigate 해서 리스트로 돌아가도 됨
-      // navigate("/");
-    } catch (e: any) {
-      console.error(e);
-      alert(e?.message ?? "저장 중 오류가 발생했습니다.");
-    } finally {
-      setSaving(false);
-    }
-  }, [data]);
+      navigate(`/details/${promiseId}/participants/new`, {
+        state: {
+          nameDraft: participant.name,
+          selectedOrigin: participant.startAddress ?? null,
+          selectedTransportation: participant.transportation ?? null,
+          selectedTimes: participant.availableTimes ?? [],
+          selectedPreferences: participant.preferredCategories ?? [],
+          editParticipantId: participant.id,
+        },
+      });
+    },
+    [promiseId, navigate]
+  );
 
   return (
-    <CreatePromiseMainView
+    <PromiseMainView
       loading={loading}
       error={error}
       data={data}
-      onEditParticipants={onEditParticipants}
       onEditSchedule={onEditSchedule}
       onEditPlace={onEditPlace}
       onEditCourse={onEditCourse}
       onAddParticipant={onAddParticipant}
-      onEditTitle={onEditTitle}
       onChangeTitle={onChangeTitle}
       onRemoveParticipant={onRemoveParticipant}
-      onCalculate={onCalculate}
+      onEditParticipant={onEditParticipant}
+      onCalculatePlan={onCalculatePlan}
+      onCalculateCourse={onCalculateCourse}
       onSave={onSave}
       saving={saving}
+      calculatingPlan={calculatingPlan}
+      calculatingCourse={calculatingCourse}
+      onReset={onReset}
+      onEditMustVisitPlaces={onEditMustVisitPlaces}
+      onDeleteMustVisitPlace={onDeleteMustVisitPlace}
+      // 🔹 프로필 섹션 연결
+      meetingProfile={data?.meetingProfile}
+      onChangeMeetingProfile={onChangeMeetingProfile}
+      onToggleMeetingProfileChip={onToggleMeetingProfileChip}
     />
   );
 }

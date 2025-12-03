@@ -1,49 +1,148 @@
 /* src/pages/home/style.module.css */
 
-/* 컨테이너: 약속추가 화면과 스페이싱 톤 맞춤 */
+/* 전체 컨테이너 */
 .wrap {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   padding: 12px 16px calc(var(--bottom-nav-h) + 20px);
-  gap: 20px;
-}
-
-/* 타이틀: 좌측 정렬, 페이지 헤더 느낌 */
-.title {
-  width: 100%;
-  font-size: 24px;
-  font-weight: 700;
-  text-align: left;
-  margin: 4px 0 8px;
-}
-
-/* 리스트: 카드 간격 */
-.list {
-  display: grid;
   gap: 16px;
-  width: 100%;
 }
 
-/* 공통 카드 폭 */
+/* 약속이 하나도 없을 때 */
+.emptyWrap {
+  padding: 40px 20px calc(var(--bottom-nav-h) + 20px);
+  text-align: left;
+}
+
+/* 상단 헤더 */
+.headerSection {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.headerAvatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.35);
+}
+
+.headerTexts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.headerTextMain {
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.headerTextSub {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.highlight {
+  font-weight: 600;
+  color: #4f46e5;
+}
+
+/* 위젯 섹션 */
+.widgetsSection {
+  margin-top: 4px;
+}
+
+.widgetsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.widgetCard {
+  border-radius: 16px;
+  padding: 10px 12px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
+}
+
+.widgetEmoji {
+  font-size: 16px;
+}
+
+.widgetLabel {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.widgetValue {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+}
+
+/* 섹션 공통 */
+.section {
+  margin-top: 8px;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.sectionTitleWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sectionIcon {
+  font-size: 16px;
+}
+
+.sectionTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.sectionBadge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4f46e5;
+  font-weight: 600;
+}
+
+/* 섹션 리스트: 2열 그리드 */
+.sectionList {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 360px) {
+  .sectionList {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 카드 폭 */
 .card {
   width: 100%;
-}
-
-/* 첫 번째 카드를 히어로 카드처럼 강조하고 싶을 때 */
-.heroCard {
-  width: 100%;
-  text-align: left;
-  background: linear-gradient(135deg, #f9fafb, #fff);
-  border-radius: 16px;
-  padding: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-}
-
-/* 배지/우측 상단 액션 정렬용(필요 시) */
-.badgeWrap {
-  display: flex;
-  justify-content: flex-end;
 }
 
 /* 상태/재시도 버튼 */
@@ -57,18 +156,19 @@
   margin-top: 8px;
   padding: 8px 12px;
   border-radius: 8px;
+  border: none;
+  background: #4f46e5;
+  color: white;
+  font-size: 13px;
 }
 
-/* 섹션 타이틀 톤 (약속추가 화면과 동일 계열) */
-.sectionTitle {
-  margin: 16px 0 8px;
-  font-size: 20px;
-  font-weight: 700;
-  text-align: left;
-  width: 100%;
+/* "약속 없음" 헤더 텍스트 공용 */
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-/* 하단 네비 여백 보정용 */
 .bottomSpacer {
   height: var(--bottom-nav-h);
 }

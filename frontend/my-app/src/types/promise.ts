@@ -1,14 +1,36 @@
 // src/types/promise.ts
-export type Participant = {
-  id: string;
-  name: string;
-  avatarUrl: string;
+
+import type { Participant } from "./participant";
+
+/**
+ * 약속의 분위기 / 목적 / 예산 / 메모 정보
+ * - 백엔드 Meeting 모델의 with_whom, purpose, vibe, budget, profile_memo 와 매핑됨
+ */
+export type MeetingProfile = {
+  // 누구와 모이나요? → 단일 선택
+  withWhom?: string;
+
+  // 어떤 목적의 자리인가요? → 복수 선택
+  purpose?: string[];
+
+  // 어떤 분위기를 원하나요? → 단일 선택
+  vibe?: string;
+
+  // 1인당 예산 → 복수 선택
+  budget?: string[];
 };
 
+/**
+ * 약속 확정 날짜
+ * - 백엔드 MeetingPlan.meeting_time 의 date 부분을 감싼 구조
+ */
 export type Schedule = {
-  dateISO: string; // "2025-10-27T00:00:00+09:00"
+  dateISO: string; // e.g. "2025-10-27T00:00:00+09:00"
 };
 
+/**
+ * 대표 장소(만남 장소 등)
+ */
 export type Place = {
   name: string;
   address?: string;
@@ -16,10 +38,23 @@ export type Place = {
   lng?: number;
 };
 
-// 이동 수단
+/**
+ * Meeting 단위의 "반드시 가고 싶은 장소" 정보
+ */
+export type MustVisitPlace = {
+  id: string;
+  name: string;
+  address?: string | null;
+};
+
+/**
+ * 이동 수단
+ */
 export type TravelMode = "walk" | "subway" | "bus" | "car" | "taxi" | "bike";
 
-// POI 카테고리(원하면 자유 문자열 추가 가능)
+/**
+ * POI 카테고리 (필요시 자유 문자열 추가 가능)
+ */
 export type PlaceCategory =
   | "restaurant"
   | "cafe"
@@ -27,51 +62,76 @@ export type PlaceCategory =
   | "activity"
   | string;
 
-// 기존 Place 확장(아이콘/카테고리 선택)
+/**
+ * 코스에서 사용하는 장소 타입
+ */
 export type CoursePlace = Place & {
   category?: PlaceCategory;
-  iconUrl?: string; // 원형 이모지/이미지 등
+  iconUrl?: string; // 원형 이모지/이미지 등 UI용
 };
 
-// 방문 단계
+/**
+ * 코스의 방문 단계
+ */
 export type CourseVisit = {
   type: "visit";
   id: string; // step id
   place: CoursePlace;
-  stayMinutes: number; // 우측의 90분, 60분 등
-  note?: string; // 카드 하단 설명 등
+  stayMinutes: number; // 체류 시간 (분)
+  note?: string; // 카드 하단 설명
 };
 
-// 이동 단계(두 방문 사이)
+/**
+ * 코스의 이동 단계 (두 방문 사이)
+ */
 export type CourseTransfer = {
   type: "transfer";
-  mode: TravelMode; // walk -> "도보"
-  minutes: number; // 5분, 8분 등
-  distanceMeters?: number; // 선택
-  note?: string; // "비 올 때 경사로 우회" 등
+  mode: TravelMode; // walk -> "도보" 등으로 변환 가능
+  minutes: number; // 이동 시간 (분)
+  distanceMeters?: number;
+  note?: string;
 };
 
-// 코스 본문
+/**
+ * 코스 전체 구조
+ */
 export type Course = {
   title?: string; // "추천 코스" 등
   summary: {
-    totalMinutes: number; // 총 소요시간
+    totalMinutes: number; // 총 소요 시간
     activityMinutes: number; // 방문(stay) 합
     travelMinutes: number; // 이동 합
   };
-  items: Array<CourseVisit | CourseTransfer>; // visit/transfer 교차
+  items: Array<CourseVisit | CourseTransfer>;
   generatedAtISO?: string;
-  source?: "auto" | "manual" | string; // 생성 출처 표기용
+  source?: "auto" | "manual" | string;
 };
 
-// PromiseDetail에 적용(하위호환을 원하면 union으로)
+/**
+ * 프론트에서 사용하는 약속(Promise) 상세 타입
+ * - 백엔드 MeetingResponse + 파생 정보들을 모두 하나로 모은 구조
+ */
 export type PromiseDetail = {
   id: string;
   title: string;
-  dday: number;
+  dday?: number | null;
+
   participants: Participant[];
-  schedule: Schedule;
+
+  schedule?: Schedule;
   place?: Place;
-  course: Course; // 기존 CourseList{text} 대신
-  // course: Course | { text: string }; // ← 하위호환 필요시 이렇게
+  course: Course;
+
+  // Meeting 단위의 Must-Visit Places
+  mustVisitPlaces?: {
+    id: string;
+    name: string;
+    address?: string | null;
+  }[];
+
+  // 약속의 분위기/목적/예산/메모
+  meetingProfile?: MeetingProfile;
 };
+
+// Participant 타입을 여기서도 재노출
+export type { Participant };

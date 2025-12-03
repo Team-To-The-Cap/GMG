@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from . import models
 from .database import engine, SessionLocal
 from . import schemas
-from .routers import meeting_point 
+from .routers import calc_func as meeting_point
 from .routers import participants 
 from .routers import meetings  
 from .routers import participant_times 
@@ -16,6 +16,7 @@ from .routers import meeting_plans
 from .routers import meeting_places  
 from .routers import google_api  
 from .routers import naver_search 
+from .routers import course
 
 
 
@@ -27,6 +28,9 @@ def on_startup():
 
 origins = [
     "http://localhost:3000",
+    "http://localhost:5173",
+    "http://223.130.152.114:8001",
+    "capacitor://localhost", 
     # "http://<서버-공인IP>:3000",
 ]
 app.add_middleware(
