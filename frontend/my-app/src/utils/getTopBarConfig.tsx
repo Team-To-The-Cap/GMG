@@ -208,6 +208,25 @@ export function getTopBarConfig(pathname: string): TopBarConfig {
     }
   }
 
+  // 코스 장소 미리보기 화면
+{
+  const match =
+    m("/create/:promiseId/course-review") ||
+    m("/details/:promiseId/course-review");
+
+  if (match) {
+    const { promiseId } = match.params;
+    return {
+      title: "코스 장소 미리보기",
+      showBack: true,
+      backTo: match.pattern?.path.startsWith("/create")
+        ? `/create/${promiseId}`
+        : `/details/${promiseId}`,
+      showShare: false,
+    };
+  }
+}
+
   // 매칭 안될 때 기본값
   return { title: "GMG", showBack: true, backTo: "/", showShare: false };
 }

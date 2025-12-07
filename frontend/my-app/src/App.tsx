@@ -26,6 +26,7 @@ import { getTopBarConfig } from "@/utils/getTopBarConfig";
 import { ShareIcon } from "@/assets/icons/icons";
 
 import "./App.css";
+import CourseReviewScreen from "./pages/course-review";
 
 export default function App() {
   const location = useLocation();
@@ -223,6 +224,10 @@ export default function App() {
             path="/create/:promiseId/place-calculation"
             element={<PlaceCalculationScreen />}
           />
+
+          {/*코스디테일*/}
+          <Route path="/details/:promiseId/course-review" element={<CourseReviewScreen />} />
+          <Route path="/create/:promiseId/course-review" element={<CourseReviewScreen />} />
 
           {/* 마이페이지 */}
           <Route path="/me" element={<MyPage />} />

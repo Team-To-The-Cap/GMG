@@ -600,7 +600,7 @@ export default class PromiseMainView extends React.PureComponent<Props, State> {
               iconLeft={<EditIcon width={16} height={16} />}
               onClick={onEditCourse}
             >
-              수정
+              자세히보기
             </Button>
           }
         />
