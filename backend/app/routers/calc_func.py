@@ -172,102 +172,106 @@ import networkx as nx
 def find_road_center_node_multi_mode(
     G: nx.MultiGraph,
     coords_lonlat: List[Tuple[float, float]], 
-    modes: List[str],             # 참가자별 교통수단 ['walk', 'public', 'drive', ...]
+    modes: List[str],
     return_paths: bool = True,
     top_k: int = 3
 ) -> Dict[str, Any]:
-    """
-    [멀티 모드 중간 지점 계산]
-    - 참가자별로 속도가 다르므로, '거리(m)'가 아닌 '시간(s)'을 기준으로 Minimax 지점을 찾습니다.
-    - Public은 Drive와 동일 속도로 계산됩니다.
-    """
+    
+    # [DEBUG] 입력 데이터 확인
+    print("\n" + "="*50)
+    print(f"[DEBUG] 입력 좌표 개수: {len(coords_lonlat)}")
+    print(f"[DEBUG] 입력 모드: {modes}")
+    
     if not coords_lonlat:
         raise ValueError("coords_lonlat is empty")
 
-    # 모드 리스트 길이 맞추기 (부족하면 'drive'로 채움)
     if len(modes) < len(coords_lonlat):
         modes.extend(["drive"] * (len(coords_lonlat) - len(modes)))
 
     sources = snap_points_to_nodes(G, coords_lonlat)
     k = len(sources)
-
-    # v별 통계 저장소
-    counts: Dict[int, int] = {}      # 해당 노드에 도달 가능한 참가자 수
-    max_costs: Dict[int, float] = {} # 해당 노드까지 걸리는 '가장 오래 걸리는 사람의 시간(초)'
     
-    # 참가자별(source) 노드까지의 거리(m)를 저장해두는 딕셔너리 (나중에 상세 정보 출력용)
-    # dist_matrix[source_idx][target_node_id] = distance_meters
+    # [DEBUG] 스냅된 노드와 참가자 정보 매칭 확인
+    print("-" * 30)
+    for i, (s, mode) in enumerate(zip(sources, modes)):
+        node_data = G.nodes[s]
+        speed = mode_to_speed_kph(mode)
+        print(f"[참가자 {i}] Mode: {mode:<6} | Speed: {speed} km/h")
+        print(f"   ㄴ 입력 좌표: {coords_lonlat[i]}")
+        print(f"   ㄴ 매칭 노드: {s} (Lon: {node_data['x']}, Lat: {node_data['y']})")
+    print("-" * 30)
+
+    counts: Dict[int, int] = {}
+    node_stats: Dict[int, Dict[str, float]] = {}
     dist_matrix: Dict[int, Dict[int, float]] = {} 
 
-    # --- 1. 참가자별 다익스트라 수행 ---
+    # 1. 다익스트라 수행
     for idx, (s, mode) in enumerate(zip(sources, modes)):
         speed_kph = mode_to_speed_kph(mode)
-        
-        # 1-1. 거리(meter) 기준 다익스트라
-        # 그래프에 'travel_time'이 있더라도, 도보/차량이 섞여 있으므로 
-        # 일단 거리(length)를 구하고 속도로 나누는 것이 정확합니다.
         dists_m = nx.single_source_dijkstra_path_length(G, s, weight="length")
-        
-        dist_matrix[idx] = dists_m # 저장
+        dist_matrix[idx] = dists_m
 
-        # 1-2. 시간(seconds) 변환 및 집계
         for v, dist_m in dists_m.items():
-            # 시간(초) = (거리km / 속도km/h) * 3600
-            # speed_kph가 0일 경우 대비 max(speed, 0.1)
             t_sec = (dist_m / 1000.0) / max(speed_kph, 0.1) * 3600.0
-
+            
             counts[v] = counts.get(v, 0) + 1
-
-            # Minimax 로직: v지점에서의 "최악의 시간(=가장 늦게 도착하는 사람)" 갱신
-            if v not in max_costs or t_sec > max_costs[v]:
-                max_costs[v] = t_sec
+            
+            if v not in node_stats:
+                node_stats[v] = {"min": t_sec, "max": t_sec}
+            else:
+                if t_sec > node_stats[v]["max"]: node_stats[v]["max"] = t_sec
+                if t_sec < node_stats[v]["min"]: node_stats[v]["min"] = t_sec
 
     if not counts:
-        raise RuntimeError("No reachable nodes from any source.")
+        raise RuntimeError("No reachable nodes.")
 
-    # --- 2. 후보군 선정 ---
-    # 전원이 도달 가능한 노드 우선
     max_reach = max(counts.values())
     candidates = [v for v, c in counts.items() if c == k]
     if not candidates:
-        # 전원 도달 불가시, 최대한 많이 만날 수 있는 곳들
         candidates = [v for v, c in counts.items() if c == max_reach]
 
-    # --- 3. 최적 노드 정렬 (소요 시간 짧은 순) ---
-    # max_costs(가장 늦게 오는 사람의 시간)가 최소인 곳이 중간 지점
-    sorted_candidates = sorted(
-        candidates,
-        key=lambda v: max_costs.get(v, float("inf"))
-    )
+    # [DEBUG] 후보군 점수 계산 로그 (상위 3개만 출력)
+    FAIRNESS_WEIGHT = 1.5 
     
+    def calculate_score(v_id):
+        stats = node_stats[v_id]
+        max_t = stats["max"]
+        min_t = stats["min"]
+        diff = max_t - min_t
+        score = max_t + (diff * FAIRNESS_WEIGHT)
+        return score
+
+    sorted_candidates = sorted(candidates, key=calculate_score)
     top_nodes = sorted_candidates[:top_k]
     best_node = top_nodes[0]
-    worst_cost = max_costs.get(best_node, float("inf"))
+    
+    print(f"[DEBUG] 최종 선정 노드: {best_node}")
+    print(f"[DEBUG] 점수: {calculate_score(best_node):.2f}, MaxTime: {node_stats[best_node]['max']:.2f}s")
+    print("="*50 + "\n")
 
-    # --- 4. 결과 JSON 구성 ---
+    # 결과 구성 (기존 코드와 동일)
+    worst_cost = node_stats[best_node]["max"]
     res: Dict[str, Any] = {
         "node": int(best_node),
         "lon": float(G.nodes[best_node]["x"]),
         "lat": float(G.nodes[best_node]["y"]),
-        "max_travel_time_s": float(worst_cost), # 가장 오래 걸리는 사람의 시간
+        "max_travel_time_s": float(worst_cost),
         "n_reached": int(counts[best_node]),
         "n_sources": int(k),
         "top_candidates": []
     }
 
-    # (1) Best Node 상권 보정
+    # (이하 보정 로직 및 return_paths 처리 로직은 기존 코드 그대로 유지)
     res["adjusted_point"] = adjust_to_busy_station_area(
         lat=res["lat"], lng=res["lon"],
         base_radius=400, station_search_radius=1500,
         min_score=5.0, min_poi_count=8
     )
 
-    # (2) Top K Candidates 정보 (+상권 보정)
     for node in top_nodes:
         lon = float(G.nodes[node]["x"])
         lat = float(G.nodes[node]["y"])
-        cost = max_costs.get(node, float("inf"))
-        
+        cost = node_stats[node]["max"]
         cand_obj = {
             "node": int(node),
             "lon": lon,
@@ -275,7 +279,6 @@ def find_road_center_node_multi_mode(
             "max_travel_time_s": float(cost),
             "n_reached": int(counts[node]),
         }
-        # 후보지 각각 보정 좌표 계산
         cand_obj["adjusted_point"] = adjust_to_busy_station_area(
             lat=lat, lng=lon,
             base_radius=400, station_search_radius=1500,
@@ -283,33 +286,18 @@ def find_road_center_node_multi_mode(
         )
         res["top_candidates"].append(cand_obj)
 
-    # (3) 참가자별 상세 정보 (per_person)
     if return_paths:
         per: List[Dict[str, Any]] = []
         for idx, (s, mode) in enumerate(zip(sources, modes)):
             speed_kph = mode_to_speed_kph(mode)
-            
-            # 이 참가자가 best_node까지 가는 거리 가져오기
             d_m = dist_matrix.get(idx, {}).get(best_node)
-            
             if d_m is None:
-                per.append({
-                    "index": idx,
-                    "source_node": int(s),
-                    "reachable": False,
-                    "transportation": mode,
-                    "distance_m": None,
-                    "travel_time_s": None
-                })
+                per.append({"index": idx, "source_node": int(s), "reachable": False, "transportation": mode})
             else:
                 t_sec = (d_m / 1000.0) / max(speed_kph, 0.1) * 3600.0
                 per.append({
-                    "index": idx,
-                    "source_node": int(s),
-                    "reachable": True,
-                    "transportation": mode,
-                    "distance_m": float(d_m),
-                    "travel_time_s": float(t_sec)
+                    "index": idx, "source_node": int(s), "reachable": True,
+                    "transportation": mode, "distance_m": float(d_m), "travel_time_s": float(t_sec)
                 })
         res["per_person"] = per
 
