@@ -45,6 +45,8 @@ export type MustVisitPlace = {
   id: string;
   name: string;
   address?: string | null;
+  lat?: number;
+  lng?: number;
 };
 
 /**
@@ -123,11 +125,7 @@ export type PromiseDetail = {
   course: Course;
 
   // Meeting 단위의 Must-Visit Places
-  mustVisitPlaces?: {
-    id: string;
-    name: string;
-    address?: string | null;
-  }[];
+  mustVisitPlaces?: MustVisitPlace[];
 
   // 약속의 분위기/목적/예산/메모
   meetingProfile?: MeetingProfile;

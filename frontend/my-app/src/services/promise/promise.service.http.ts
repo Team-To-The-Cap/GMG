@@ -1,4 +1,4 @@
-// src/services/promise/promise.service.http.ts
+// src/services/promise.service.http.ts
 import { DRAFT_PROMISE_ID_KEY } from "@/assets/constants/storage";
 import { http } from "@/lib/http";
 import type {
@@ -16,13 +16,11 @@ import type {
 } from "@/types/meeting";
 
 /**
- * 🔹 백엔드에서 내려주는 MeetingResponse.places 배열을
- *     PromiseDetail.course 구조로 변환해 주는 헬퍼
+ * 🔹 백엔드 MeetingResponse.places → 프론트 Course 구조로 변환
  */
 function buildCourseFromPlaces(meeting: MeetingResponse): Course {
   const places = meeting.places ?? [];
 
-  // 장소가 하나도 없으면 기본(빈) 코스 반환
   if (!places.length) {
     return {
       title: "코스 미정",
@@ -41,23 +39,18 @@ function buildCourseFromPlaces(meeting: MeetingResponse): Course {
   let travelMinutes = 0;
 
   places.forEach((pl, idx) => {
-    // (1) 이전 장소 → 현재 장소로의 이동 단계
     if (idx > 0) {
-      const transferMinutes = 10; // TODO: 나중에 실제 이동시간 계산으로 교체 가능
-
+      const transferMinutes = 10; // TODO: 실제 이동시간 계산으로 교체 가능
       items.push({
         type: "transfer",
-        mode: "subway", // 기본값
+        mode: "subway",
         minutes: transferMinutes,
         note: "이동",
       });
-
       travelMinutes += transferMinutes;
     }
 
-    // (2) 현재 장소 방문 단계
-    const stay = pl.duration ?? 60; // duration을 체류시간으로 사용
-
+    const stay = pl.duration ?? 60;
     items.push({
       type: "visit",
       id: String(pl.id),
@@ -71,7 +64,6 @@ function buildCourseFromPlaces(meeting: MeetingResponse): Course {
       stayMinutes: stay,
       note: pl.address,
     });
-
     activityMinutes += stay;
   });
 
@@ -176,20 +168,20 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
 
   const course = buildCourseFromPlaces(meeting);
 
-  // Must-Visit Place 매핑
   const mustVisitPlaces =
     (meeting.must_visit_places ?? []).map((p) => ({
       id: String(p.id),
       name: p.name,
       address: p.address ?? undefined,
+      // MeetingMustVisitPlace 타입에 lat/lng 있으면 여기서 같이 매핑 가능
+      // lat: (p as any).latitude,
+      // lng: (p as any).longitude,
     })) ?? [];
 
-  // ✨ 서버 Meeting → 프론트 MeetingProfile 매핑
-  //    서버는 string, 프론트는 purpose/vibe/budget를 배열로 사용
   const meetingProfile: MeetingProfile = {
     withWhom: meeting.with_whom ?? undefined,
     purpose: parseMultiField(meeting.purpose),
-    vibe: parseMultiField(meeting.vibe) as any, // vibe도 복수 선택
+    vibe: parseMultiField(meeting.vibe) as any,
     budget: parseMultiField(meeting.budget),
   };
 
@@ -201,8 +193,7 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
     participants,
     place: primaryPlace,
     course,
-    plan: meeting.plan, // MeetingPlan(available_dates 포함)
-
+    plan: meeting.plan as any,
     mustVisitPlaces,
     meetingProfile,
   } as PromiseDetail;
@@ -253,7 +244,7 @@ export async function savePromiseDetail(
       : null;
 
   const purpose = serializeMultiField(profile.purpose);
-  const vibe = serializeMultiField(profile.vibe); // 🔥 배열이 와도 string으로 직렬화
+  const vibe = serializeMultiField(profile.vibe);
   const budget = serializeMultiField(profile.budget);
 
   await http.request(`/meetings/${meetingId}`, {
@@ -270,7 +261,9 @@ export async function savePromiseDetail(
     }),
   });
 
-  return detail;
+  // 서버 상태가 변경됐다고 가정하고 다시 한 번 상세 조회
+  const meeting = await http.request<MeetingResponse>(`/meetings/${meetingId}`);
+  return mapMeetingToPromiseDetail(meeting);
 }
 
 /**
@@ -310,7 +303,9 @@ export async function deletePromise(promiseId: string): Promise<void> {
   }
 }
 
-// 🔹 참여자 삭제 (HTTP 버전)
+/**
+ * 🔹 참여자 삭제 (HTTP 버전)
+ */
 export async function deleteParticipant(
   meetingId: string | number,
   participantId: string | number
@@ -329,7 +324,9 @@ export async function deleteParticipant(
   });
 }
 
-// 🔹 자동 일정/장소/코스 계산 (HTTP 버전)
+/**
+ * 🔹 자동 일정/장소/코스 계산 (HTTP 버전)
+ */
 export async function calculateAutoPlan(
   promiseId: string
 ): Promise<PromiseDetail> {
@@ -359,18 +356,17 @@ export async function calculateAutoCourse(
     throw new Error(`잘못된 meeting id: ${promiseId}`);
   }
 
-  // 1) 백엔드에 코스 자동 생성 요청
   await http.request(`/meetings/${meetingId}/courses/auto`, {
     method: "POST",
   });
 
-  // 2) 코스가 MeetingPlace 테이블에 저장되었으므로,
-  //    최신 MeetingResponse를 다시 가져와서 프론트 구조로 매핑
   const meeting = await http.request<MeetingResponse>(`/meetings/${meetingId}`);
   return mapMeetingToPromiseDetail(meeting);
 }
 
-// 🔹 약속 이름만 수정 (HTTP 버전)
+/**
+ * 🔹 약속 이름만 수정 (HTTP 버전)
+ */
 export async function updateMeetingName(
   meetingId: string | number,
   name: string
@@ -389,7 +385,9 @@ export async function updateMeetingName(
   });
 }
 
-// 🔹 약속 전체 초기화
+/**
+ * 🔹 약속 전체 초기화
+ */
 export async function resetPromiseOnServer(
   detail: PromiseDetail
 ): Promise<PromiseDetail> {
@@ -455,10 +453,17 @@ export async function resetPromiseOnServer(
   return mapMeetingToPromiseDetail(meeting);
 }
 
-// 🔹 반드시 가고 싶은 장소 추가
+/**
+ * 🔹 반드시 가고 싶은 장소 추가 (좌표도 같이 보낼 수 있음)
+ */
 export async function addMustVisitPlace(
   promiseId: string | number,
-  payload: { name: string; address?: string }
+  payload: {
+    name: string;
+    address?: string;
+    latitude?: number;
+    longitude?: number;
+  }
 ): Promise<void> {
   const mid = Number(promiseId);
   if (Number.isNaN(mid)) {
@@ -473,11 +478,15 @@ export async function addMustVisitPlace(
     body: JSON.stringify({
       name: payload.name,
       address: payload.address ?? "",
+      latitude: payload.latitude ?? null,
+      longitude: payload.longitude ?? null,
     }),
   });
 }
 
-// 🔹 반드시 가고 싶은 장소 삭제
+/**
+ * 🔹 반드시 가고 싶은 장소 삭제
+ */
 export async function deleteMustVisitPlace(
   promiseId: string | number,
   placeId: string | number
@@ -496,7 +505,9 @@ export async function deleteMustVisitPlace(
   });
 }
 
-// 🔹 약속에 연결된 장소(코스 장소) 목록 조회
+/**
+ * 🔹 약속에 연결된 장소(코스 장소) 목록 조회
+ */
 export async function getMeetingPlaces(
   promiseId: string | number
 ): Promise<MeetingPlace[]> {
@@ -509,7 +520,9 @@ export async function getMeetingPlaces(
   return places;
 }
 
-// 🔹 선택한 장소를 MeetingPlan의 확정 장소로 반영
+/**
+ * 🔹 선택한 장소를 MeetingPlan의 확정 장소로 반영
+ */
 export async function setMeetingFinalPlace(
   promiseId: string | number,
   payload: { address: string; lat: number; lng: number }
@@ -528,7 +541,6 @@ export async function setMeetingFinalPlace(
       address: payload.address,
       latitude: payload.lat,
       longitude: payload.lng,
-      // meeting_time, total_time 등은 건드리지 않으면 기존 값 유지
     }),
   });
 }

@@ -14,6 +14,9 @@ export type Participant = {
 
   // 백엔드에서 오는 추가 정보들 (optional)
   startAddress?: string;
+  startLat?: number;
+  startLng?: number;
+
   transportation?: string;
   favActivityRaw?: string; // "카페,맛집" 같은 원본 문자열
   preferredCategories?: string[]; // ["카페","맛집"] 처럼 split 해둔 것

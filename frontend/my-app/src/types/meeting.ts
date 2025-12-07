@@ -11,11 +11,12 @@ export type Meeting = {
 export type MeetingParticipant = {
   id: number;
   name: string;
-  // 백엔드에 프로필 이미지 필드가 있으면 여기에 추가
   avatar_url?: string | null;
 
-  // 아래는 ParticipantResponse에 맞게 필요한 경우 확장 가능
   start_address?: string | null;
+  start_latitude?: number | null;
+  start_longitude?: number | null;
+
   transportation?: string | null;
   fav_activity?: string | null;
   available_times?: {
@@ -55,6 +56,8 @@ export type MeetingMustVisitPlace = {
   meeting_id: number;
   name: string;
   address: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 /** 백엔드 Meeting 응답 전체 */

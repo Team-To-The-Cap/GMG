@@ -607,7 +607,12 @@ export async function resetPromiseOnServer(
 // 🔹 반드시 가고 싶은 장소 추가 (Mock 버전)
 export async function addMustVisitPlace(
   promiseId: string,
-  payload: { name: string; address?: string }
+  payload: {
+    name: string;
+    address?: string;
+    latitude?: number;
+    longitude?: number;
+  }
 ): Promise<void> {
   await delay(100);
   const item = MOCK_DB[promiseId];
@@ -622,6 +627,9 @@ export async function addMustVisitPlace(
       id,
       name: payload.name,
       address: payload.address,
+      lat: typeof payload.latitude === "number" ? payload.latitude : undefined,
+      lng:
+        typeof payload.longitude === "number" ? payload.longitude : undefined,
     },
   ];
 }

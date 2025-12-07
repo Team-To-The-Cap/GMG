@@ -27,7 +27,7 @@ export default function AddParticipantStartPage() {
   const [name, setName] = useState("");
   /**
    * origin: 실제 서버로 보내는 주소 문자열
-   * originPlace: SavedPlace 전체 객체 (이름/주소 모두 포함, UI + 로컬 저장용)
+   * originPlace: SavedPlace 전체 객체 (이름/주소/좌표 포함, UI + 로컬 저장용)
    */
   const [origin, setOrigin] = useState<string | null>(null);
   const [originPlace, setOriginPlace] = useState<SavedPlace | null>(null);
@@ -78,7 +78,7 @@ export default function AddParticipantStartPage() {
         setOriginPlace(null);
 
         // 👉 이 약속(promiseId)에 대해 저장된 모든 장소 캐시에서
-        //    동일한 주소/이름을 가진 SavedPlace를 찾아서 이름을 복구한다.
+        //    동일한 주소/이름을 가진 SavedPlace를 찾아서 이름/좌표를 복구
         if (promiseId && typeof window !== "undefined") {
           const norm = addr.trim();
           const prefix = `${PARTICIPANT_PLACES_PREFIX}${promiseId}:`;
@@ -221,11 +221,17 @@ export default function AddParticipantStartPage() {
     }
     if (submitting) return;
 
+    // 🔹 SavedPlace에 좌표가 있으면 같이 전송 (없으면 null)
+    const originLat = (originPlace as any)?.latitude ?? null;
+    const originLng = (originPlace as any)?.longitude ?? null;
+
     const payload: any = {
       name,
       member_id: 0,
       // ✅ SavedPlace.address 우선 사용, 없으면 origin 문자열
       start_address: originPlace?.address ?? origin ?? null,
+      start_latitude: originLat,
+      start_longitude: originLng,
       transportation: transportation ?? null,
       fav_activity: preferredCats.length > 0 ? preferredCats.join(",") : null,
       available_times: availableTimes,
