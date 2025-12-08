@@ -15,6 +15,8 @@ router = APIRouter(
     tags=["Participants"],
 )
 
+# 🔹 Naver Geocoding (APIGW) 인증 정보
+#    - 여기 값은 실제 사용 중인 APIGW 키로 유지
 CLIENT_ID = "o3qhd1pz6i"
 CLIENT_SECRET = "CgU14l9YJBqqNetcd8KiZ0chNLJmYBwmy9HkAjg5"
 GEOCODE_URL = "https://maps.apigw.ntruss.com/map-geocode/v2/geocode"
@@ -105,14 +107,19 @@ def create_participant_for_meeting(
     participant_dict = participant_in.model_dump()
     times_data_list = participant_dict.pop("available_times", [])
 
+    # 주소 정리
     raw_address = participant_dict.get("start_address")
     address = raw_address.strip() if isinstance(raw_address, str) else raw_address
     participant_dict["start_address"] = address
 
+    # 프론트에서 미리 넘겨준 좌표 (옵션 A)
+    lat = participant_dict.pop("start_latitude", None)
+    lng = participant_dict.pop("start_longitude", None)
+
     fav = participant_dict.get("fav_activity")
 
     has_schedule = len(times_data_list) > 0
-    has_origin = bool(address)
+    has_origin = bool(address or (lat is not None and lng is not None))
     has_pref = bool(fav)
 
     if not (has_schedule or has_origin or has_pref):
@@ -121,15 +128,27 @@ def create_participant_for_meeting(
             detail="At least one of schedule, origin or preferences is required.",
         )
 
-    if address:
+    # 1) 좌표가 이미 들어온 경우 → 그대로 사용 (지오코딩 생략)
+    if lat is not None and lng is not None:
+        participant_dict["start_latitude"] = lat
+        participant_dict["start_longitude"] = lng
+
+    # 2) 좌표는 없지만 주소가 있는 경우 → 지오코딩 시도 (실패해도 주소만 저장)
+    elif address:
         coordinates = get_coords_from_address(address)
-        if not coordinates:
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid start_address or geocoding failed. (주소 변환 실패)",
+        if coordinates:
+            participant_dict["start_latitude"] = coordinates[0]
+            participant_dict["start_longitude"] = coordinates[1]
+        else:
+            # ❗ 지오코딩 실패: 주소는 그대로 두고, 좌표는 None 처리 (에러 X)
+            print(
+                f"!!! [Geocoding] 주소는 있으나 좌표 변환 실패 → "
+                f"address='{address}', lat/lng=None 로 저장"
             )
-        participant_dict["start_latitude"] = coordinates[0]
-        participant_dict["start_longitude"] = coordinates[1]
+            participant_dict["start_latitude"] = None
+            participant_dict["start_longitude"] = None
+
+    # 3) 둘 다 없는 경우 → None
     else:
         participant_dict["start_latitude"] = None
         participant_dict["start_longitude"] = None
@@ -175,7 +194,8 @@ def update_participant(
     참가 가능 시간 목록(available_times)을 수정(덮어쓰기)합니다.
 
     - start_address 가 ""(빈 문자열) 이나 공백이면 주소/위경도 None 으로 초기화
-    - start_address 가 유효한 문자열이면 Naver Geocoding 으로 위경도 재계산
+    - start_address + 위경도(start_latitude/longitude)가 같이 들어오면 그대로 사용
+    - 좌표 없이 주소만 들어오면 Naver Geocoding 으로 위경도 재계산 (실패 시 좌표 None으로 저장)
     """
 
     db_participant = (
@@ -195,9 +215,17 @@ def update_participant(
 
     update_data = participant_in.model_dump(exclude_unset=True)
 
-    if "start_address" in update_data:
-        raw_address = update_data["start_address"]
+    # ───────── 주소/좌표 처리 ─────────
+    if (
+        "start_address" in update_data
+        or "start_latitude" in update_data
+        or "start_longitude" in update_data
+    ):
+        raw_address = update_data.get("start_address", db_participant.start_address)
+        lat_in = update_data.get("start_latitude", None)
+        lng_in = update_data.get("start_longitude", None)
 
+        # 1) 주소를 비우는 경우 → 주소 + 좌표 모두 초기화
         if raw_address is None or (
             isinstance(raw_address, str) and raw_address.strip() == ""
         ):
@@ -205,21 +233,37 @@ def update_participant(
             db_participant.start_latitude = None
             db_participant.start_longitude = None
 
-            update_data.pop("start_address", None)
-            update_data.pop("start_latitude", None)
-            update_data.pop("start_longitude", None)
         else:
-            coordinates = get_coords_from_address(raw_address)
-            if not coordinates:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Invalid new start_address or geocoding failed.",
-                )
+            address = raw_address.strip()
 
-            update_data["start_address"] = raw_address
-            update_data["start_latitude"] = coordinates[0]
-            update_data["start_longitude"] = coordinates[1]
+            # (1) 주소 + 좌표가 함께 온 경우 → 그대로 사용
+            if lat_in is not None and lng_in is not None:
+                db_participant.start_address = address
+                db_participant.start_latitude = lat_in
+                db_participant.start_longitude = lng_in
 
+            # (2) 좌표 없이 주소만 온 경우 → 지오코딩 시도 (실패해도 주소만 저장)
+            else:
+                coordinates = get_coords_from_address(address)
+                if coordinates:
+                    db_participant.start_address = address
+                    db_participant.start_latitude = coordinates[0]
+                    db_participant.start_longitude = coordinates[1]
+                else:
+                    print(
+                        f"!!! [Geocoding] PATCH 주소만 갱신, 좌표 변환 실패 → "
+                        f"address='{address}', lat/lng=None 로 저장"
+                    )
+                    db_participant.start_address = address
+                    db_participant.start_latitude = None
+                    db_participant.start_longitude = None
+
+        # 이미 직접 처리했으니 나머지 공통 루프에서 또 반영 안 되게 제거
+        update_data.pop("start_address", None)
+        update_data.pop("start_latitude", None)
+        update_data.pop("start_longitude", None)
+
+    # ───────── available_times 처리 ─────────
     if "available_times" in update_data:
         times_data_list = update_data.pop("available_times")
 
@@ -234,6 +278,7 @@ def update_participant(
             )
             db.add(db_time)
 
+    # ───────── 나머지 필드 공통 처리 ─────────
     for key, value in update_data.items():
         setattr(db_participant, key, value)
 
