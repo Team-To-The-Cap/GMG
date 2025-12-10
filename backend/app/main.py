@@ -31,6 +31,7 @@ def on_startup():
 origins = [
     "http://localhost:3000",
     "http://localhost:5173",
+    "http://localhost:5174",
     "http://211.188.55.98:8001",
     "capacitor://localhost",
     # "http://<서버-공인IP>:3000",
