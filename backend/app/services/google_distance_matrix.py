@@ -87,7 +87,7 @@ def _call_routes_compute_routes(
     url = "https://routes.googleapis.com/directions/v2:computeRoutes"
     travel_mode = _to_routes_travel_mode(mode)
 
-    body: Dict[str, Any] = {
+    base_body: Dict[str, Any] = {
         "origin": {
             "location": {
                 "latLng": {"latitude": float(start_lat), "longitude": float(start_lng)}
@@ -105,57 +105,65 @@ def _call_routes_compute_routes(
         "computeAlternativeRoutes": False,
     }
 
-    if travel_mode == "DRIVE":
-        # NOTE: 일부 환경에서 TRAFFIC_AWARE_OPTIMAL이 빈 routes로 떨어지는 사례가 있어
-        # 우선 TRAFFIC_AWARE로 사용 (실시간 교통 반영은 유지됨)
-        body["routingPreference"] = "TRAFFIC_AWARE"
+    def _with_traffic(b: Dict[str, Any]) -> Dict[str, Any]:
+        bb = dict(b)
+        bb["routingPreference"] = "TRAFFIC_AWARE"
         # Routes API는 departureTime이 "미래"여야 하는 경우가 있어
-        # now로 보내면 서버 처리 지연/시계 오차로 과거로 판정되어 400이 날 수 있음.
         dt = (datetime.now(timezone.utc) + timedelta(minutes=2)).replace(microsecond=0)
-        body["departureTime"] = dt.isoformat().replace("+00:00", "Z")
+        bb["departureTime"] = dt.isoformat().replace("+00:00", "Z")
+        return bb
 
     # Routes API는 FieldMask가 필수.
     # 문서 예시와 동일하게 polyline까지 포함해서 디버깅/확인을 쉽게 함.
     field_mask = "routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline,geocodingResults"
     headers = {
         "Content-Type": "application/json",
-        # header / query 둘 다 지원하지만, 환경에 따라 헤더가 누락/차단되는 케이스가 있어
-        # 안정성을 위해 둘 다 보냅니다.
+        # Routes API 권장 방식: 헤더로 API Key/FieldMask 전달
         "X-Goog-Api-Key": GOOGLE_MAPS_API_KEY,
         "X-Goog-FieldMask": field_mask,
     }
-    params = {
-        "fields": field_mask,
-        "key": GOOGLE_MAPS_API_KEY,
-    }
 
-    try:
-        res = requests.post(url, headers=headers, params=params, json=body, timeout=8)
-    except requests.RequestException as e:
-        log.warning("[GROUTES] request error: %s", e)
-        return None
+    def _post(body: Dict[str, Any]) -> Optional[requests.Response]:
+        try:
+            return requests.post(url, headers=headers, json=body, timeout=10)
+        except requests.RequestException as e:
+            log.warning("[GROUTES] request error: %s", e)
+            return None
 
-    if res.status_code != 200:
-        log.warning(
-            "[GROUTES] non-200 status=%s, content_type=%s, body=%s",
-            res.status_code,
-            res.headers.get("content-type"),
-            res.text[:800],
-        )
-        return None
+    # 1) driving이면 교통 반영 옵션으로 먼저 시도 → routes가 없으면 옵션 제거 후 재시도
+    bodies: List[Dict[str, Any]] = []
+    if travel_mode == "DRIVE":
+        bodies.append(_with_traffic(base_body))
+        bodies.append(dict(base_body))  # traffic 옵션 제거 fallback
+    else:
+        bodies.append(dict(base_body))
 
-    try:
-        data = res.json()
-    except ValueError:
-        log.warning(
-            "[GROUTES] invalid JSON | content_type=%s, body=%s",
-            res.headers.get("content-type"),
-            res.text[:800],
-        )
-        return None
+    last_non200: Optional[requests.Response] = None
+    for attempt_idx, body in enumerate(bodies):
+        res = _post(body)
+        if res is None:
+            return None
+        if res.status_code != 200:
+            last_non200 = res
+            continue
 
-    if not isinstance(data, dict) or not data.get("routes"):
-        # Routes API는 오류 시 error 객체를 주는 경우가 많음
+        try:
+            data = res.json()
+        except ValueError:
+            log.warning(
+                "[GROUTES] invalid JSON | content_type=%s, body=%s",
+                res.headers.get("content-type"),
+                res.text[:800],
+            )
+            return None
+
+        if isinstance(data, dict) and data.get("routes"):
+            if travel_mode == "DRIVE" and attempt_idx == 1:
+                log.warning(
+                    "[GROUTES] traffic-aware returned no routes; fell back to non-traffic route"
+                )
+            return data
+
         log.warning(
             "[GROUTES] no routes | content_type=%s, payload=%s, raw=%s | req=%s",
             res.headers.get("content-type"),
@@ -167,9 +175,15 @@ def _call_routes_compute_routes(
                 "has_departureTime": "departureTime" in body,
             },
         )
-        return None
 
-    return data
+    if last_non200 is not None:
+        log.warning(
+            "[GROUTES] non-200 status=%s, content_type=%s, body=%s",
+            last_non200.status_code,
+            last_non200.headers.get("content-type"),
+            last_non200.text[:800],
+        )
+    return None
 
 
 def get_travel_time_single(
