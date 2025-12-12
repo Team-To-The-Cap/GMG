@@ -627,7 +627,7 @@ async def get_travel_time(
             "distance_meters": int(distance_m),
             "mode": "walking",
             "success": True,
-            "is_estimated": True,  # 거리 기반 계산이므로 추정치
+            "is_estimated": False,  # calc_func.py와 동일한 방식이므로 정상 계산값
             "source": "haversine_calculation",
         }
 
