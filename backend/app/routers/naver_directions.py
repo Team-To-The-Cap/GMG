@@ -88,8 +88,11 @@ async def calculate_travel_time(request: TravelTimeRequest):
         
         if not result or not result.get("success"):
             raise HTTPException(
-                status_code=404,
-                detail="경로를 찾을 수 없습니다. 좌표나 이동 수단을 확인해주세요."
+                status_code=503,
+                detail=(
+                    "실시간 이동시간을 계산할 수 없습니다. "
+                    "Google/네이버 API 키 또는 외부 API 상태를 확인해주세요."
+                ),
             )
         
         duration_sec = result["duration_seconds"]

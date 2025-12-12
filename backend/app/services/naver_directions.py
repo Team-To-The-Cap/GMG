@@ -24,6 +24,13 @@ try:
 except Exception:
     _gdm_single = None
 
+# 정확한(실시간) 값만 허용할지 여부
+# - 기본값: 정확값만 (추정치 금지)
+# - 필요 시 서버 env로 ALLOW_ESTIMATED_TRAVEL_TIME=true 설정
+ALLOW_ESTIMATED_TRAVEL_TIME = os.getenv(
+    "ALLOW_ESTIMATED_TRAVEL_TIME", ""
+).strip().lower() in {"1", "true", "yes", "y"}
+
 
 # 네이버 Directions API 엔드포인트
 NAVER_DRIVING_URL = "https://naveropenapi.apigw.ntruss.com/map-direction/v1/driving"
@@ -108,6 +115,10 @@ def _fallback_travel_time(
         "success": True,
         "is_estimated": True,
     }
+
+
+def _fail_unavailable(mode: str) -> Dict[str, Any]:
+    return {"success": False, "mode": mode, "error": "travel_time_unavailable"}
 
 
 async def get_driving_direction(
@@ -439,17 +450,21 @@ async def get_travel_time(
             start_lat, start_lng, goal_lat, goal_lng, option=driving_option
         )
         if not data:
-            return _fallback_travel_time(
-                start_lat, start_lng, goal_lat, goal_lng, "driving"
-            )
+            if ALLOW_ESTIMATED_TRAVEL_TIME:
+                return _fallback_travel_time(
+                    start_lat, start_lng, goal_lat, goal_lng, "driving"
+                )
+            return _fail_unavailable("driving")
 
         duration = extract_travel_time_from_driving_response(
             data, option=driving_option
         )
         if duration is None:
-            return _fallback_travel_time(
-                start_lat, start_lng, goal_lat, goal_lng, "driving"
-            )
+            if ALLOW_ESTIMATED_TRAVEL_TIME:
+                return _fallback_travel_time(
+                    start_lat, start_lng, goal_lat, goal_lng, "driving"
+                )
+            return _fail_unavailable("driving")
 
         # 거리 정보 추출 (선택적)
         distance = None
@@ -475,17 +490,40 @@ async def get_travel_time(
         }
 
     elif mode == "walking":
+        # 도보는 교통 반영 개념이 거의 없으므로 Google walking(거리 기반)을 우선 사용
+        if _gdm_single is not None:
+            g = _gdm_single(
+                start_lat=start_lat,
+                start_lng=start_lng,
+                goal_lat=goal_lat,
+                goal_lng=goal_lng,
+                mode="walking",
+            )
+            if g and g.get("success"):
+                return {
+                    "duration_seconds": int(g["duration_seconds"]),
+                    "distance_meters": g.get("distance_meters"),
+                    "mode": "walking",
+                    "success": True,
+                    "is_estimated": False,
+                    "source": "google_distance_matrix",
+                }
+
         data = await get_walking_direction(start_lat, start_lng, goal_lat, goal_lng)
         if not data:
-            return _fallback_travel_time(
-                start_lat, start_lng, goal_lat, goal_lng, "walking"
-            )
+            if ALLOW_ESTIMATED_TRAVEL_TIME:
+                return _fallback_travel_time(
+                    start_lat, start_lng, goal_lat, goal_lng, "walking"
+                )
+            return _fail_unavailable("walking")
 
         duration = extract_travel_time_from_walking_response(data)
         if duration is None:
-            return _fallback_travel_time(
-                start_lat, start_lng, goal_lat, goal_lng, "walking"
-            )
+            if ALLOW_ESTIMATED_TRAVEL_TIME:
+                return _fallback_travel_time(
+                    start_lat, start_lng, goal_lat, goal_lng, "walking"
+                )
+            return _fail_unavailable("walking")
 
         # 거리 정보 추출 (선택적)
         distance = None
@@ -534,17 +572,21 @@ async def get_travel_time(
             start_lat, start_lng, goal_lat, goal_lng, option=driving_option
         )
         if not data:
-            return _fallback_travel_time(
-                start_lat, start_lng, goal_lat, goal_lng, "transit"
-            )
+            if ALLOW_ESTIMATED_TRAVEL_TIME:
+                return _fallback_travel_time(
+                    start_lat, start_lng, goal_lat, goal_lng, "transit"
+                )
+            return _fail_unavailable("transit")
 
         duration = extract_travel_time_from_driving_response(
             data, option=driving_option
         )
         if duration is None:
-            return _fallback_travel_time(
-                start_lat, start_lng, goal_lat, goal_lng, "transit"
-            )
+            if ALLOW_ESTIMATED_TRAVEL_TIME:
+                return _fallback_travel_time(
+                    start_lat, start_lng, goal_lat, goal_lng, "transit"
+                )
+            return _fail_unavailable("transit")
 
         distance = None
         try:
@@ -570,7 +612,9 @@ async def get_travel_time(
 
     else:
         log.warning("[NAVER Directions] Unknown mode: %s", mode)
-        return _fallback_travel_time(start_lat, start_lng, goal_lat, goal_lng, mode)
+        if ALLOW_ESTIMATED_TRAVEL_TIME:
+            return _fallback_travel_time(start_lat, start_lng, goal_lat, goal_lng, mode)
+        return _fail_unavailable(str(mode))
 
 
 async def get_route(
