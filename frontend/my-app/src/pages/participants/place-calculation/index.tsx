@@ -368,7 +368,7 @@ export function PlaceCalculationScreen() {
         });
         participantMarkersRef.current.push(participantMarker);
 
-        // 이동 시간 계산 (네이버 Directions API 사용)
+        // 이동 경로 + 이동 시간 (네이버 Directions API 사용)
         try {
           const transportation = participant.transportation || "driving";
           const mode =
@@ -379,6 +379,65 @@ export function PlaceCalculationScreen() {
                 ? "transit"
                 : "driving";
 
+          // 1) route 먼저 시도 (driving/walking만 path 제공)
+          const routeResult = await http
+            .request<{
+              duration_seconds: number;
+              duration_minutes: number;
+              distance_meters?: number;
+              mode: string;
+              path: { lat: number; lng: number }[];
+              success: boolean;
+            }>(
+              `/directions/route?start_lat=${startLat}&start_lng=${startLng}&goal_lat=${currentPlace.lat}&goal_lng=${currentPlace.lng}&mode=${mode}`
+            )
+            .catch(() => null);
+
+          if (routeResult?.success && Array.isArray(routeResult.path) && routeResult.path.length > 1) {
+            const linePath = routeResult.path.map(
+              (pt) => new window.naver.maps.LatLng(pt.lat, pt.lng)
+            );
+
+            const polyline = new window.naver.maps.Polyline({
+              map,
+              path: linePath,
+              strokeColor: color,
+              strokeWeight: 5,
+              strokeOpacity: 0.75,
+              strokeStyle: "solid",
+              zIndex: 500,
+            });
+            polylinesRef.current.push(polyline);
+
+            const midIdx = Math.floor(linePath.length / 2);
+            const midPos = linePath[midIdx];
+
+            const modeText =
+              routeResult.mode === "walking"
+                ? "도보"
+                : routeResult.mode === "transit"
+                  ? "대중교통"
+                  : "자동차";
+
+            const minutes = Math.round(routeResult.duration_minutes);
+            const labelContent = `<div style="background-color: rgba(0,0,0,0.75); color: white; padding: 6px 10px; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.25); font-size: 12px; font-weight: 700; white-space: nowrap;">
+              ${modeText} ${minutes}분
+            </div>`;
+
+            const labelMarker = new window.naver.maps.Marker({
+              position: midPos,
+              map,
+              icon: {
+                content: labelContent,
+                anchor: new window.naver.maps.Point(0, 0),
+              },
+              zIndex: 1001,
+            });
+            labelMarkersRef.current.push(labelMarker);
+            continue;
+          }
+
+          // 2) route 실패 시 travel-time으로 시간만 받고 직선 표시
           const travelTimeResult = await http.request<{
             duration_seconds: number;
             duration_minutes: number;
@@ -389,7 +448,6 @@ export function PlaceCalculationScreen() {
           );
 
           if (travelTimeResult?.success) {
-            // 참가자 위치에서 만남 장소까지 선 그리기
             const endPos = new window.naver.maps.LatLng(
               currentPlace.lat,
               currentPlace.lng
@@ -398,31 +456,31 @@ export function PlaceCalculationScreen() {
               map,
               path: [startPos, endPos],
               strokeColor: color,
-              strokeWeight: 3,
+              strokeWeight: 4,
               strokeOpacity: 0.6,
-              strokeStyle: "solid",
+              strokeStyle: "dashed",
               zIndex: 500,
             });
             polylinesRef.current.push(polyline);
 
-            // 이동수단 한글 변환
-            const transportLabel =
-              mode === "walking"
+            const midPos = new window.naver.maps.LatLng(
+              (startLat + currentPlace.lat) / 2,
+              (startLng + currentPlace.lng) / 2
+            );
+            const modeText =
+              travelTimeResult.mode === "walking"
                 ? "도보"
-                : mode === "transit"
+                : travelTimeResult.mode === "transit"
                   ? "대중교통"
                   : "자동차";
-
-            // 출발지 근처에 이동 시간 라벨 표시
+            const minutes = Math.round(travelTimeResult.duration_minutes);
+            const labelContent = `<div style="background-color: rgba(0,0,0,0.75); color: white; padding: 6px 10px; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.25); font-size: 12px; font-weight: 700; white-space: nowrap;">
+              ${modeText} ${minutes}분
+            </div>`;
             const labelMarker = new window.naver.maps.Marker({
-              position: startPos,
+              position: midPos,
               map,
-              icon: {
-                content: `<div style="background-color: rgba(0,0,0,0.7); color: white; padding: 6px 10px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.3); font-size: 12px; font-weight: 600; white-space: nowrap; margin-bottom: 40px;">
-                  ${participant.name || "참가자"}에서 ${Math.round(travelTimeResult.duration_minutes)}분
-                </div>`,
-                anchor: new window.naver.maps.Point(0, 0),
-              },
+              icon: { content: labelContent, anchor: new window.naver.maps.Point(0, 0) },
               zIndex: 1001,
             });
             labelMarkersRef.current.push(labelMarker);

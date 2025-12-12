@@ -9,6 +9,7 @@ from ..services.naver_directions import (
     get_travel_time,
     get_driving_direction,
     get_walking_direction,
+    get_route,
 )
 
 router = APIRouter(prefix="/api/directions", tags=["directions"])
@@ -32,6 +33,20 @@ class TravelTimeResponse(BaseModel):
     duration_minutes: float
     distance_meters: Optional[int] = None
     mode: str
+    success: bool
+
+
+class RoutePoint(BaseModel):
+    lat: float
+    lng: float
+
+
+class RouteResponse(BaseModel):
+    duration_seconds: int
+    duration_minutes: float
+    distance_meters: Optional[int] = None
+    mode: str
+    path: List[RoutePoint]
     success: bool
 
 
@@ -110,6 +125,59 @@ async def calculate_travel_time_get(
         driving_option=driving_option,
     )
     return await calculate_travel_time(request)
+
+
+@router.get("/route", response_model=RouteResponse)
+async def get_route_get(
+    start_lat: float = Query(..., description="출발지 위도"),
+    start_lng: float = Query(..., description="출발지 경도"),
+    goal_lat: float = Query(..., description="도착지 위도"),
+    goal_lng: float = Query(..., description="도착지 경도"),
+    mode: Literal["driving", "walking", "transit"] = Query("driving", description="이동 수단"),
+    driving_option: str = Query("trafast", description="자동차 경로 옵션 (trafast, tracomfort, traoptimal)"),
+):
+    """
+    두 지점 간의 경로(geometry) + 이동 시간 반환 (GET 방식)
+    - driving/walking: 네이버 Directions의 path를 반환
+    - transit: 미구현 (404)
+    """
+    try:
+        result = await get_route(
+            start_lat=start_lat,
+            start_lng=start_lng,
+            goal_lat=goal_lat,
+            goal_lng=goal_lng,
+            mode=mode,
+            driving_option=driving_option,
+        )
+
+        if not result or not result.get("success"):
+            raise HTTPException(
+                status_code=404,
+                detail="경로를 찾을 수 없습니다. 좌표나 이동 수단을 확인해주세요.",
+            )
+
+        duration_sec = int(result["duration_seconds"])
+        path = result.get("path") or []
+        if not path:
+            raise HTTPException(status_code=404, detail="경로 좌표를 찾을 수 없습니다.")
+
+        return RouteResponse(
+            duration_seconds=duration_sec,
+            duration_minutes=round(duration_sec / 60.0, 2),
+            distance_meters=result.get("distance_meters"),
+            mode=result.get("mode", mode),
+            path=[RoutePoint(**p) for p in path],
+            success=True,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.exception("Error getting route: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"경로 조회 중 오류가 발생했습니다: {str(e)}",
+        )
 
 
 @router.post("/travel-time/multi-point")
