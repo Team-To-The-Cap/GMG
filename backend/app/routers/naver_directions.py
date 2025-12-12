@@ -12,7 +12,9 @@ from ..services.naver_directions import (
     get_route,
 )
 
-router = APIRouter(prefix="/api/directions", tags=["directions"])
+# NOTE: 프론트에서 /directions/* 로 호출하고 있으므로 prefix를 /directions 로 맞춥니다.
+# (기존 /api/directions 는 404를 유발하여 직선 fallback만 보이던 원인)
+router = APIRouter(prefix="/directions", tags=["directions"])
 
 log = logging.getLogger(__name__)
 

@@ -395,10 +395,40 @@ async def get_travel_time(
         }
 
     elif mode == "transit":
-        # 대중교통은 네이버에서 별도 API가 필요할 수 있습니다
-        # 현재는 None 반환 (추후 확장 가능)
-        log.warning("[NAVER Directions] Transit mode not yet implemented")
-        return None
+        # NOTE: 네이버 대중교통 경로 API는 별도 스펙/상품이어서 여기서는 "임시 fallback" 제공
+        # - 사용자 경험을 위해 최소한의 time/route를 제공 (도로 기반)
+        # - mode는 transit으로 반환 (UI에서 "대중교통"으로 표기 가능)
+        data = await get_driving_direction(
+            start_lat, start_lng, goal_lat, goal_lng, option=driving_option
+        )
+        if not data:
+            return None
+
+        duration = extract_travel_time_from_driving_response(
+            data, option=driving_option
+        )
+        if duration is None:
+            return None
+
+        distance = None
+        try:
+            route = data.get("route", {})
+            path_key = (
+                driving_option if driving_option in route else list(route.keys())[0]
+            )
+            paths = route.get(path_key, [])
+            if paths:
+                summary = paths[0].get("summary", {})
+                distance = summary.get("distance")
+        except Exception:
+            pass
+
+        return {
+            "duration_seconds": int(duration),
+            "distance_meters": distance,
+            "mode": "transit",
+            "success": True,
+        }
 
     else:
         log.warning("[NAVER Directions] Unknown mode: %s", mode)
@@ -487,6 +517,41 @@ async def get_route(
             "success": True,
         }
 
-    # transit: 현재 미구현
-    log.warning("[NAVER Directions] Transit route not yet implemented")
+    # NOTE: transit은 임시로 driving route를 반환 (도로 기반)
+    if mode == "transit":
+        data = await get_driving_direction(
+            start_lat, start_lng, goal_lat, goal_lng, option=driving_option
+        )
+        if not data:
+            return None
+
+        duration = extract_travel_time_from_driving_response(
+            data, option=driving_option
+        )
+        path = extract_route_path_from_driving_response(data, option=driving_option)
+        if duration is None or not path:
+            return None
+
+        distance = None
+        try:
+            route = data.get("route", {})
+            path_key = (
+                driving_option if driving_option in route else list(route.keys())[0]
+            )
+            paths = route.get(path_key, [])
+            if paths:
+                summary = paths[0].get("summary", {})
+                distance = summary.get("distance")
+        except Exception:
+            pass
+
+        return {
+            "duration_seconds": int(duration),
+            "distance_meters": distance,
+            "mode": "transit",
+            "path": path,
+            "success": True,
+        }
+
+    log.warning("[NAVER Directions] Unknown mode for route: %s", mode)
     return None
