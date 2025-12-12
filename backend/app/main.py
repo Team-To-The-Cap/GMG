@@ -15,6 +15,7 @@ from .routers import meeting_plans
 from .routers import meeting_places
 from .routers import google_api
 from .routers import naver_search
+from .routers import naver_directions
 from .routers import course
 from .routers import meeting_must_visit_place
 from .routers import meeting_courses  # ✅ 코스 자동 생성 라우터 추가
@@ -53,6 +54,7 @@ app.include_router(meeting_plans.router, prefix="")
 app.include_router(meeting_places.router, prefix="")
 app.include_router(google_api.router, prefix="")
 app.include_router(naver_search.router, prefix="")
+app.include_router(naver_directions.router, prefix="")
 app.include_router(meeting_must_visit_place.router, prefix="")
 app.include_router(course.router, prefix="")          # 코스 단독용
 app.include_router(meeting_courses.router, prefix="")  # ✅ 약속별 코스 자동 생성

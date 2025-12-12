@@ -218,26 +218,38 @@ export function PlaceCalculationScreen() {
 
   // 1) 네이버 지도 초기화 / 마커 설정 (places 준비된 후)
   useEffect(() => {
-    if (!window.naver || !mapRef.current || places.length === 0) return;
+    if (!mapRef.current || places.length === 0) return;
+
+    // 네이버 지도 API 로드 확인
+    if (!window.naver || !window.naver.maps) {
+      console.error("[Naver Map] Naver Maps API is not loaded");
+      setError("네이버 지도를 불러올 수 없습니다. 인터넷 연결을 확인해주세요.");
+      return;
+    }
 
     // 지도 최초 생성
     if (!naverMapRef.current) {
-      const firstPlace = places[0];
-      const center = new window.naver.maps.LatLng(
-        firstPlace.lat,
-        firstPlace.lng
-      );
+      try {
+        const firstPlace = places[0];
+        const center = new window.naver.maps.LatLng(
+          firstPlace.lat,
+          firstPlace.lng
+        );
 
-      const map = new window.naver.maps.Map(mapRef.current, {
-        center,
-        zoom: 14,
-      });
-      naverMapRef.current = map;
+        const map = new window.naver.maps.Map(mapRef.current, {
+          center,
+          zoom: 14,
+        });
+        naverMapRef.current = map;
 
-      requestAnimationFrame(() => {
-        window.naver.maps.Event.trigger(map, "resize");
-        map.setCenter(center);
-      });
+        requestAnimationFrame(() => {
+          window.naver.maps.Event.trigger(map, "resize");
+          map.setCenter(center);
+        });
+      } catch (err) {
+        console.error("[Naver Map] Failed to initialize map:", err);
+        setError("지도를 초기화하는 중 오류가 발생했습니다.");
+      }
     }
 
     const map = naverMapRef.current;

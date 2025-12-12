@@ -11,7 +11,10 @@
     <title>my-app</title>
 
     <!-- Naver Map JS SDK -->
-    <script src="https://openapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=jiuoev9r8i"></script>
+    <script 
+      src="https://openapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=jiuoev9r8i"
+      onerror="console.error('네이버 지도 API를 불러오는 중 오류가 발생했습니다. API 키와 인터넷 연결을 확인해주세요.')"
+    ></script>
   </head>
   <body>
     <div id="root"></div>

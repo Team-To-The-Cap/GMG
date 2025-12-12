@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- 네이버 지도 API 도메인에 대한 HTTP 평문 통신 허용 -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">map.naver.com</domain>
+        <domain includeSubdomains="true">map.naver.net</domain>
+        <domain includeSubdomains="true">openapi.map.naver.com</domain>
+        <domain includeSubdomains="true">naveropenapi.apigw.ntruss.com</domain>
+    </domain-config>
+    
+    <!-- 개발 환경 백엔드 서버 (필요한 경우) -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">211.188.55.98</domain>
+        <domain includeSubdomains="true">localhost</domain>
+    </domain-config>
+</network-security-config>
+
