@@ -316,6 +316,39 @@ async def get_driving_direction(
         )
         return None
 
+    # 자격 증명 값 상세 검증
+    log.warning(
+        "[NAVER Directions] [DRIVING API] Credential details: "
+        "key_id=%r (len=%d, repr=%s) | key=%r (len=%d, repr=%s)",
+        client_id_clean,
+        len(client_id_clean),
+        repr(client_id_clean),
+        client_secret_clean,
+        len(client_secret_clean),
+        repr(client_secret_clean),
+    )
+
+    # 숨겨진 공백이나 특수문자 확인
+    if (
+        client_id_clean != client_id_clean.strip()
+        or client_secret_clean != client_secret_clean.strip()
+    ):
+        log.error(
+            "[NAVER Directions] [DRIVING API] ✗ Credentials contain hidden whitespace!"
+        )
+
+    # 빈 문자열이나 None 체크
+    if not client_id_clean or client_id_clean.isspace():
+        log.error(
+            "[NAVER Directions] [DRIVING API] ✗ client_id is empty or whitespace only"
+        )
+        return None
+    if not client_secret_clean or client_secret_clean.isspace():
+        log.error(
+            "[NAVER Directions] [DRIVING API] ✗ client_secret is empty or whitespace only"
+        )
+        return None
+
     headers = {
         "X-NCP-APIGW-API-KEY-ID": client_id_clean,
         "X-NCP-APIGW-API-KEY": client_secret_clean,
