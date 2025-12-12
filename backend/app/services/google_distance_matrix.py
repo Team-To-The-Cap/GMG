@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 import requests
 import logging
+from datetime import datetime, timezone
 
 from core.config import GOOGLE_MAPS_API_KEY
 
@@ -37,53 +38,97 @@ def _transportation_to_google_mode(transportation: Optional[str]) -> str:
     return "driving"
 
 
-def _call_distance_matrix(
-    origins: str,
-    destinations: str,
+def _to_routes_travel_mode(mode: str) -> str:
+    m = (mode or "").strip().lower()
+    if m == "driving":
+        return "DRIVE"
+    if m == "walking":
+        return "WALK"
+    if m == "transit":
+        return "TRANSIT"
+    return "DRIVE"
+
+
+def _parse_duration_seconds(duration: Any) -> Optional[int]:
+    """
+    Routes API duration은 보통 "123s" 형태(string)로 옵니다.
+    """
+    if duration is None:
+        return None
+    if isinstance(duration, (int, float)):
+        return int(duration)
+    if isinstance(duration, str):
+        s = duration.strip()
+        if s.endswith("s"):
+            try:
+                return int(float(s[:-1]))
+            except ValueError:
+                return None
+    return None
+
+
+def _call_routes_compute_routes(
+    *,
+    start_lat: float,
+    start_lng: float,
+    goal_lat: float,
+    goal_lng: float,
     mode: str,
 ) -> Optional[Dict[str, Any]]:
     """
-    Google Distance Matrix API 호출 래퍼.
-    origins, destinations는 "lat,lng|lat,lng|..." 형식.
+    Google Routes API(신규) 호출 래퍼.
+    - 기존 Distance Matrix(legacy)가 막힌 프로젝트에서도 사용 가능(단, Routes API 활성화 필요).
+    - driving일 때 TRAFFIC_AWARE_OPTIMAL + departureTime(now)로 실시간 교통 반영.
     """
     if not GOOGLE_MAPS_API_KEY:
-        log.warning("[GDM] GOOGLE_MAPS_API_KEY not configured")
+        log.warning("[GROUTES] GOOGLE_MAPS_API_KEY not configured")
         return None
 
-    url = "https://maps.googleapis.com/maps/api/distancematrix/json"
-    params: Dict[str, Any] = {
-        "origins": origins,
-        "destinations": destinations,
-        "mode": mode,
-        "language": "ko",
-        "key": GOOGLE_MAPS_API_KEY,
+    url = "https://routes.googleapis.com/directions/v2:computeRoutes"
+    travel_mode = _to_routes_travel_mode(mode)
+
+    body: Dict[str, Any] = {
+        "origin": {
+            "location": {
+                "latLng": {"latitude": float(start_lat), "longitude": float(start_lng)}
+            }
+        },
+        "destination": {
+            "location": {
+                "latLng": {"latitude": float(goal_lat), "longitude": float(goal_lng)}
+            }
+        },
+        "travelMode": travel_mode,
+        "languageCode": "ko-KR",
+        "units": "METRIC",
+        "computeAlternativeRoutes": False,
     }
 
-    # driving일 때만 교통량 반영 옵션
-    if mode == "driving":
-        params["departure_time"] = "now"
+    if travel_mode == "DRIVE":
+        body["routingPreference"] = "TRAFFIC_AWARE_OPTIMAL"
+        body["departureTime"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+    headers = {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": GOOGLE_MAPS_API_KEY,
+        # 필요한 필드만 받아 비용/지연 최소화
+        "X-Goog-FieldMask": "routes.duration,routes.distanceMeters",
+    }
 
     try:
-        res = requests.get(url, params=params, timeout=5)
+        res = requests.post(url, headers=headers, json=body, timeout=8)
     except requests.RequestException as e:
-        log.warning("[GDM] request error: %s", e)
+        log.warning("[GROUTES] request error: %s", e)
         return None
 
     if res.status_code != 200:
-        log.warning(
-            "[GDM] non-200 status=%s, body=%s",
-            res.status_code,
-            res.text[:200],
-        )
+        log.warning("[GROUTES] non-200 status=%s, body=%s", res.status_code, res.text[:400])
         return None
 
     data = res.json()
-    if data.get("status") != "OK":
-        log.warning(
-            "[GDM] API status not OK: %s | error_message=%s",
-            data.get("status"),
-            data.get("error_message"),
-        )
+    if not isinstance(data, dict) or not data.get("routes"):
+        # Routes API는 오류 시 error 객체를 주는 경우가 많음
+        log.warning("[GROUTES] no routes | payload=%s", str(data)[:400])
         return None
 
     return data
@@ -101,34 +146,23 @@ def get_travel_time_single(
     단일 출발지→도착지에 대한 이동 시간/거리 반환.
     - driving: departure_time=now가 적용되므로 duration_in_traffic 우선 사용 가능
     """
-    data = _call_distance_matrix(
-        origins=f"{start_lat},{start_lng}",
-        destinations=f"{goal_lat},{goal_lng}",
+    data = _call_routes_compute_routes(
+        start_lat=start_lat,
+        start_lng=start_lng,
+        goal_lat=goal_lat,
+        goal_lng=goal_lng,
         mode=mode,
     )
     if not data:
         return None
 
-    rows = data.get("rows") or []
-    if not rows:
-        return None
-    elements = (rows[0] or {}).get("elements") or []
-    if not elements:
+    routes = data.get("routes") or []
+    first = routes[0] if routes else None
+    if not isinstance(first, dict):
         return None
 
-    elem = elements[0] or {}
-    if elem.get("status") != "OK":
-        log.warning("[GDM] element status not OK: %s | elem=%s", elem.get("status"), elem)
-        return None
-
-    distance_m = (elem.get("distance") or {}).get("value")
-    duration_s = None
-
-    if mode == "driving":
-        duration_s = ((elem.get("duration_in_traffic") or {}) or {}).get("value")
-    if duration_s is None:
-        duration_s = (elem.get("duration") or {}).get("value")
-
+    distance_m = first.get("distanceMeters")
+    duration_s = _parse_duration_seconds(first.get("duration"))
     if duration_s is None:
         return None
 
@@ -166,89 +200,47 @@ def compute_minimax_travel_times(
     if not participants or not candidates:
         return None
 
-    # 1) 참가자들을 Google mode 기준으로 그룹핑
-    mode_to_participants: Dict[str, List[Dict[str, Any]]] = {}
-
-    for p in participants:
-        lat = p.get("lat")
-        lng = p.get("lng")
-        if lat is None or lng is None:
-            continue
-
-        mode = _transportation_to_google_mode(p.get("transportation"))
-        mode_to_participants.setdefault(mode, []).append(p)
-
-    if not mode_to_participants:
-        return None
-
-    # 2) destinations 문자열 (모든 후보 공통)
-    dest_coords = [
-        f"{c['lat']},{c['lng']}"
-        for c in candidates
-        if c.get("lat") is not None and c.get("lng") is not None
-    ]
-    if len(dest_coords) != len(candidates):
-        log.warning("[GDM] some candidates lack lat/lng; they will be ignored")
-    destinations_str = "|".join(dest_coords)
-
-    if not destinations_str:
-        return None
-
-    # 3) 후보별 최대 소요시간 초기화
+    # 후보별 최대 소요시간 초기화
     n_candidates = len(candidates)
     max_times: List[float] = [0.0 for _ in range(n_candidates)]
+
     used_any = False
-
-    # 4) mode 그룹별로 Distance Matrix 호출
-    for mode, plist in mode_to_participants.items():
-        if not plist:
+    # Routes API로 각 (참가자, 후보) 쌍을 계산 (top_k가 작으므로 OK)
+    for j, c in enumerate(candidates):
+        clat = c.get("lat")
+        clng = c.get("lng")
+        if clat is None or clng is None:
             continue
 
-        origins_str = "|".join(
-            f"{p['lat']},{p['lng']}"
-            for p in plist
-        )
-        if not origins_str:
-            continue
+        worst = 0.0
+        ok_any = False
 
-        data = _call_distance_matrix(
-            origins=origins_str,
-            destinations=destinations_str,
-            mode=mode,
-        )
-        if not data:
-            continue
+        for p in participants:
+            plat = p.get("lat")
+            plng = p.get("lng")
+            if plat is None or plng is None:
+                continue
 
-        rows = data.get("rows", [])
-        if not rows:
-            continue
+            mode = _transportation_to_google_mode(p.get("transportation"))
+            r = get_travel_time_single(
+                start_lat=float(plat),
+                start_lng=float(plng),
+                goal_lat=float(clat),
+                goal_lng=float(clng),
+                mode=mode,
+            )
+            if not r or not r.get("success"):
+                ok_any = False
+                break
 
-        # rows[i] = i번째 origin에 대한 결과
-        for row in rows:
-            elements = row.get("elements", [])
-            for j, elem in enumerate(elements):
-                if j >= n_candidates:
-                    break
+            ok_any = True
+            t = float(r["duration_seconds"])
+            if t > worst:
+                worst = t
 
-                if elem.get("status") != "OK":
-                    continue
-
-                # driving인 경우 duration_in_traffic 우선 사용도 가능
-                dur_sec = None
-                if mode == "driving":
-                    dur_sec = (
-                        elem.get("duration_in_traffic") or {}
-                    ).get("value")
-                if dur_sec is None:
-                    dur_sec = (elem.get("duration") or {}).get("value")
-
-                if dur_sec is None:
-                    continue
-
-                used_any = True
-                t = float(dur_sec)
-                if t > max_times[j]:
-                    max_times[j] = t
+        if ok_any:
+            used_any = True
+            max_times[j] = worst
 
     if not used_any:
         return None

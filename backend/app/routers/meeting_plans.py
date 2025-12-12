@@ -359,7 +359,7 @@ def create_auto_plan_for_meeting(
                 coords_lonlat=coords,
                 modes=modes,
                 return_paths=True,
-                top_k=3,  # 상위 3개 후보까지
+                top_k=7,  # 후보를 늘려 minimax(최대값 최소) 탐색 품질 개선
             )
             print(f"[DEBUG] center_result: {center_result}")
         except (RuntimeError, ValueError, Exception) as e:
@@ -433,6 +433,17 @@ def create_auto_plan_for_meeting(
                         "poi_name": adjusted_main.get("poi_name"),
                     }
                 )
+
+            # 후보 중복 제거 (보정으로 인해 동일 좌표가 여러 개 생길 수 있음)
+            uniq: List[dict] = []
+            seen: set[tuple[int, int]] = set()
+            for c in center_candidates:
+                key = (int(round(float(c["lat"]) * 1_000_000)), int(round(float(c["lng"]) * 1_000_000)))
+                if key in seen:
+                    continue
+                seen.add(key)
+                uniq.append(c)
+            center_candidates = uniq
 
             # 3-3. Google Distance Matrix로 공평한 center 재선택 (하이브리드)
             best_center_lat = raw_adjusted_lat
