@@ -118,7 +118,9 @@ def _call_routes_compute_routes(
     }
 
     try:
-        res = requests.post(url, headers=headers, json=body, timeout=8)
+        # Routes API는 FieldMask가 필수라서, 디버깅 단계에서는 fields=* 로 전체 응답을 받습니다.
+        # (안정화 후에는 fields를 필요한 것만으로 좁혀 비용/지연을 줄이세요)
+        res = requests.post(url, headers=headers, params={"fields": "*"}, json=body, timeout=8)
     except requests.RequestException as e:
         log.warning("[GROUTES] request error: %s", e)
         return None
