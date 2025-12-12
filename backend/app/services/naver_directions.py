@@ -36,6 +36,10 @@ ALLOW_ESTIMATED_TRAVEL_TIME = os.getenv(
 NAVER_DRIVING_URL = "https://naveropenapi.apigw.ntruss.com/map-direction/v1/driving"
 NAVER_WALKING_URL = "https://naveropenapi.apigw.ntruss.com/map-direction/v1/walking"
 
+# OpenRouteService (OpenStreetMap 기반) API 엔드포인트
+ORS_API_KEY = os.getenv("OPENROUTESERVICE_API_KEY") or os.getenv("ORS_API_KEY")
+ORS_BASE_URL = "https://api.openrouteservice.org/v2"
+
 # 대중교통은 네이버에서 별도 API가 있거나, 다른 방식으로 처리해야 할 수 있습니다
 # 일단 자동차/도보만 구현하고, 대중교통은 추후 확장 가능하도록 구조 설계
 
@@ -130,6 +134,101 @@ def _fallback_travel_time(
 
 def _fail_unavailable(mode: str) -> Dict[str, Any]:
     return {"success": False, "mode": mode, "error": "travel_time_unavailable"}
+
+
+async def _call_openrouteservice(
+    start_lat: float,
+    start_lng: float,
+    goal_lat: float,
+    goal_lng: float,
+    mode: Literal["driving", "walking"],
+) -> Optional[Dict[str, Any]]:
+    """
+    OpenRouteService (OpenStreetMap 기반) API 호출
+    - driving: driving-car 프로필
+    - walking: foot-walking 프로필
+    - 한국 지역 지원, 무료 티어 제공
+    """
+    if not ORS_API_KEY:
+        log.debug("[ORS] API key not configured")
+        return None
+
+    # OpenRouteService 프로필 매핑
+    profile_map = {
+        "driving": "driving-car",
+        "walking": "foot-walking",
+    }
+    profile = profile_map.get(mode)
+    if not profile:
+        return None
+
+    url = f"{ORS_BASE_URL}/directions/{profile}"
+    headers = {
+        "Authorization": ORS_API_KEY,
+        "Content-Type": "application/json",
+    }
+
+    # OpenRouteService는 [경도, 위도] 형식 사용
+    body = {
+        "coordinates": [[start_lng, start_lat], [goal_lng, goal_lat]],
+        "units": "m",
+        "format": "json",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(url, headers=headers, json=body)
+            response.raise_for_status()
+            data = response.json()
+
+            routes = data.get("routes", [])
+            if not routes:
+                log.warning("[ORS] No routes returned")
+                return None
+
+            route = routes[0]
+            summary = route.get("summary", {})
+            duration_s = summary.get("duration")
+            distance_m = summary.get("distance")
+
+            if duration_s is None:
+                log.warning("[ORS] Duration not found in response")
+                return None
+
+            log.info(
+                "[ORS] ✓ Success for mode=%s | duration=%.1fs, distance=%.1fm",
+                mode,
+                duration_s,
+                distance_m or 0,
+            )
+
+            return {
+                "duration_seconds": int(duration_s),
+                "distance_meters": int(distance_m) if distance_m else None,
+                "mode": mode,
+                "success": True,
+                "source": "openrouteservice",
+            }
+
+    except httpx.HTTPStatusError as e:
+        body_text = None
+        try:
+            body_text = e.response.text
+        except Exception:
+            pass
+        log.warning(
+            "[ORS] HTTP error: %s | status=%s | body=%s",
+            e,
+            e.response.status_code,
+            body_text[:200] if body_text else None,
+        )
+        return None
+    except httpx.RequestError as e:
+        log.warning("[ORS] Request error: %s", e)
+        return None
+    except (KeyError, ValueError, TypeError) as e:
+        log.warning("[ORS] Response parse error: %s", e)
+        return None
 
 
 async def get_driving_direction(
@@ -438,36 +537,31 @@ async def get_travel_time(
         } 또는 None
     """
     if mode == "driving":
-        # 0) 실시간 교통 반영: Google Distance Matrix 우선
-        if _gdm_single is not None:
-            g = _gdm_single(
-                start_lat=start_lat,
-                start_lng=start_lng,
-                goal_lat=goal_lat,
-                goal_lng=goal_lng,
-                mode="driving",
-            )
-            if g and g.get("success"):
-                return {
-                    "duration_seconds": int(g["duration_seconds"]),
-                    "distance_meters": g.get("distance_meters"),
-                    "mode": "driving",
-                    "success": True,
-                    "is_estimated": False,
-                    "source": "google_distance_matrix",
-                }
+        log.info(
+            "[TRAVEL_TIME] driving mode | start=(%.6f,%.6f) goal=(%.6f,%.6f)",
+            start_lat,
+            start_lng,
+            goal_lat,
+            goal_lng,
+        )
 
+        # 자동차: Naver Directions API만 사용
+        log.debug("[TRAVEL_TIME] Trying Naver Directions API for driving...")
         data = await get_driving_direction(
             start_lat, start_lng, goal_lat, goal_lng, option=driving_option
         )
         if not data:
-            # 모든 API가 실패했을 때는 최소한 추정치라도 반환 (사용자 경험 개선)
+            # Naver API 실패 시 추정치 반환
             log.warning(
-                "[NAVER Directions] All APIs failed for driving, using fallback estimate"
+                "[TRAVEL_TIME] ✗ Naver Directions API failed for driving, using fallback estimate"
             )
             return _fallback_travel_time(
                 start_lat, start_lng, goal_lat, goal_lng, "driving"
             )
+
+        log.debug(
+            "[TRAVEL_TIME] ✓ Naver Directions API returned data, extracting duration..."
+        )
 
         duration = extract_travel_time_from_driving_response(
             data, option=driving_option
@@ -505,68 +599,50 @@ async def get_travel_time(
         }
 
     elif mode == "walking":
-        # 도보는 교통 반영 개념이 거의 없으므로 Google walking(거리 기반)을 우선 사용
-        if _gdm_single is not None:
-            g = _gdm_single(
-                start_lat=start_lat,
-                start_lng=start_lng,
-                goal_lat=goal_lat,
-                goal_lng=goal_lng,
-                mode="walking",
-            )
-            if g and g.get("success"):
-                return {
-                    "duration_seconds": int(g["duration_seconds"]),
-                    "distance_meters": g.get("distance_meters"),
-                    "mode": "walking",
-                    "success": True,
-                    "is_estimated": False,
-                    "source": "google_distance_matrix",
-                }
+        log.info(
+            "[TRAVEL_TIME] walking mode | start=(%.6f,%.6f) goal=(%.6f,%.6f)",
+            start_lat,
+            start_lng,
+            goal_lat,
+            goal_lng,
+        )
 
-        data = await get_walking_direction(start_lat, start_lng, goal_lat, goal_lng)
-        if not data:
-            # 모든 API가 실패했을 때는 최소한 추정치라도 반환
-            log.warning(
-                "[NAVER Directions] All APIs failed for walking, using fallback estimate"
-            )
-            return _fallback_travel_time(
-                start_lat, start_lng, goal_lat, goal_lng, "walking"
-            )
+        # 도보: calc_func.py처럼 거리/속도로 계산 (나이브한 방법)
+        # calc_func.py의 MODE_SPEED_KMPH["walking"] = 4.0 km/h 사용
+        WALKING_SPEED_KMPH = 4.0  # calc_func.py와 동일
 
-        duration = extract_travel_time_from_walking_response(data)
-        if duration is None:
-            # 경로는 찾았지만 duration 추출 실패 시에도 추정치 반환
-            log.warning(
-                "[NAVER Directions] Failed to extract duration for walking, using fallback estimate"
-            )
-            return _fallback_travel_time(
-                start_lat, start_lng, goal_lat, goal_lng, "walking"
-            )
+        distance_m = _haversine_meters(start_lat, start_lng, goal_lat, goal_lng)
+        speed_mps = (WALKING_SPEED_KMPH * 1000.0) / 3600.0  # m/s로 변환
+        duration_s = max(60, int(distance_m / max(speed_mps, 0.1)))  # 최소 1분
 
-        # 거리 정보 추출 (선택적)
-        distance = None
-        try:
-            route = data.get("route", {})
-            paths = route.get("traoptimal", [])
-            if paths:
-                summary = paths[0].get("summary", {})
-                distance = summary.get("distance")
-        except (KeyError, ValueError, TypeError):
-            pass
+        log.info(
+            "[TRAVEL_TIME] ✓ Walking calculated | distance=%.1fm, speed=%.1f km/h, duration=%ds",
+            distance_m,
+            WALKING_SPEED_KMPH,
+            duration_s,
+        )
 
         return {
-            "duration_seconds": duration,
-            "distance_meters": distance,
+            "duration_seconds": duration_s,
+            "distance_meters": int(distance_m),
             "mode": "walking",
             "success": True,
-            "is_estimated": False,
-            "source": "naver_directions",
+            "is_estimated": True,  # 거리 기반 계산이므로 추정치
+            "source": "haversine_calculation",
         }
 
     elif mode == "transit":
+        log.info(
+            "[TRAVEL_TIME] transit mode | start=(%.6f,%.6f) goal=(%.6f,%.6f)",
+            start_lat,
+            start_lng,
+            goal_lat,
+            goal_lng,
+        )
+
         # (선택) 대중교통: Google transit이 가능하면 우선 사용
         if _gdm_single is not None:
+            log.debug("[TRAVEL_TIME] Trying Google Distance Matrix API for transit...")
             g = _gdm_single(
                 start_lat=start_lat,
                 start_lng=start_lng,
@@ -575,6 +651,11 @@ async def get_travel_time(
                 mode="transit",
             )
             if g and g.get("success"):
+                log.info(
+                    "[TRAVEL_TIME] ✓ Google Distance Matrix success | duration=%ds, source=%s",
+                    g.get("duration_seconds"),
+                    g.get("source", "unknown"),
+                )
                 return {
                     "duration_seconds": int(g["duration_seconds"]),
                     "distance_meters": g.get("distance_meters"),
@@ -583,55 +664,23 @@ async def get_travel_time(
                     "is_estimated": False,
                     "source": "google_distance_matrix",
                 }
-
-        # NOTE: 네이버 대중교통 경로 API는 별도 스펙/상품이어서 여기서는 "임시 fallback" 제공
-        # - 사용자 경험을 위해 최소한의 time/route를 제공 (도로 기반)
-        # - mode는 transit으로 반환 (UI에서 "대중교통"으로 표기 가능)
-        data = await get_driving_direction(
-            start_lat, start_lng, goal_lat, goal_lng, option=driving_option
-        )
-        if not data:
-            # 모든 API가 실패했을 때는 최소한 추정치라도 반환
+            else:
+                log.warning(
+                    "[TRAVEL_TIME] ✗ Google Distance Matrix failed for transit | result=%s",
+                    "None" if g is None else f"success={g.get('success')}",
+                )
+        else:
             log.warning(
-                "[NAVER Directions] All APIs failed for transit, using fallback estimate"
-            )
-            return _fallback_travel_time(
-                start_lat, start_lng, goal_lat, goal_lng, "transit"
+                "[TRAVEL_TIME] Google Distance Matrix not available (_gdm_single is None)"
             )
 
-        duration = extract_travel_time_from_driving_response(
-            data, option=driving_option
+        # Google API 실패 시 추정치 반환
+        log.warning(
+            "[TRAVEL_TIME] ✗ Google API failed for transit, using fallback estimate"
         )
-        if duration is None:
-            # 경로는 찾았지만 duration 추출 실패 시에도 추정치 반환
-            log.warning(
-                "[NAVER Directions] Failed to extract duration for transit, using fallback estimate"
-            )
-            return _fallback_travel_time(
-                start_lat, start_lng, goal_lat, goal_lng, "transit"
-            )
-
-        distance = None
-        try:
-            route = data.get("route", {})
-            path_key = (
-                driving_option if driving_option in route else list(route.keys())[0]
-            )
-            paths = route.get(path_key, [])
-            if paths:
-                summary = paths[0].get("summary", {})
-                distance = summary.get("distance")
-        except Exception:
-            pass
-
-        return {
-            "duration_seconds": int(duration),
-            "distance_meters": distance,
-            "mode": "transit",
-            "success": True,
-            "is_estimated": False,
-            "source": "naver_directions(driving_fallback)",
-        }
+        return _fallback_travel_time(
+            start_lat, start_lng, goal_lat, goal_lng, "transit"
+        )
 
     else:
         log.warning("[NAVER Directions] Unknown mode: %s", mode)

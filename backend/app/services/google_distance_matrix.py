@@ -114,12 +114,23 @@ def _call_google_directions_api(
         log.warning("[GDIRECTIONS] invalid JSON body=%s", res.text[:400])
         return None
 
-    if data.get("status") != "OK":
-        log.warning(
-            "[GDIRECTIONS] status not OK: %s | error_message=%s",
-            data.get("status"),
-            data.get("error_message"),
-        )
+    status = data.get("status")
+    if status != "OK":
+        error_message = data.get("error_message")
+        # ZERO_RESULTS는 경로를 찾을 수 없다는 의미 (한국 지역에서 자주 발생)
+        if status == "ZERO_RESULTS":
+            log.warning(
+                "[GDIRECTIONS] ZERO_RESULTS for mode=%s | start=(%.6f,%.6f) goal=(%.6f,%.6f) | "
+                "This may indicate: 1) No route found, 2) Restricted area, 3) Limited data for Korea region",
+                mode, start_lat, start_lng, goal_lat, goal_lng
+            )
+        else:
+            log.warning(
+                "[GDIRECTIONS] status not OK: %s | error_message=%s | mode=%s",
+                status,
+                error_message,
+                mode,
+            )
         return None
 
     routes = data.get("routes") or []
@@ -171,7 +182,7 @@ def _call_routes_compute_routes(
     travel_mode = _to_routes_travel_mode(mode)
 
     # Routes API는 departureTime이 필수일 수 있음 (특히 TRAFFIC_AWARE 사용 시)
-    # 미래 시간으로 설정 (현재 시간 + 2분)
+    # 단, WALK mode는 departureTime이 필요 없을 수 있음
     departure_time = (datetime.now(timezone.utc) + timedelta(minutes=2)).replace(microsecond=0)
     departure_time_str = departure_time.isoformat().replace("+00:00", "Z")
 
@@ -191,9 +202,12 @@ def _call_routes_compute_routes(
         "regionCode": "KR",
         "units": "METRIC",
         "computeAlternativeRoutes": False,
-        # departureTime을 기본 요청에도 포함 (Routes API v2 권장)
-        "departureTime": departure_time_str,
     }
+    
+    # WALK mode는 departureTime이 필요 없을 수 있음 (선택적)
+    # DRIVE, TRANSIT는 departureTime 포함
+    if travel_mode != "WALK":
+        base_body["departureTime"] = departure_time_str
 
     def _with_traffic(b: Dict[str, Any]) -> Dict[str, Any]:
         bb = dict(b)
@@ -309,6 +323,12 @@ def get_travel_time_single(
     단일 출발지→도착지에 대한 이동 시간/거리 반환.
     - driving: departure_time=now가 적용되므로 duration_in_traffic 우선 사용 가능
     """
+    log.debug(
+        "[GDM] get_travel_time_single | mode=%s | start=(%.6f,%.6f) goal=(%.6f,%.6f)",
+        mode, start_lat, start_lng, goal_lat, goal_lng
+    )
+    
+    log.debug("[GDM] Step 1: Trying Google Routes API (v2) for mode=%s...", mode)
     data = _call_routes_compute_routes(
         start_lat=start_lat,
         start_lng=start_lng,
@@ -318,14 +338,32 @@ def get_travel_time_single(
     )
     if not data:
         # Routes API가 None을 반환하면 Directions API로 fallback
-        log.debug("[GDM] Routes API returned None, trying Directions API")
-        return _call_google_directions_api(
+        log.warning(
+            "[GDM] ✗ Routes API returned None for mode=%s, trying Directions API (legacy) | "
+            "Note: Routes API v2 may have limited support for walking/driving in Korea region",
+            mode
+        )
+        log.debug("[GDM] Step 2: Trying Google Directions API (legacy) for mode=%s...", mode)
+        result = _call_google_directions_api(
             start_lat=start_lat,
             start_lng=start_lng,
             goal_lat=goal_lat,
             goal_lng=goal_lng,
             mode=mode,
         )
+        if result:
+            log.info(
+                "[GDM] ✓ Directions API success for mode=%s | duration=%ds",
+                mode, result.get("duration_seconds")
+            )
+        else:
+            log.warning(
+                "[GDM] ✗ Directions API also failed for mode=%s | "
+                "This is common in Korea region - Google may have limited walking/driving data. "
+                "Consider using Naver API as primary source for Korea.",
+                mode
+            )
+        return result
 
     routes = data.get("routes") or []
     first = routes[0] if routes else None
@@ -333,27 +371,44 @@ def get_travel_time_single(
     # routes가 없거나 geocodingResults만 있는 경우 Directions API로 fallback
     if not isinstance(first, dict) or not routes:
         log.warning(
-            "[GDM] Routes API returned no routes (only geocodingResults?), trying Directions API"
+            "[GDM] ✗ Routes API returned no routes (only geocodingResults?), trying Directions API"
         )
-        return _call_google_directions_api(
+        log.debug("[GDM] Step 2: Trying Google Directions API (legacy)...")
+        result = _call_google_directions_api(
             start_lat=start_lat,
             start_lng=start_lng,
             goal_lat=goal_lat,
             goal_lng=goal_lng,
             mode=mode,
         )
+        if result:
+            log.info("[GDM] ✓ Directions API success | duration=%ds", result.get("duration_seconds"))
+        else:
+            log.warning("[GDM] ✗ Directions API also failed")
+        return result
 
     distance_m = first.get("distanceMeters")
     duration_s = _parse_duration_seconds(first.get("duration"))
     if duration_s is None:
-        log.warning("[GDM] Failed to parse duration from Routes API, trying Directions API")
-        return _call_google_directions_api(
+        log.warning("[GDM] ✗ Failed to parse duration from Routes API, trying Directions API")
+        log.debug("[GDM] Step 2: Trying Google Directions API (legacy)...")
+        result = _call_google_directions_api(
             start_lat=start_lat,
             start_lng=start_lng,
             goal_lat=goal_lat,
             goal_lng=goal_lng,
             mode=mode,
         )
+        if result:
+            log.info("[GDM] ✓ Directions API success | duration=%ds", result.get("duration_seconds"))
+        else:
+            log.warning("[GDM] ✗ Directions API also failed")
+        return result
+    
+    log.info(
+        "[GDM] ✓ Routes API success | duration=%ds, distance=%sm, source=google_routes_api",
+        duration_s, distance_m
+    )
 
     return {
         "duration_seconds": int(duration_s),
