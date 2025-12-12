@@ -67,6 +67,89 @@ def _parse_duration_seconds(duration: Any) -> Optional[int]:
     return None
 
 
+def _call_google_directions_api(
+    *,
+    start_lat: float,
+    start_lng: float,
+    goal_lat: float,
+    goal_lng: float,
+    mode: str,
+) -> Optional[Dict[str, Any]]:
+    """
+    Google Directions API(legacy JSON) fallback.
+    - driving: departure_time=now + duration_in_traffic 사용
+    - walking/transit: duration 사용
+    """
+    if not GOOGLE_MAPS_API_KEY:
+        return None
+
+    url = "https://maps.googleapis.com/maps/api/directions/json"
+    params: Dict[str, Any] = {
+        "origin": f"{start_lat},{start_lng}",
+        "destination": f"{goal_lat},{goal_lng}",
+        "mode": mode,
+        "language": "ko",
+        "key": GOOGLE_MAPS_API_KEY,
+    }
+    if mode in {"driving", "transit"}:
+        params["departure_time"] = "now"
+    if mode == "driving":
+        params["traffic_model"] = "best_guess"
+
+    try:
+        res = requests.get(url, params=params, timeout=10)
+    except requests.RequestException as e:
+        log.warning("[GDIRECTIONS] request error: %s", e)
+        return None
+
+    if res.status_code != 200:
+        log.warning(
+            "[GDIRECTIONS] non-200 status=%s, body=%s", res.status_code, res.text[:400]
+        )
+        return None
+
+    try:
+        data = res.json()
+    except ValueError:
+        log.warning("[GDIRECTIONS] invalid JSON body=%s", res.text[:400])
+        return None
+
+    if data.get("status") != "OK":
+        log.warning(
+            "[GDIRECTIONS] status not OK: %s | error_message=%s",
+            data.get("status"),
+            data.get("error_message"),
+        )
+        return None
+
+    routes = data.get("routes") or []
+    if not routes:
+        return None
+    legs = (routes[0] or {}).get("legs") or []
+    if not legs:
+        return None
+    leg0 = legs[0] or {}
+
+    distance_m = (leg0.get("distance") or {}).get("value")
+    if mode == "driving":
+        duration_s = (leg0.get("duration_in_traffic") or {}).get("value")
+    else:
+        duration_s = (leg0.get("duration") or {}).get("value")
+
+    if duration_s is None:
+        return None
+
+    return {
+        "duration_seconds": int(duration_s),
+        "distance_meters": (
+            int(distance_m) if isinstance(distance_m, (int, float)) else None
+        ),
+        "mode": mode,
+        "success": True,
+        "source": "google_directions_api",
+    }
+
+
 def _call_routes_compute_routes(
     *,
     start_lat: float,
@@ -212,23 +295,45 @@ def get_travel_time_single(
         mode=mode,
     )
     if not data:
-        return None
+        # Routes가 계속 비정상(geocodingResults만)이라 Directions API로 fallback
+        return _call_google_directions_api(
+            start_lat=start_lat,
+            start_lng=start_lng,
+            goal_lat=goal_lat,
+            goal_lng=goal_lng,
+            mode=mode,
+        )
 
     routes = data.get("routes") or []
     first = routes[0] if routes else None
     if not isinstance(first, dict):
-        return None
+        return _call_google_directions_api(
+            start_lat=start_lat,
+            start_lng=start_lng,
+            goal_lat=goal_lat,
+            goal_lng=goal_lng,
+            mode=mode,
+        )
 
     distance_m = first.get("distanceMeters")
     duration_s = _parse_duration_seconds(first.get("duration"))
     if duration_s is None:
-        return None
+        return _call_google_directions_api(
+            start_lat=start_lat,
+            start_lng=start_lng,
+            goal_lat=goal_lat,
+            goal_lng=goal_lng,
+            mode=mode,
+        )
 
     return {
         "duration_seconds": int(duration_s),
-        "distance_meters": int(distance_m) if isinstance(distance_m, (int, float)) else None,
+        "distance_meters": (
+            int(distance_m) if isinstance(distance_m, (int, float)) else None
+        ),
         "mode": mode,
         "success": True,
+        "source": "google_routes_api",
     }
 
 
