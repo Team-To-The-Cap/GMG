@@ -100,6 +100,7 @@ def _call_routes_compute_routes(
         },
         "travelMode": travel_mode,
         "languageCode": "ko-KR",
+        "regionCode": "KR",
         "units": "METRIC",
         "computeAlternativeRoutes": False,
     }
@@ -115,7 +116,8 @@ def _call_routes_compute_routes(
         "Content-Type": "application/json",
         "X-Goog-Api-Key": GOOGLE_MAPS_API_KEY,
         # 필요한 필드만 받아 비용/지연 최소화
-        "X-Goog-FieldMask": "routes.duration,routes.distanceMeters",
+        # NOTE: FieldMask가 너무 빡빡하면 응답이 {} 로 떨어지는 케이스가 있어 routes를 명시적으로 포함
+        "X-Goog-FieldMask": "routes,routes.duration,routes.distanceMeters",
     }
 
     try:
