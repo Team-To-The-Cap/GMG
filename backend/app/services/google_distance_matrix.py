@@ -106,13 +106,17 @@ def _call_routes_compute_routes(
     }
 
     if travel_mode == "DRIVE":
-        body["routingPreference"] = "TRAFFIC_AWARE_OPTIMAL"
+        # NOTE: 일부 환경에서 TRAFFIC_AWARE_OPTIMAL이 빈 routes로 떨어지는 사례가 있어
+        # 우선 TRAFFIC_AWARE로 사용 (실시간 교통 반영은 유지됨)
+        body["routingPreference"] = "TRAFFIC_AWARE"
         # Routes API는 departureTime이 "미래"여야 하는 경우가 있어
         # now로 보내면 서버 처리 지연/시계 오차로 과거로 판정되어 400이 날 수 있음.
         dt = (datetime.now(timezone.utc) + timedelta(minutes=2)).replace(microsecond=0)
         body["departureTime"] = dt.isoformat().replace("+00:00", "Z")
 
-    field_mask = "routes.duration,routes.distanceMeters,geocodingResults"
+    # Routes API는 FieldMask가 필수.
+    # 문서 예시와 동일하게 polyline까지 포함해서 디버깅/확인을 쉽게 함.
+    field_mask = "routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline,geocodingResults"
     headers = {
         "Content-Type": "application/json",
         # header / query 둘 다 지원하지만, 환경에 따라 헤더가 누락/차단되는 케이스가 있어
