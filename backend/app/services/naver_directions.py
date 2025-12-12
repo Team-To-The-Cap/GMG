@@ -551,13 +551,11 @@ async def get_travel_time(
             start_lat, start_lng, goal_lat, goal_lng, option=driving_option
         )
         if not data:
-            # Naver API 실패 시 추정치 반환
-            log.warning(
-                "[TRAVEL_TIME] ✗ Naver Directions API failed for driving, using fallback estimate"
+            # Naver API 실패 시 계산 실패 반환
+            log.error(
+                "[TRAVEL_TIME] ✗ Naver Directions API failed for driving - calculation failed"
             )
-            return _fallback_travel_time(
-                start_lat, start_lng, goal_lat, goal_lng, "driving"
-            )
+            return _fail_unavailable("driving")
 
         log.debug(
             "[TRAVEL_TIME] ✓ Naver Directions API returned data, extracting duration..."
@@ -567,13 +565,11 @@ async def get_travel_time(
             data, option=driving_option
         )
         if duration is None:
-            # 경로는 찾았지만 duration 추출 실패 시에도 추정치 반환
-            log.warning(
-                "[NAVER Directions] Failed to extract duration, using fallback estimate"
+            # 경로는 찾았지만 duration 추출 실패 시 계산 실패 반환
+            log.error(
+                "[NAVER Directions] Failed to extract duration - calculation failed"
             )
-            return _fallback_travel_time(
-                start_lat, start_lng, goal_lat, goal_lng, "driving"
-            )
+            return _fail_unavailable("driving")
 
         # 거리 정보 추출 (선택적)
         distance = None
@@ -674,18 +670,14 @@ async def get_travel_time(
                 "[TRAVEL_TIME] Google Distance Matrix not available (_gdm_single is None)"
             )
 
-        # Google API 실패 시 추정치 반환
-        log.warning(
-            "[TRAVEL_TIME] ✗ Google API failed for transit, using fallback estimate"
-        )
-        return _fallback_travel_time(
-            start_lat, start_lng, goal_lat, goal_lng, "transit"
-        )
+        # Google API 실패 시 계산 실패 반환
+        log.error("[TRAVEL_TIME] ✗ Google API failed for transit - calculation failed")
+        return _fail_unavailable("transit")
 
     else:
         log.warning("[NAVER Directions] Unknown mode: %s", mode)
-        # 알 수 없는 mode여도 최소한 추정치라도 반환
-        return _fallback_travel_time(start_lat, start_lng, goal_lat, goal_lng, mode)
+        # 알 수 없는 mode는 계산 실패 반환
+        return _fail_unavailable(str(mode))
 
 
 async def get_route(

@@ -87,11 +87,18 @@ async def calculate_travel_time(request: TravelTimeRequest):
         )
         
         if not result or not result.get("success"):
+            mode_name = {
+                "driving": "자동차",
+                "walking": "도보",
+                "transit": "대중교통",
+            }.get(request.mode, request.mode)
+            
+            error_msg = result.get("error", "unknown_error") if result else "no_result"
             raise HTTPException(
                 status_code=503,
                 detail=(
-                    "실시간 이동시간을 계산할 수 없습니다. "
-                    "Google/네이버 API 키 또는 외부 API 상태를 확인해주세요."
+                    f"{mode_name} 이동시간 계산에 실패했습니다. "
+                    f"API 상태를 확인해주세요. (오류: {error_msg})"
                 ),
             )
         
