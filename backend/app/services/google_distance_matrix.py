@@ -125,13 +125,31 @@ def _call_routes_compute_routes(
         return None
 
     if res.status_code != 200:
-        log.warning("[GROUTES] non-200 status=%s, body=%s", res.status_code, res.text[:400])
+        log.warning(
+            "[GROUTES] non-200 status=%s, content_type=%s, body=%s",
+            res.status_code,
+            res.headers.get("content-type"),
+            res.text[:800],
+        )
         return None
 
-    data = res.json()
+    try:
+        data = res.json()
+    except ValueError:
+        log.warning(
+            "[GROUTES] invalid JSON | content_type=%s, body=%s",
+            res.headers.get("content-type"),
+            res.text[:800],
+        )
+        return None
+
     if not isinstance(data, dict) or not data.get("routes"):
         # Routes API는 오류 시 error 객체를 주는 경우가 많음
-        log.warning("[GROUTES] no routes | payload=%s", str(data)[:400])
+        log.warning(
+            "[GROUTES] no routes | content_type=%s, payload=%s",
+            res.headers.get("content-type"),
+            str(data)[:800],
+        )
         return None
 
     return data
