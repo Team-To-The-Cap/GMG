@@ -302,6 +302,7 @@ def create_auto_plan_for_meeting(
     coords: List[Tuple[float, float]] = []
     modes: List[str] = []  # 각 참가자의 이동 수단
     participant_for_matrix: List[dict] = []
+    modes: List[str] = []
 
     for p in meeting.participants:
         if p.start_latitude is None or p.start_longitude is None:
@@ -323,7 +324,7 @@ def create_auto_plan_for_meeting(
             {
                 "lat": p.start_latitude,
                 "lng": p.start_longitude,
-                "transportation": p.transportation,
+                "transportation": transport_mode,
             }
         )
 
