@@ -17,7 +17,9 @@ import os
 from pathlib import Path
 
 # backend 루트 디렉토리 기준으로 상대 경로 사용
-BACKEND_ROOT = Path(__file__).resolve().parents[2]  # app/routers/calc_func.py -> backend/
+BACKEND_ROOT = (
+    Path(__file__).resolve().parents[2]
+)  # app/routers/calc_func.py -> backend/
 GRAPH_PATH = BACKEND_ROOT / "seoul_graph_out" / "drive.graphml"
 
 if not GRAPH_PATH.exists():
@@ -29,7 +31,8 @@ if not GRAPH_PATH.exists():
 G = ox.load_graphml(str(GRAPH_PATH))
 
 import networkx as nx
-G = G.to_undirected()   # 또는 nx.MultiGraph(G_directed)
+
+G = G.to_undirected()  # 또는 nx.MultiGraph(G_directed)
 
 MODE_SPEED_KMPH = {
     # 1) 도보: 시속 1km (테스트용으로 아주 느리게)
@@ -37,20 +40,18 @@ MODE_SPEED_KMPH = {
     "도보": 4.0,
     "walk": 4.0,
     "walking": 4.0,
-
     # 2) 자동차: 시속 30km (도심 평균 서행 기준)
-    "차": 30.0,
-    "자동차": 30.0,
-    "drive": 30.0,
-    "driving": 30.0,
-    "car": 30.0,
-
+    "차": 10.0,
+    "자동차": 10.0,
+    "drive": 10.0,
+    "driving": 10.0,
+    "car": 10.0,
     # 3) 대중교통: 일단 자동차와 동일하게 취급
-    "대중교통": 30.0,
-    "public": 30.0,
-    "transit": 30.0,
-    "bus": 30.0,
-    "subway": 30.0,
+    "대중교통": 10.0,
+    "public": 10.0,
+    "transit": 10.0,
+    "bus": 10.0,
+    "subway": 10.0,
 }
 
 
@@ -66,10 +67,11 @@ def mode_to_speed_kph(mode: str) -> float:
         raise HTTPException(
             status_code=400,
             detail=f"알 수 없는 이동 수단 모드입니다: {mode!r}. "
-                   f"지원하는 값 예시: 도보, 자동차, walk, drive, public, bus, subway ..."
+            f"지원하는 값 예시: 도보, 자동차, walk, drive, public, bus, subway ...",
         )
 
     return MODE_SPEED_KMPH[key]
+
 
 '''
 def snap_points_to_nodes(
@@ -114,6 +116,8 @@ def snap_points_to_nodes(
 
     return snapped
 '''
+
+
 def snap_points_to_nodes(
     G: nx.MultiDiGraph,
     coords: List[Tuple[float, float]],  # [(lon, lat), ...]
@@ -130,6 +134,7 @@ def snap_points_to_nodes(
 
     # OSMnx 1.9.x 기준
     return ox.distance.nearest_nodes(G, X=xs, Y=ys)
+
 
 """
 def find_road_center_node(
@@ -207,15 +212,16 @@ def find_road_center_node(
 from typing import List, Tuple, Dict, Any
 import networkx as nx
 
+
 def find_road_center_node_multi_mode(
     G: nx.MultiGraph,
-    coords_lonlat: List[Tuple[float, float]], 
+    coords_lonlat: List[Tuple[float, float]],
     modes: List[str],
     return_paths: bool = True,
-    top_k: int = 3
+    top_k: int = 3,
 ) -> Dict[str, Any]:
 
-    print("\n" + "="*50)
+    print("\n" + "=" * 50)
     print(f"[DEBUG] 입력 좌표 개수: {len(coords_lonlat)}")
     print(f"[DEBUG] 입력 모드(raw): {modes}")
 
@@ -234,7 +240,7 @@ def find_road_center_node_multi_mode(
 
     sources = snap_points_to_nodes(G, coords_lonlat)
     k = len(sources)
-    
+
     # [DEBUG] 스냅된 노드와 참가자 정보 매칭 확인
     print("-" * 30)
     for i, (s, mode) in enumerate(zip(sources, modes)):
@@ -247,7 +253,7 @@ def find_road_center_node_multi_mode(
 
     counts: Dict[int, int] = {}
     node_stats: Dict[int, Dict[str, float]] = {}
-    dist_matrix: Dict[int, Dict[int, float]] = {} 
+    dist_matrix: Dict[int, Dict[int, float]] = {}
 
     # 1. 다익스트라 수행
     for idx, (s, mode) in enumerate(zip(sources, modes)):
@@ -257,14 +263,16 @@ def find_road_center_node_multi_mode(
 
         for v, dist_m in dists_m.items():
             t_sec = (dist_m / 1000.0) / max(speed_kph, 0.1) * 3600.0
-            
+
             counts[v] = counts.get(v, 0) + 1
-            
+
             if v not in node_stats:
                 node_stats[v] = {"min": t_sec, "max": t_sec}
             else:
-                if t_sec > node_stats[v]["max"]: node_stats[v]["max"] = t_sec
-                if t_sec < node_stats[v]["min"]: node_stats[v]["min"] = t_sec
+                if t_sec > node_stats[v]["max"]:
+                    node_stats[v]["max"] = t_sec
+                if t_sec < node_stats[v]["min"]:
+                    node_stats[v]["min"] = t_sec
 
     if not counts:
         raise RuntimeError("No reachable nodes.")
@@ -275,8 +283,8 @@ def find_road_center_node_multi_mode(
         candidates = [v for v, c in counts.items() if c == max_reach]
 
     # [DEBUG] 후보군 점수 계산 로그 (상위 3개만 출력)
-    FAIRNESS_WEIGHT = 1.5 
-    
+    FAIRNESS_WEIGHT = 1.5
+
     def calculate_score(v_id):
         stats = node_stats[v_id]
         max_t = stats["max"]
@@ -288,10 +296,12 @@ def find_road_center_node_multi_mode(
     sorted_candidates = sorted(candidates, key=calculate_score)
     top_nodes = sorted_candidates[:top_k]
     best_node = top_nodes[0]
-    
+
     print(f"[DEBUG] 최종 선정 노드: {best_node}")
-    print(f"[DEBUG] 점수: {calculate_score(best_node):.2f}, MaxTime: {node_stats[best_node]['max']:.2f}s")
-    print("="*50 + "\n")
+    print(
+        f"[DEBUG] 점수: {calculate_score(best_node):.2f}, MaxTime: {node_stats[best_node]['max']:.2f}s"
+    )
+    print("=" * 50 + "\n")
 
     # 결과 구성 (기존 코드와 동일)
     worst_cost = node_stats[best_node]["max"]
@@ -302,14 +312,17 @@ def find_road_center_node_multi_mode(
         "max_travel_time_s": float(worst_cost),
         "n_reached": int(counts[best_node]),
         "n_sources": int(k),
-        "top_candidates": []
+        "top_candidates": [],
     }
 
     # (이하 보정 로직 및 return_paths 처리 로직은 기존 코드 그대로 유지)
     res["adjusted_point"] = adjust_to_busy_station_area(
-        lat=res["lat"], lng=res["lon"],
-        base_radius=400, station_search_radius=1500,
-        min_score=5.0, min_poi_count=8
+        lat=res["lat"],
+        lng=res["lon"],
+        base_radius=400,
+        station_search_radius=1500,
+        min_score=5.0,
+        min_poi_count=8,
     )
 
     for node in top_nodes:
@@ -324,9 +337,12 @@ def find_road_center_node_multi_mode(
             "n_reached": int(counts[node]),
         }
         cand_obj["adjusted_point"] = adjust_to_busy_station_area(
-            lat=lat, lng=lon,
-            base_radius=400, station_search_radius=1500,
-            min_score=5.0, min_poi_count=8
+            lat=lat,
+            lng=lon,
+            base_radius=400,
+            station_search_radius=1500,
+            min_score=5.0,
+            min_poi_count=8,
         )
         res["top_candidates"].append(cand_obj)
 
@@ -336,13 +352,26 @@ def find_road_center_node_multi_mode(
             speed_kph = mode_to_speed_kph(mode)
             d_m = dist_matrix.get(idx, {}).get(best_node)
             if d_m is None:
-                per.append({"index": idx, "source_node": int(s), "reachable": False, "transportation": mode})
+                per.append(
+                    {
+                        "index": idx,
+                        "source_node": int(s),
+                        "reachable": False,
+                        "transportation": mode,
+                    }
+                )
             else:
                 t_sec = (d_m / 1000.0) / max(speed_kph, 0.1) * 3600.0
-                per.append({
-                    "index": idx, "source_node": int(s), "reachable": True,
-                    "transportation": mode, "distance_m": float(d_m), "travel_time_s": float(t_sec)
-                })
+                per.append(
+                    {
+                        "index": idx,
+                        "source_node": int(s),
+                        "reachable": True,
+                        "transportation": mode,
+                        "distance_m": float(d_m),
+                        "travel_time_s": float(t_sec),
+                    }
+                )
         res["per_person"] = per
     print("[DEBUG][CENTER]", "best_node =", best_node)
     for row in res.get("per_person", []):
@@ -353,14 +382,15 @@ def find_road_center_node_multi_mode(
     return res
 
 
-
 @router.get("/meeting-point")
 def get_meeting_point(
     lons: List[float] = Query(...),
     lats: List[float] = Query(...),
     # modes: ?modes=walk&modes=public&modes=drive ... 순서대로 매핑
-    modes: List[str] = Query(None), 
-    weight: str = Query("time", description="내부적으로 multi-mode일 때는 무조건 time 기준입니다."),
+    modes: List[str] = Query(None),
+    weight: str = Query(
+        "time", description="내부적으로 multi-mode일 때는 무조건 time 기준입니다."
+    ),
     mode: Literal["full", "point", "geojson"] = "full",
 ):
     """
@@ -370,7 +400,7 @@ def get_meeting_point(
     """
     if len(lons) != len(lats):
         raise HTTPException(status_code=400, detail="lons와 lats의 길이가 다릅니다.")
-    
+
     # modes 기본값 처리
     if not modes:
         # 아무것도 안 들어오면 전부 자동차로 가정
@@ -386,14 +416,10 @@ def get_meeting_point(
         )
 
     coords: List[Tuple[float, float]] = list(zip(lons, lats))
-    
+
     # 멀티 모드 계산 호출
     result = find_road_center_node_multi_mode(
-        G,
-        coords,
-        modes=modes,
-        return_paths=True,
-        top_k=3
+        G, coords, modes=modes, return_paths=True, top_k=3
     )
 
     # 응답 형식 분기 (기존 유지)
@@ -405,16 +431,15 @@ def get_meeting_point(
             "type": "Feature",
             "geometry": {
                 "type": "Point",
-                "coordinates": [result["lon"], result["lat"]]
+                "coordinates": [result["lon"], result["lat"]],
             },
             "properties": {
                 "max_travel_time_s": result["max_travel_time_s"],
-                "n_sources": result["n_sources"]
-            }
+                "n_sources": result["n_sources"],
+            },
         }
 
     return result
-
 
 
 from datetime import date
@@ -427,7 +452,7 @@ from typing import List, Set
 # ) -> List[date]:
 #     """
 #     모든 참가자의 available_times에서 공통으로 존재하는 '날짜(date)'만 반환한다.
-    
+
 #     - 각 ParticipantResponse.available_times 의 start_time 기준으로 날짜를 뽑음
 #     - 한 참가자라도 그 날짜에 슬롯이 없으면 결과에서 제외
 #     """
@@ -454,6 +479,7 @@ from typing import List, Set
 # class CommonDatesResponse(BaseModel):
 #     meeting_id: int
 #     common_dates: List[date]
+
 
 def find_road_center_node(
     G: nx.MultiDiGraph,
@@ -534,19 +560,21 @@ def find_road_center_node(
     center_node = best
     center_lat = G.nodes[center_node]["y"]
     center_lon = G.nodes[center_node]["x"]
-    print(
-        f"[DEBUG] center node={center_node}, lat={center_lat}, lon={center_lon}"
-    )
+    print(f"[DEBUG] center node={center_node}, lat={center_lat}, lon={center_lon}")
 
     # 각 source에서 center까지 거리/시간 디버그 출력
     for i, s in enumerate(sources):
         d = dist_dicts.get(s, {}).get(center_node)
         if d is None:
-            print(f"[DEBUG] dist from source[{i}] node {s} → center {center_node}: UNREACHABLE")
+            print(
+                f"[DEBUG] dist from source[{i}] node {s} → center {center_node}: UNREACHABLE"
+            )
         else:
-            print(f"[DEBUG] dist from source[{i}] node {s} → center {center_node}: {d} ({weight})")
+            print(
+                f"[DEBUG] dist from source[{i}] node {s} → center {center_node}: {d} ({weight})"
+            )
 
-     # 대표 center 정보
+    # 대표 center 정보
     center_lon = float(G.nodes[center_node]["x"])
     center_lat = float(G.nodes[center_node]["y"])
 
@@ -612,13 +640,15 @@ def find_road_center_node(
             d = dist_dicts.get(s, {}).get(center_node)
 
             if d is None:
-                per.append({
-                    "index": idx,
-                    "source_node": int(s),
-                    "reachable": False,
-                    "distance_m": None,
-                    "travel_time_s": None,
-                })
+                per.append(
+                    {
+                        "index": idx,
+                        "source_node": int(s),
+                        "reachable": False,
+                        "distance_m": None,
+                        "travel_time_s": None,
+                    }
+                )
             else:
                 if weight == "length":
                     distance_m = float(d)
@@ -627,13 +657,15 @@ def find_road_center_node(
                     distance_m = None
                     travel_time_s = float(d)
 
-                per.append({
-                    "index": idx,
-                    "source_node": int(s),
-                    "reachable": True,
-                    "distance_m": distance_m,
-                    "travel_time_s": travel_time_s,
-                })
+                per.append(
+                    {
+                        "index": idx,
+                        "source_node": int(s),
+                        "reachable": True,
+                        "distance_m": distance_m,
+                        "travel_time_s": travel_time_s,
+                    }
+                )
 
         res["per_person"] = per
 
@@ -724,7 +756,6 @@ def save_calculated_places(db: Session, meeting_id: int, candidates: list[dict])
             address=c["address"],
             category=c.get("category"),
             duration=c.get("duration"),
-
             # ⭐ 추가
             poi_name=c.get("poi_name"),
         )
