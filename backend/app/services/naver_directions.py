@@ -33,8 +33,9 @@ ALLOW_ESTIMATED_TRAVEL_TIME = os.getenv(
 
 
 # 네이버 Directions API 엔드포인트
-NAVER_DRIVING_URL = "https://naveropenapi.apigw.ntruss.com/map-direction/v1/driving"
-NAVER_WALKING_URL = "https://naveropenapi.apigw.ntruss.com/map-direction/v1/walking"
+# 공식 문서: https://maps.apigw.ntruss.com/map-direction/v1/driving
+NAVER_DRIVING_URL = "https://maps.apigw.ntruss.com/map-direction/v1/driving"
+NAVER_WALKING_URL = "https://maps.apigw.ntruss.com/map-direction/v1/walking"
 
 # OpenRouteService (OpenStreetMap 기반) API 엔드포인트
 ORS_API_KEY = os.getenv("OPENROUTESERVICE_API_KEY") or os.getenv("ORS_API_KEY")
@@ -68,7 +69,8 @@ def _get_naver_apigw_credentials() -> tuple[str | None, str | None]:
         or os.getenv("NCP_API_KEY_ID")
     )
     key = (
-        os.getenv("NAVER_NCP_APIGW_KEY")
+        os.getenv("NAVER_NCP_APIGW_API_KEY")  # .env 파일의 변수명과 일치
+        or os.getenv("NAVER_NCP_APIGW_KEY")  # 하위호환
         or os.getenv("NAVER_MAPS_KEY")
         or os.getenv("NCP_API_KEY")
     )
