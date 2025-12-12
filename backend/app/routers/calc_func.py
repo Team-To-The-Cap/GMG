@@ -13,7 +13,20 @@ from ..database import get_db  # 이미 다른 곳에서 쓰고 있다면 생략
 router = APIRouter(prefix="/api", tags=["meeting"])
 
 # === 그래프 로드: 서버 시작 시 1회 ===
-G = ox.load_graphml("/home/jinsoo/GMG/backend/seoul_graph_out/drive.graphml")
+import os
+from pathlib import Path
+
+# backend 루트 디렉토리 기준으로 상대 경로 사용
+BACKEND_ROOT = Path(__file__).resolve().parents[2]  # app/routers/calc_func.py -> backend/
+GRAPH_PATH = BACKEND_ROOT / "seoul_graph_out" / "drive.graphml"
+
+if not GRAPH_PATH.exists():
+    raise FileNotFoundError(
+        f"Graph file not found: {GRAPH_PATH}\n"
+        f"Please ensure the graph file exists at: {GRAPH_PATH}"
+    )
+
+G = ox.load_graphml(str(GRAPH_PATH))
 
 import networkx as nx
 G = G.to_undirected()   # 또는 nx.MultiGraph(G_directed)
