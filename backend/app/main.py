@@ -39,8 +39,12 @@ is_dev = os.getenv("ENV", "development") == "development"
 if is_dev:
     # 개발 환경: localhost의 모든 포트 허용 + 서버 IP
     origins = [
-        "http://localhost:*",  # 모든 localhost 포트
-        "http://127.0.0.1:*",  # 모든 127.0.0.1 포트
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
         "http://211.188.55.98:8000",
         "http://211.188.55.98:8001",
         "capacitor://localhost",
