@@ -85,6 +85,56 @@ def _call_distance_matrix(
     return data
 
 
+def get_travel_time_single(
+    *,
+    start_lat: float,
+    start_lng: float,
+    goal_lat: float,
+    goal_lng: float,
+    mode: str,
+) -> Optional[Dict[str, Any]]:
+    """
+    단일 출발지→도착지에 대한 이동 시간/거리 반환.
+    - driving: departure_time=now가 적용되므로 duration_in_traffic 우선 사용 가능
+    """
+    data = _call_distance_matrix(
+        origins=f"{start_lat},{start_lng}",
+        destinations=f"{goal_lat},{goal_lng}",
+        mode=mode,
+    )
+    if not data:
+        return None
+
+    rows = data.get("rows") or []
+    if not rows:
+        return None
+    elements = (rows[0] or {}).get("elements") or []
+    if not elements:
+        return None
+
+    elem = elements[0] or {}
+    if elem.get("status") != "OK":
+        return None
+
+    distance_m = (elem.get("distance") or {}).get("value")
+    duration_s = None
+
+    if mode == "driving":
+        duration_s = ((elem.get("duration_in_traffic") or {}) or {}).get("value")
+    if duration_s is None:
+        duration_s = (elem.get("duration") or {}).get("value")
+
+    if duration_s is None:
+        return None
+
+    return {
+        "duration_seconds": int(duration_s),
+        "distance_meters": int(distance_m) if isinstance(distance_m, (int, float)) else None,
+        "mode": mode,
+        "success": True,
+    }
+
+
 def compute_minimax_travel_times(
     participants: List[Dict[str, Any]],
     candidates: List[Dict[str, float]],

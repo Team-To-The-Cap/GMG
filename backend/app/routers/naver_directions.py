@@ -36,6 +36,7 @@ class TravelTimeResponse(BaseModel):
     distance_meters: Optional[int] = None
     mode: str
     success: bool
+    is_estimated: Optional[bool] = False
 
 
 class RoutePoint(BaseModel):
@@ -99,6 +100,7 @@ async def calculate_travel_time(request: TravelTimeRequest):
             distance_meters=result.get("distance_meters"),
             mode=result["mode"],
             success=True,
+            is_estimated=bool(result.get("is_estimated", False)),
         )
 
     except HTTPException:

@@ -10,7 +10,8 @@ router = APIRouter(prefix="/api/search", tags=["search"])
 # ── .env 강제 로드 (backend 루트의 .env) ──
 try:
     from dotenv import load_dotenv
-    load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env")
+    # backend/app/routers/naver_search.py -> backend/.env
+    load_dotenv(dotenv_path=Path(__file__).resolve().parents[2] / ".env")
 except Exception:
     pass
 

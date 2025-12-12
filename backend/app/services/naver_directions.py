@@ -18,6 +18,12 @@ except Exception:
     pass
 
 log = logging.getLogger(__name__)
+# Google Distance Matrix (교통 반영)
+try:
+    from ..services.google_distance_matrix import get_travel_time_single as _gdm_single
+except Exception:
+    _gdm_single = None
+
 
 # 네이버 Directions API 엔드포인트
 NAVER_DRIVING_URL = "https://naveropenapi.apigw.ntruss.com/map-direction/v1/driving"
@@ -32,6 +38,31 @@ def _get_naver_credentials() -> tuple[str | None, str | None]:
     client_id = os.getenv("NAVER_CLIENT_ID") or os.getenv("client_id")
     client_secret = os.getenv("NAVER_CLIENT_SECRET") or os.getenv("client_secret")
     return client_id, client_secret
+
+
+def _get_naver_apigw_credentials() -> tuple[str | None, str | None]:
+    """
+    Naver Maps/Directions(APIGW) 인증키.
+    - 권장 env:
+      - NAVER_NCP_APIGW_KEY_ID / NAVER_NCP_APIGW_KEY
+      - (대안) NAVER_MAPS_KEY_ID / NAVER_MAPS_KEY
+      - (대안) NCP_API_KEY_ID / NCP_API_KEY
+    - 하위호환:
+      - NAVER_CLIENT_ID / NAVER_CLIENT_SECRET
+    """
+    key_id = (
+        os.getenv("NAVER_NCP_APIGW_KEY_ID")
+        or os.getenv("NAVER_MAPS_KEY_ID")
+        or os.getenv("NCP_API_KEY_ID")
+    )
+    key = (
+        os.getenv("NAVER_NCP_APIGW_KEY")
+        or os.getenv("NAVER_MAPS_KEY")
+        or os.getenv("NCP_API_KEY")
+    )
+    if key_id and key:
+        return key_id, key
+    return _get_naver_credentials()
 
 
 def _format_coordinates(lat: float, lng: float) -> str:
@@ -99,7 +130,7 @@ async def get_driving_direction(
     Returns:
         API 응답 데이터 또는 None (실패 시)
     """
-    client_id, client_secret = _get_naver_credentials()
+    client_id, client_secret = _get_naver_apigw_credentials()
     if not client_id or not client_secret:
         log.warning("[NAVER Directions] API credentials not configured")
         return None
@@ -134,7 +165,12 @@ async def get_driving_direction(
             return data
 
     except httpx.HTTPStatusError as e:
-        log.warning("[NAVER Directions] HTTP error: %s", e)
+        body = None
+        try:
+            body = e.response.text
+        except Exception:
+            body = None
+        log.warning("[NAVER Directions] HTTP error: %s | body=%s", e, body)
         return None
     except httpx.RequestError as e:
         log.warning("[NAVER Directions] Request error: %s", e)
@@ -162,7 +198,7 @@ async def get_walking_direction(
     Returns:
         API 응답 데이터 또는 None (실패 시)
     """
-    client_id, client_secret = _get_naver_credentials()
+    client_id, client_secret = _get_naver_apigw_credentials()
     if not client_id or not client_secret:
         log.warning("[NAVER Directions] API credentials not configured")
         return None
@@ -196,7 +232,12 @@ async def get_walking_direction(
             return data
 
     except httpx.HTTPStatusError as e:
-        log.warning("[NAVER Directions] HTTP error: %s", e)
+        body = None
+        try:
+            body = e.response.text
+        except Exception:
+            body = None
+        log.warning("[NAVER Directions] HTTP error: %s | body=%s", e, body)
         return None
     except httpx.RequestError as e:
         log.warning("[NAVER Directions] Request error: %s", e)
@@ -375,6 +416,25 @@ async def get_travel_time(
         } 또는 None
     """
     if mode == "driving":
+        # 0) 실시간 교통 반영: Google Distance Matrix 우선
+        if _gdm_single is not None:
+            g = _gdm_single(
+                start_lat=start_lat,
+                start_lng=start_lng,
+                goal_lat=goal_lat,
+                goal_lng=goal_lng,
+                mode="driving",
+            )
+            if g and g.get("success"):
+                return {
+                    "duration_seconds": int(g["duration_seconds"]),
+                    "distance_meters": g.get("distance_meters"),
+                    "mode": "driving",
+                    "success": True,
+                    "is_estimated": False,
+                    "source": "google_distance_matrix",
+                }
+
         data = await get_driving_direction(
             start_lat, start_lng, goal_lat, goal_lng, option=driving_option
         )
@@ -410,6 +470,8 @@ async def get_travel_time(
             "distance_meters": distance,
             "mode": "driving",
             "success": True,
+            "is_estimated": False,
+            "source": "naver_directions",
         }
 
     elif mode == "walking":
@@ -441,9 +503,30 @@ async def get_travel_time(
             "distance_meters": distance,
             "mode": "walking",
             "success": True,
+            "is_estimated": False,
+            "source": "naver_directions",
         }
 
     elif mode == "transit":
+        # (선택) 대중교통: Google transit이 가능하면 우선 사용
+        if _gdm_single is not None:
+            g = _gdm_single(
+                start_lat=start_lat,
+                start_lng=start_lng,
+                goal_lat=goal_lat,
+                goal_lng=goal_lng,
+                mode="transit",
+            )
+            if g and g.get("success"):
+                return {
+                    "duration_seconds": int(g["duration_seconds"]),
+                    "distance_meters": g.get("distance_meters"),
+                    "mode": "transit",
+                    "success": True,
+                    "is_estimated": False,
+                    "source": "google_distance_matrix",
+                }
+
         # NOTE: 네이버 대중교통 경로 API는 별도 스펙/상품이어서 여기서는 "임시 fallback" 제공
         # - 사용자 경험을 위해 최소한의 time/route를 제공 (도로 기반)
         # - mode는 transit으로 반환 (UI에서 "대중교통"으로 표기 가능)
@@ -481,6 +564,8 @@ async def get_travel_time(
             "distance_meters": distance,
             "mode": "transit",
             "success": True,
+            "is_estimated": False,
+            "source": "naver_directions(driving_fallback)",
         }
 
     else:
