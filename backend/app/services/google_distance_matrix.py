@@ -79,7 +79,11 @@ def _call_distance_matrix(
 
     data = res.json()
     if data.get("status") != "OK":
-        log.warning("[GDM] API status not OK: %s", data.get("status"))
+        log.warning(
+            "[GDM] API status not OK: %s | error_message=%s",
+            data.get("status"),
+            data.get("error_message"),
+        )
         return None
 
     return data
@@ -114,6 +118,7 @@ def get_travel_time_single(
 
     elem = elements[0] or {}
     if elem.get("status") != "OK":
+        log.warning("[GDM] element status not OK: %s | elem=%s", elem.get("status"), elem)
         return None
 
     distance_m = (elem.get("distance") or {}).get("value")
