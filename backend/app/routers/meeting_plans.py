@@ -298,8 +298,9 @@ def create_auto_plan_for_meeting(
         # 공통 날짜가 전혀 없는 경우: 시간 미정으로 두고 계속 진행
         meeting_time = None
 
-    # 3. 출발 좌표 모으기 (lon, lat) + 하이브리드용 participant 정보
+    # 3. 출발 좌표 모으기 (lon, lat) + 이동 수단 정보
     coords: List[Tuple[float, float]] = []
+    modes: List[str] = []  # 각 참가자의 이동 수단
     participant_for_matrix: List[dict] = []
 
     for p in meeting.participants:
@@ -307,6 +308,17 @@ def create_auto_plan_for_meeting(
             continue
 
         coords.append((p.start_longitude, p.start_latitude))  # (lon, lat)
+        
+        # transportation을 mode로 변환 (도보/자동차/대중교통 -> walk/drive/public)
+        transport = (p.transportation or "").strip()
+        if transport in ["도보", "walking", "walk"]:
+            mode_str = "walk"
+        elif transport in ["대중교통", "transit", "public"]:
+            mode_str = "public"
+        else:  # "자동차", "driving", "drive", None 등
+            mode_str = "drive"
+        modes.append(mode_str)
+        
         participant_for_matrix.append(
             {
                 "lat": p.start_latitude,
@@ -326,14 +338,25 @@ def create_auto_plan_for_meeting(
 
     if coords:
         print(f"[DEBUG] Found {len(coords)} participant coordinates")
+        
+        # coords와 modes 개수 검증
+        if len(coords) != len(modes):
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    f"coords 개수({len(coords)})와 modes 개수({len(modes)})가 다릅니다. "
+                    "서버 로직을 확인하세요."
+                ),
+            )
+        
         # 3-0. 그래프 범위 확인 (서울 그래프는 서울 지역만 커버)
         # 입력 좌표가 그래프 범위 밖이면 단순 지리적 중심점 사용
         try:
-            # 3-1. 도로 그래프 위 minimax center + top_k 후보 계산 (1차 후보 생성)
-            center_result = find_road_center_node(
+            # 3-1. 도로 그래프 위 multi-mode minimax center + top_k 후보 계산 (1차 후보 생성)
+            center_result = find_road_center_node_multi_mode(
                 G,
                 coords_lonlat=coords,
-                weight="length",
+                modes=modes,
                 return_paths=True,
                 top_k=3,  # 상위 3개 후보까지
             )
