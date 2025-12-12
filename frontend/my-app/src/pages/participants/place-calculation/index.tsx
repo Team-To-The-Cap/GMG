@@ -8,6 +8,7 @@ import type { PanInfo } from "framer-motion";
 import {
   getMeetingPlaces,
   setMeetingFinalPlace,
+  getPromiseDetail,
 } from "@/services/promise/promise.service";
 
 declare global {
@@ -121,7 +122,7 @@ export function PlaceCalculationScreen() {
     };
   }
 
-  // 0) 서버에서 장소 목록 가져오기
+  // 0) 서버에서 장소 목록 가져오기 (plan에서 가져오거나 places에서 가져오기)
   useEffect(() => {
     if (!promiseId) return;
 
@@ -132,12 +133,42 @@ export function PlaceCalculationScreen() {
         setLoading(true);
         setError(null);
 
-        const meetingPlaces = await getMeetingPlaces(promiseId);
+        // 먼저 PromiseDetail을 가져와서 plan 정보 확인
+        const detail = await getPromiseDetail(promiseId);
         if (cancelled) return;
 
-        const mapped = (meetingPlaces ?? []).map((p) =>
-          mapMeetingPlaceToCandidate(p)
+        let mapped: PlaceCandidate[] = [];
+
+        // 1. places 배열에서 meeting_point 카테고리 찾기
+        const meetingPlaces = await getMeetingPlaces(promiseId);
+        console.log("[PlaceCalculation] API places 응답:", meetingPlaces);
+        
+        const meetingPointPlaces = (meetingPlaces ?? []).filter(
+          (p: any) => p.category === "meeting_point"
         );
+
+        if (meetingPointPlaces.length > 0) {
+          // places에 meeting_point가 있으면 사용
+          mapped = meetingPointPlaces.map((p) => mapMeetingPlaceToCandidate(p));
+        } else if (detail.place) {
+          // places에 없으면 plan에서 가져온 place 정보 사용
+          mapped = [
+            {
+              id: "plan-place",
+              title: detail.place.name || detail.place.address || "만남 장소",
+              address: detail.place.address || "",
+              label: "자동 추천 만남 장소",
+              lat: detail.place.lat || 0,
+              lng: detail.place.lng || 0,
+              averageDistance:
+                "참여자들의 이동 거리를 모두 고려해 계산한 추천 위치예요.",
+              description:
+                "모든 참여자의 출발지를 기준으로 이동 시간이 가장 균형 잡히도록 계산한 대표 만남 장소예요.",
+            },
+          ];
+        }
+
+        console.log("[PlaceCalculation] 최종 매핑된 places:", mapped);
 
         setPlaces(mapped);
         setCurrentSlide(0);
