@@ -14,6 +14,8 @@ import sys
 import argparse
 import os
 import re
+import signal
+import time
 
 # 브랜치별 기본 포트 매핑 (브랜치 이름의 해시값 기반)
 BRANCH_PORT_MAP = {
@@ -71,6 +73,44 @@ def is_port_in_use(port: int) -> bool:
             return True
 
 
+def kill_process_on_port(port: int, timeout: float = 3.0) -> bool:
+    """지정 포트를 점유 중인 프로세스를 종료합니다."""
+    try:
+        # lsof로 해당 포트를 사용하는 PID 목록 가져오기
+        result = subprocess.run(
+            ["lsof", "-ti", f":{port}"], capture_output=True, text=True, check=False
+        )
+        pids = [int(pid) for pid in result.stdout.split() if pid.strip()]
+        if not pids:
+            return False
+
+        print(f"⚠️  포트 {port}를 사용 중인 프로세스를 종료합니다: {pids}")
+        for pid in pids:
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+
+        # 종료 대기
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if not is_port_in_use(port):
+                return True
+            time.sleep(0.1)
+
+        # 아직 살아있으면 강제 종료
+        for pid in pids:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+
+        return not is_port_in_use(port)
+    except Exception as e:
+        print(f"❌ 포트 {port} 점유 프로세스 종료 중 오류: {e}")
+        return False
+
+
 def find_available_port(start_port: int, max_attempts: int = 10) -> int:
     """사용 가능한 포트 찾기"""
     for i in range(max_attempts):
@@ -124,12 +164,10 @@ def main():
     
     # 포트 사용 가능 여부 확인
     if is_port_in_use(port):
-        print(f"⚠️  포트 {port}가 이미 사용 중입니다.")
-        try:
-            port = find_available_port(port)
-            print(f"   → 사용 가능한 포트 {port}로 변경합니다.")
-        except RuntimeError as e:
-            print(f"❌ {e}")
+        print(f"⚠️  포트 {port}가 이미 사용 중입니다. 기존 프로세스를 종료합니다.")
+        killed = kill_process_on_port(port)
+        if not killed and is_port_in_use(port):
+            print(f"❌ 포트 {port}를 비울 수 없습니다. 프로세스를 수동으로 종료해 주세요.")
             sys.exit(1)
     
     # 서버 정보 출력
