@@ -115,9 +115,10 @@ def _call_routes_compute_routes(
     headers = {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": GOOGLE_MAPS_API_KEY,
-        # 필요한 필드만 받아 비용/지연 최소화
-        # NOTE: FieldMask가 너무 빡빡하면 응답이 {} 로 떨어지는 케이스가 있어 routes를 명시적으로 포함
-        "X-Goog-FieldMask": "routes,routes.duration,routes.distanceMeters",
+        # 디버깅/운영 안정화를 위해 일단 전체 응답을 받습니다.
+        # (요청이 거절될 때 error 객체가 FieldMask로 잘려 {} 로 보일 수 있음)
+        # 안정화되면 routes.duration,routes.distanceMeters 등으로 다시 좁혀도 됩니다.
+        "X-Goog-FieldMask": "*",
     }
 
     try:
