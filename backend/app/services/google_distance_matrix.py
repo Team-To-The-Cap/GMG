@@ -115,10 +115,11 @@ def _call_routes_compute_routes(
     headers = {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": GOOGLE_MAPS_API_KEY,
-        # 디버깅/운영 안정화를 위해 일단 전체 응답을 받습니다.
-        # (요청이 거절될 때 error 객체가 FieldMask로 잘려 {} 로 보일 수 있음)
-        # 안정화되면 routes.duration,routes.distanceMeters 등으로 다시 좁혀도 됩니다.
-        "X-Goog-FieldMask": "*",
+        # NOTE:
+        # - FieldMask가 너무 제한적이면 에러가 잘려 payload가 {} 처럼 보일 수 있음
+        # - 하지만 "*"는 환경/버전에 따라 기대대로 동작하지 않을 수 있어
+        #   routes/error/geocodingResults를 명시적으로 포함합니다.
+        "X-Goog-FieldMask": "routes.distanceMeters,routes.duration,geocodingResults,error",
     }
 
     try:
