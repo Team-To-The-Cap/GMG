@@ -283,7 +283,7 @@ async def get_driving_direction(
                 response.status_code,
                 response.headers.get("content-type"),
             )
-            
+
             # 401 에러도 응답 본문을 확인하기 위해 raise_for_status 전에 처리
             if response.status_code == 401:
                 try:
@@ -297,7 +297,7 @@ async def get_driving_direction(
                         "[NAVER Directions] [DRIVING API] 401 Authentication Failed | body=%s",
                         response.text[:500],
                     )
-            
+
             response.raise_for_status()
             data = response.json()
 
