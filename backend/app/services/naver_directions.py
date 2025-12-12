@@ -291,7 +291,22 @@ async def get_driving_direction(
             body = e.response.text
         except Exception:
             body = None
-        log.warning("[NAVER Directions] HTTP error: %s | body=%s", e, body)
+
+        # 401 Unauthorized는 인증 실패 (API 키 문제)
+        if e.response.status_code == 401:
+            log.error(
+                "[NAVER Directions] Authentication failed (401) - API credentials invalid or missing | "
+                "Please check NAVER_NCP_APIGW_KEY_ID and NAVER_NCP_APIGW_API_KEY in .env file | "
+                "body=%s",
+                body,
+            )
+        else:
+            log.warning(
+                "[NAVER Directions] HTTP error: %s | status=%s | body=%s",
+                e,
+                e.response.status_code,
+                body,
+            )
         return None
     except httpx.RequestError as e:
         log.warning("[NAVER Directions] Request error: %s", e)
@@ -358,7 +373,22 @@ async def get_walking_direction(
             body = e.response.text
         except Exception:
             body = None
-        log.warning("[NAVER Directions] HTTP error: %s | body=%s", e, body)
+
+        # 401 Unauthorized는 인증 실패 (API 키 문제)
+        if e.response.status_code == 401:
+            log.error(
+                "[NAVER Directions] Authentication failed (401) - API credentials invalid or missing | "
+                "Please check NAVER_NCP_APIGW_KEY_ID and NAVER_NCP_APIGW_API_KEY in .env file | "
+                "body=%s",
+                body,
+            )
+        else:
+            log.warning(
+                "[NAVER Directions] HTTP error: %s | status=%s | body=%s",
+                e,
+                e.response.status_code,
+                body,
+            )
         return None
     except httpx.RequestError as e:
         log.warning("[NAVER Directions] Request error: %s", e)
