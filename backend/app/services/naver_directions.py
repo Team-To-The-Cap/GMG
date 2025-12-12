@@ -269,20 +269,42 @@ async def get_driving_direction(
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
+            log.info(
+                "[NAVER Directions] Request URL: %s | params: %s",
+                NAVER_DRIVING_URL,
+                params,
+            )
             response = await client.get(
                 NAVER_DRIVING_URL, headers=headers, params=params
             )
+            log.info(
+                "[NAVER Directions] Response status: %s | headers: %s",
+                response.status_code,
+                dict(response.headers),
+            )
             response.raise_for_status()
             data = response.json()
+            
+            log.info(
+                "[NAVER Directions] Response data: code=%s, message=%s, has_route=%s",
+                data.get("code"),
+                data.get("message"),
+                "route" in data,
+            )
 
             if data.get("code") != 0:
                 log.warning(
-                    "[NAVER Directions] API returned error code=%s, message=%s",
+                    "[NAVER Directions] API returned error code=%s, message=%s | full_response=%s",
                     data.get("code"),
                     data.get("message"),
+                    str(data)[:500],
                 )
                 return None
 
+            log.info(
+                "[NAVER Directions] ✓ Success | route_keys=%s",
+                list(data.get("route", {}).keys()) if data.get("route") else None,
+            )
             return data
 
     except httpx.HTTPStatusError as e:
@@ -576,30 +598,42 @@ async def get_travel_time(
         )
 
         # 자동차: Naver Directions API만 사용
-        log.debug("[TRAVEL_TIME] Trying Naver Directions API for driving...")
+        log.info("[TRAVEL_TIME] [DRIVING] Step 1: Calling Naver Directions API...")
         data = await get_driving_direction(
             start_lat, start_lng, goal_lat, goal_lng, option=driving_option
         )
         if not data:
             # Naver API 실패 시 계산 실패 반환
             log.error(
-                "[TRAVEL_TIME] ✗ Naver Directions API failed for driving - calculation failed"
+                "[TRAVEL_TIME] [DRIVING] ✗ Step 1 FAILED: Naver Directions API returned None - calculation failed"
             )
             return _fail_unavailable("driving")
 
-        log.debug(
-            "[TRAVEL_TIME] ✓ Naver Directions API returned data, extracting duration..."
+        log.info(
+            "[TRAVEL_TIME] [DRIVING] ✓ Step 1 SUCCESS: Naver Directions API returned data | "
+            "route_keys=%s, option=%s",
+            list(data.get("route", {}).keys()) if data.get("route") else None,
+            driving_option,
         )
 
+        log.info("[TRAVEL_TIME] [DRIVING] Step 2: Extracting duration from response...")
         duration = extract_travel_time_from_driving_response(
             data, option=driving_option
         )
         if duration is None:
             # 경로는 찾았지만 duration 추출 실패 시 계산 실패 반환
             log.error(
-                "[NAVER Directions] Failed to extract duration - calculation failed"
+                "[TRAVEL_TIME] [DRIVING] ✗ Step 2 FAILED: Failed to extract duration from response | "
+                "data_keys=%s, option=%s",
+                list(data.keys()) if isinstance(data, dict) else None,
+                driving_option,
             )
             return _fail_unavailable("driving")
+        
+        log.info(
+            "[TRAVEL_TIME] [DRIVING] ✓ Step 2 SUCCESS: Duration extracted | duration=%ds",
+            duration,
+        )
 
         # 거리 정보 추출 (선택적)
         distance = None
@@ -666,9 +700,9 @@ async def get_travel_time(
             goal_lng,
         )
 
-        # (선택) 대중교통: Google transit이 가능하면 우선 사용
+        # 대중교통: Google transit만 사용
         if _gdm_single is not None:
-            log.debug("[TRAVEL_TIME] Trying Google Distance Matrix API for transit...")
+            log.info("[TRAVEL_TIME] [TRANSIT] Step 1: Calling Google Distance Matrix API...")
             g = _gdm_single(
                 start_lat=start_lat,
                 start_lng=start_lng,
@@ -676,10 +710,20 @@ async def get_travel_time(
                 goal_lng=goal_lng,
                 mode="transit",
             )
+            
+            log.info(
+                "[TRAVEL_TIME] [TRANSIT] Google API response: result=%s, success=%s, source=%s",
+                "None" if g is None else "dict",
+                g.get("success") if g else None,
+                g.get("source") if g else None,
+            )
+            
             if g and g.get("success"):
                 log.info(
-                    "[TRAVEL_TIME] ✓ Google Distance Matrix success | duration=%ds, source=%s",
+                    "[TRAVEL_TIME] [TRANSIT] ✓ Step 1 SUCCESS: Google Distance Matrix | "
+                    "duration=%ds, distance=%sm, source=%s",
                     g.get("duration_seconds"),
+                    g.get("distance_meters"),
                     g.get("source", "unknown"),
                 )
                 return {
@@ -691,17 +735,22 @@ async def get_travel_time(
                     "source": "google_distance_matrix",
                 }
             else:
-                log.warning(
-                    "[TRAVEL_TIME] ✗ Google Distance Matrix failed for transit | result=%s",
-                    "None" if g is None else f"success={g.get('success')}",
+                log.error(
+                    "[TRAVEL_TIME] [TRANSIT] ✗ Step 1 FAILED: Google Distance Matrix | "
+                    "result=%s, success=%s, error=%s",
+                    "None" if g is None else "dict",
+                    g.get("success") if g else None,
+                    g.get("error") if g else None,
                 )
         else:
-            log.warning(
-                "[TRAVEL_TIME] Google Distance Matrix not available (_gdm_single is None)"
+            log.error(
+                "[TRAVEL_TIME] [TRANSIT] ✗ Google Distance Matrix not available (_gdm_single is None)"
             )
 
         # Google API 실패 시 계산 실패 반환
-        log.error("[TRAVEL_TIME] ✗ Google API failed for transit - calculation failed")
+        log.error(
+            "[TRAVEL_TIME] [TRANSIT] ✗ FINAL FAILED: Google API failed for transit - calculation failed"
+        )
         return _fail_unavailable("transit")
 
     else:
