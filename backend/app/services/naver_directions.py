@@ -45,88 +45,32 @@ ORS_BASE_URL = "https://api.openrouteservice.org/v2"
 # 일단 자동차/도보만 구현하고, 대중교통은 추후 확장 가능하도록 구조 설계
 
 
-def _get_naver_credentials() -> tuple[str | None, str | None]:
-    """네이버 클라우드 플랫폼 인증 정보 가져오기"""
-    client_id = os.getenv("NAVER_CLIENT_ID") or os.getenv("client_id")
-    client_secret = os.getenv("NAVER_CLIENT_SECRET") or os.getenv("client_secret")
-    return client_id, client_secret
-
-
 def _get_naver_apigw_credentials() -> tuple[str | None, str | None]:
     """
     Naver Maps/Directions(APIGW) 인증키.
-    - 권장 env:
-      - NAVER_NCP_APIGW_KEY_ID / NAVER_NCP_APIGW_KEY
-      - (대안) NAVER_MAPS_KEY_ID / NAVER_MAPS_KEY
-      - (대안) NCP_API_KEY_ID / NCP_API_KEY
-    - 하위호환:
-      - NAVER_CLIENT_ID / NAVER_CLIENT_SECRET
-      - client_id / client_secret (backend/core/config.py에서 로드)
+    .env 파일의 client_id/client_secret만 사용합니다.
     """
-    key_id = (
-        os.getenv("NAVER_NCP_APIGW_KEY_ID")
-        or os.getenv("NAVER_MAPS_KEY_ID")
-        or os.getenv("NCP_API_KEY_ID")
-    )
-    key = (
-        os.getenv("NAVER_NCP_APIGW_API_KEY")  # .env 파일의 변수명과 일치
-        or os.getenv("NAVER_NCP_APIGW_KEY")  # 하위호환
-        or os.getenv("NAVER_MAPS_KEY")
-        or os.getenv("NCP_API_KEY")
-    )
-    if key_id and key:
-        return key_id, key
-
-    # 하위호환: backend/core/config.py의 client_id/client_secret도 확인
+    # core.config의 client_id/client_secret (.env의 client_id/client_secret)
     try:
         from core.config import client_id, client_secret
 
-        log.warning(
-            "[NAVER Credentials] Checking core.config: client_id=%s, client_secret=%s",
-            "SET" if client_id else "MISSING",
-            "SET" if client_secret else "MISSING",
-        )
-
         if client_id and client_secret:
-            # 따옴표 제거 (혹시 .env에 따옴표가 포함된 경우)
-            client_id_clean = client_id.strip().strip('"').strip("'")
-            client_secret_clean = client_secret.strip().strip('"').strip("'")
+            # 따옴표 제거
+            client_id_clean = str(client_id).strip().strip('"').strip("'")
+            client_secret_clean = str(client_secret).strip().strip('"').strip("'")
 
-            log.warning(
-                "[NAVER Credentials] ✓ Found in core.config: client_id=%s, client_secret=%s",
-                (
-                    client_id_clean[:10] + "..."
-                    if len(client_id_clean) > 10
-                    else client_id_clean
-                ),
-                (
-                    client_secret_clean[:10] + "..."
-                    if len(client_secret_clean) > 10
-                    else client_secret_clean
-                ),
+            log.info(
+                "[NAVER Credentials] Using client_id/client_secret from core.config (.env)"
             )
             return client_id_clean, client_secret_clean
     except Exception as e:
         log.warning("[NAVER Credentials] Failed to import from core.config: %s", e)
 
-    # 마지막: NAVER_CLIENT_ID / NAVER_CLIENT_SECRET 또는 client_id / client_secret
-    result = _get_naver_credentials()
-    if result[0] and result[1]:
-        # 따옴표 제거
-        result = (
-            result[0].strip().strip('"').strip("'") if result[0] else None,
-            result[1].strip().strip('"').strip("'") if result[1] else None,
-        )
-        if result[0] and result[1]:
-            log.warning(
-                "[NAVER Credentials] ✓ Found: NAVER_CLIENT_ID/NAVER_CLIENT_SECRET or client_id/client_secret"
-            )
-    else:
-        log.error(
-            "[NAVER Credentials] ✗ No credentials found | "
-            "Checked: NAVER_NCP_APIGW_KEY_ID, core.config.client_id, NAVER_CLIENT_ID, client_id"
-        )
-    return result
+    log.error(
+        "[NAVER Credentials] ✗ No credentials found | "
+        "Please set client_id and client_secret in .env file"
+    )
+    return None, None
 
 
 def _format_coordinates(lat: float, lng: float) -> str:
@@ -405,8 +349,36 @@ async def get_driving_direction(
                         response.text[:500],
                     )
 
-            response.raise_for_status()
+            # 네이버 API는 인증 실패 시 HTTP 200으로 응답하지만 본문에 error 객체를 포함
             data = response.json()
+            
+            # 인증 실패 체크 (errorCode: 200, message: "Authentication Failed")
+            if "error" in data:
+                error_info = data.get("error", {})
+                error_code = error_info.get("errorCode")
+                error_message = error_info.get("message", "")
+                
+                if error_code == "200" or "Authentication Failed" in error_message:
+                    log.error(
+                        "[NAVER Directions] [DRIVING API] ✗ Authentication Failed | "
+                        "errorCode=%s, message=%s, details=%s | "
+                        "해결 방법: 네이버 클라우드 플랫폼 콘솔에서 Application에 'Directions 5' 또는 'Directions 15' 서비스를 등록했는지 확인하세요. "
+                        "또한 API 키가 Directions API용인지 확인하세요.",
+                        error_code,
+                        error_message,
+                        error_info.get("details", ""),
+                    )
+                    return None
+                else:
+                    log.error(
+                        "[NAVER Directions] [DRIVING API] ✗ API error: errorCode=%s, message=%s, details=%s",
+                        error_code,
+                        error_message,
+                        error_info.get("details", ""),
+                    )
+                    return None
+
+            response.raise_for_status()
 
             log.warning(
                 "[NAVER Directions] [DRIVING API] Response data: code=%s, message=%s, has_route=%s, route_keys=%s",
@@ -442,7 +414,7 @@ async def get_driving_direction(
         if e.response.status_code == 401:
             log.error(
                 "[NAVER Directions] Authentication failed (401) - API credentials invalid or missing | "
-                "Please check NAVER_NCP_APIGW_KEY_ID and NAVER_NCP_APIGW_API_KEY in .env file | "
+                "Please check client_id and client_secret in .env file | "
                 "body=%s",
                 body,
             )
@@ -516,8 +488,35 @@ async def get_walking_direction(
             response = await client.get(
                 NAVER_WALKING_URL, headers=headers, params=params
             )
-            response.raise_for_status()
+            
+            # 네이버 API는 인증 실패 시 HTTP 200으로 응답하지만 본문에 error 객체를 포함
             data = response.json()
+            
+            # 인증 실패 체크 (errorCode: 200, message: "Authentication Failed")
+            if "error" in data:
+                error_info = data.get("error", {})
+                error_code = error_info.get("errorCode")
+                error_message = error_info.get("message", "")
+                
+                if error_code == "200" or "Authentication Failed" in error_message:
+                    log.error(
+                        "[NAVER Directions] [WALKING API] ✗ Authentication Failed | "
+                        "errorCode=%s, message=%s, details=%s | "
+                        "해결 방법: 네이버 클라우드 플랫폼 콘솔에서 Application에 'Directions 5' 또는 'Directions 15' 서비스를 등록했는지 확인하세요.",
+                        error_code,
+                        error_message,
+                        error_info.get("details", ""),
+                    )
+                    return None
+                else:
+                    log.error(
+                        "[NAVER Directions] [WALKING API] ✗ API error: errorCode=%s, message=%s",
+                        error_code,
+                        error_message,
+                    )
+                    return None
+
+            response.raise_for_status()
 
             if data.get("code") != 0:
                 log.warning(
@@ -540,7 +539,7 @@ async def get_walking_direction(
         if e.response.status_code == 401:
             log.error(
                 "[NAVER Directions] Authentication failed (401) - API credentials invalid or missing | "
-                "Please check NAVER_NCP_APIGW_KEY_ID and NAVER_NCP_APIGW_API_KEY in .env file | "
+                "Please check client_id and client_secret in .env file | "
                 "body=%s",
                 body,
             )

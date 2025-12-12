@@ -24,23 +24,16 @@ log = logging.getLogger(__name__)
 def _get_creds() -> tuple[str | None, str | None]:
     """
     Naver API 자격 증명 가져오기
-    - 환경 변수 우선: NAVER_CLIENT_ID / NAVER_CLIENT_SECRET
-    - 하위호환: client_id / client_secret
-    - core/config.py의 client_id/client_secret도 확인
+    .env 파일의 client_id/client_secret만 사용합니다.
     """
-    cid = os.getenv("NAVER_CLIENT_ID") or os.getenv("client_id")
-    sec = os.getenv("NAVER_CLIENT_SECRET") or os.getenv("client_secret")
+    try:
+        from core.config import client_id, client_secret
+        if client_id and client_secret:
+            return client_id, client_secret
+    except Exception as e:
+        log.warning("[NAVER Search] Failed to import from core.config: %s", e)
     
-    # core/config.py의 client_id/client_secret도 확인
-    if not cid or not sec:
-        try:
-            from core.config import client_id, client_secret
-            if client_id and client_secret:
-                return client_id, client_secret
-        except Exception:
-            pass
-    
-    return cid, sec
+    return None, None
 
 
 class Place(BaseModel):
