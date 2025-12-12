@@ -13,25 +13,50 @@ from ..database import get_db  # 이미 다른 곳에서 쓰고 있다면 생략
 router = APIRouter(prefix="/api", tags=["meeting"])
 
 # === 그래프 로드: 서버 시작 시 1회 ===
-G = ox.load_graphml("/home/duram/GMG/backend/seoul_graph_out/drive.graphml")
+G = ox.load_graphml("/home/jinsoo/GMG/backend/seoul_graph_out/drive.graphml")
 
 import networkx as nx
 G = G.to_undirected()   # 또는 nx.MultiGraph(G_directed)
 
 MODE_SPEED_KMPH = {
-    # 1) 도보: 시속 4.5km
-    "도": 1.0, "도보": 1.0, "walk": 1.0, "WALK": 1.0,
-    
+    # 1) 도보: 시속 1km (테스트용으로 아주 느리게)
+    "도": 4.0,
+    "도보": 4.0,
+    "walk": 4.0,
+    "walking": 4.0,
+
     # 2) 자동차: 시속 30km (도심 평균 서행 기준)
-    "차": 30.0, "자동차": 30.0, "drive": 30.0, "DRIVE": 30.0, "car": 30.0,
-    
-    # 3) 대중교통: 일단 자동차와 동일하게 취급 (요청사항 반영)
-    "대중교통": 30.0, "public": 30.0, "PUBLIC": 30.0, "transit": 30.0, "bus": 30.0, "subway": 30.0
+    "차": 30.0,
+    "자동차": 30.0,
+    "drive": 30.0,
+    "driving": 30.0,
+    "car": 30.0,
+
+    # 3) 대중교통: 일단 자동차와 동일하게 취급
+    "대중교통": 30.0,
+    "public": 30.0,
+    "transit": 30.0,
+    "bus": 30.0,
+    "subway": 30.0,
 }
 
+
 def mode_to_speed_kph(mode: str) -> float:
-    """교통수단 문자열을 속도(km/h)로 매핑. 없으면 기본적으로 30km/h."""
-    return MODE_SPEED_KMPH.get(mode, 30.0)
+    """
+    교통수단 문자열을 속도(km/h)로 매핑.
+    - 앞뒤 공백 제거 + 소문자 변환 후 매핑
+    - 알 수 없는 값이면 400 에러를 터뜨려서 버그를 숨기지 않는다.
+    """
+    key = mode.strip().lower()
+
+    if key not in MODE_SPEED_KMPH:
+        raise HTTPException(
+            status_code=400,
+            detail=f"알 수 없는 이동 수단 모드입니다: {mode!r}. "
+                   f"지원하는 값 예시: 도보, 자동차, walk, drive, public, bus, subway ..."
+        )
+
+    return MODE_SPEED_KMPH[key]
 
 '''
 def snap_points_to_nodes(
@@ -176,17 +201,23 @@ def find_road_center_node_multi_mode(
     return_paths: bool = True,
     top_k: int = 3
 ) -> Dict[str, Any]:
-    
-    # [DEBUG] 입력 데이터 확인
+
     print("\n" + "="*50)
     print(f"[DEBUG] 입력 좌표 개수: {len(coords_lonlat)}")
-    print(f"[DEBUG] 입력 모드: {modes}")
-    
+    print(f"[DEBUG] 입력 모드(raw): {modes}")
+
     if not coords_lonlat:
         raise ValueError("coords_lonlat is empty")
 
-    if len(modes) < len(coords_lonlat):
-        modes.extend(["drive"] * (len(coords_lonlat) - len(modes)))
+    # ✅ 길이 안 맞으면 조용히 채우지 말고 에러
+    if len(modes) != len(coords_lonlat):
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"coords 개수({len(coords_lonlat)})와 modes 개수({len(modes)})가 다릅니다. "
+                "상위 로직/DB의 transportation 매핑을 확인하세요."
+            ),
+        )
 
     sources = snap_points_to_nodes(G, coords_lonlat)
     k = len(sources)
@@ -300,7 +331,12 @@ def find_road_center_node_multi_mode(
                     "transportation": mode, "distance_m": float(d_m), "travel_time_s": float(t_sec)
                 })
         res["per_person"] = per
-
+    print("[DEBUG][CENTER]", "best_node =", best_node)
+    for row in res.get("per_person", []):
+        print(
+            f"  - idx={row['index']}, mode={row['transportation']}, "
+            f"dist={row['distance_m']:.1f}m, time={row['travel_time_s']/60:.1f}min"
+        )
     return res
 
 
@@ -324,13 +360,17 @@ def get_meeting_point(
     
     # modes 기본값 처리
     if not modes:
+        # 아무것도 안 들어오면 전부 자동차로 가정
         modes = ["drive"] * len(lons)
-    
-    # 개수가 안 맞을 경우 채우기 (Safe guard)
-    if len(modes) < len(lons):
-         modes.extend(["drive"] * (len(lons) - len(modes)))
-    # 넘치면 자르기
-    modes = modes[:len(lons)]
+    elif len(modes) != len(lons):
+        # 조용히 채우지 말고, 아예 에러를 내서 버그를 드러내자
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"좌표 개수({len(lons)})와 modes 개수({len(modes)})가 다릅니다. "
+                "예: ?modes=도보&modes=자동차 처럼 사람 수만큼 modes를 보내 주세요."
+            ),
+        )
 
     coords: List[Tuple[float, float]] = list(zip(lons, lats))
     

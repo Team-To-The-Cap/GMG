@@ -294,20 +294,28 @@ def create_auto_plan_for_meeting(
         # 공통 날짜가 전혀 없는 경우: 시간 미정으로 두고 계속 진행
         meeting_time = None
 
-    # 3. 출발 좌표 모으기 (lon, lat) + 하이브리드용 participant 정보
+    # 3. 출발 좌표 모으기 (lon, lat) + Google Distance Matrix용 participant 정보 + multi-mode용 modes
     coords: List[Tuple[float, float]] = []
     participant_for_matrix: List[dict] = []
+    modes: List[str] = []
 
     for p in meeting.participants:
         if p.start_latitude is None or p.start_longitude is None:
             continue
 
-        coords.append((p.start_longitude, p.start_latitude))  # (lon, lat)
+        # (lon, lat)
+        coords.append((p.start_longitude, p.start_latitude))
+
+        # 이동수단: 없으면 기본 'drive'
+        transport_mode = p.transportation or "drive"
+        modes.append(transport_mode)
+
+        # Google Distance Matrix용 참여자 정보
         participant_for_matrix.append(
             {
                 "lat": p.start_latitude,
                 "lng": p.start_longitude,
-                "transportation": p.transportation,
+                "transportation": transport_mode,
             }
         )
 
@@ -318,26 +326,36 @@ def create_auto_plan_for_meeting(
     candidates: list[dict] = []  # MeetingPlace로 저장할 후보들
 
     if coords:
-        # 3-1. 도로 그래프 위 minimax center + top_k 후보 계산 (1차 후보 생성)
-        center_result = find_road_center_node(
+        if len(coords) != len(modes):
+            # 이 상황은 코드 버그이므로 500으로 터뜨려서 바로 찾게 한다
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    f"coords 개수({len(coords)})와 modes 개수({len(modes)})가 다릅니다. "
+                    "서버 로직을 확인하세요."
+                ),
+            )
+
+        # 3-1. 도로 그래프 위 multi-mode minimax center + top_k 후보 계산 (1차 후보 생성)
+        center_result = find_road_center_node_multi_mode(
             G,
             coords_lonlat=coords,
-            weight="length",
+            modes=modes,
             return_paths=True,
             top_k=3,  # 상위 3개 후보까지
         )
         print(center_result)
 
-        # 대표 center (보정 전)
+        # 대표 center (multi-mode 결과, 보정 전 좌표)
         raw_center_lat = float(center_result["lat"])
         raw_center_lon = float(center_result["lon"])
 
-        # 대표 center에 대해 한 번 보정
+        # 대표 center에 대해 한 번 보정 (adjust_to_busy_station_area 결과 사용)
         adjusted_main = center_result.get("adjusted_point") or {}
         raw_adjusted_lat = float(adjusted_main.get("lat", raw_center_lat))
         raw_adjusted_lon = float(adjusted_main.get("lng", raw_center_lon))
 
-        # top_k 후보들
+        # top_k 후보들 (각각 adjusted_point 포함)
         top_candidates_raw = center_result.get("top_candidates") or []
 
         # 3-2. 각 후보를 "보정된 좌표" 기준으로 center 후보 리스트로 구성
