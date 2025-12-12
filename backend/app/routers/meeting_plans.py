@@ -9,6 +9,7 @@ from ..database import get_db
 from .. import schemas
 from .. import models
 from .calc_func import *  # find_road_center_node, save_calculated_places 등
+from .calc_func import G  # 그래프 import
 from typing import Optional
 import requests
 
@@ -320,7 +321,7 @@ def create_auto_plan_for_meeting(
 
     candidates: list[dict] = []  # MeetingPlace로 저장할 후보들
     print(
-        f"[DEBUG] Starting plan calculation for meeting_id={meeting_id}, participants={len(participants)}"
+        f"[DEBUG] Starting plan calculation for meeting_id={meeting_id}, total_participants={len(meeting.participants)}, with_coordinates={len(coords)}"
     )
 
     if coords:
