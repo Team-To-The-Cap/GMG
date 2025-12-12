@@ -29,20 +29,48 @@ def on_startup():
     models.Base.metadata.create_all(bind=engine)
 
 
-origins = [
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "http://localhost:5174",
-    "http://211.188.55.98:8001",
-    "capacitor://localhost",
-    # "http://<서버-공인IP>:3000",
-]
+import os
+import re
+
+# 개발 환경에서는 모든 localhost 포트 허용
+# 프로덕션에서는 특정 origin만 허용
+is_dev = os.getenv("ENV", "development") == "development"
+
+if is_dev:
+    # 개발 환경: localhost의 모든 포트 허용 + 서버 IP
+    origins = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        "http://211.188.55.98:8000",
+        "http://211.188.55.98:8001",
+        "capacitor://localhost",
+    ]
+    # 정규식으로 localhost의 모든 포트 허용
+    allow_origin_regex = r"http://(localhost|127\.0\.0\.1):\d+"
+else:
+    # 프로덕션 환경: 특정 origin만 허용
+    origins = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://211.188.55.98:8000",  # main 브랜치용 포트
+        "http://211.188.55.98:8001",  # develop 브랜치용 포트
+        "capacitor://localhost",
+    ]
+    allow_origin_regex = None
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=allow_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # ✅ 라우터 등록

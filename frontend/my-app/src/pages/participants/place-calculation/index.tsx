@@ -8,7 +8,10 @@ import type { PanInfo } from "framer-motion";
 import {
   getMeetingPlaces,
   setMeetingFinalPlace,
+  getPromiseDetail,
 } from "@/services/promise/promise.service";
+import { http } from "@/lib/http";
+import type { Participant } from "@/types/participant";
 
 declare global {
   interface Window {
@@ -73,6 +76,11 @@ export function PlaceCalculationScreen() {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const naverMapRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
+  const participantMarkersRef = useRef<any[]>([]);
+  const polylinesRef = useRef<any[]>([]);
+  const labelMarkersRef = useRef<any[]>([]);
+
+  const [participants, setParticipants] = useState<Participant[]>([]);
 
   const currentPlace = places[currentSlide];
 
@@ -121,7 +129,7 @@ export function PlaceCalculationScreen() {
     };
   }
 
-  // 0) 서버에서 장소 목록 가져오기
+  // 0) 서버에서 장소 목록 가져오기 (plan에서 가져오거나 places에서 가져오기)
   useEffect(() => {
     if (!promiseId) return;
 
@@ -132,12 +140,45 @@ export function PlaceCalculationScreen() {
         setLoading(true);
         setError(null);
 
-        const meetingPlaces = await getMeetingPlaces(promiseId);
+        // 먼저 PromiseDetail을 가져와서 plan 정보 확인
+        const detail = await getPromiseDetail(promiseId);
         if (cancelled) return;
 
-        const mapped = (meetingPlaces ?? []).map((p) =>
-          mapMeetingPlaceToCandidate(p)
+        // 참가자 정보 저장
+        setParticipants(detail.participants || []);
+
+        let mapped: PlaceCandidate[] = [];
+
+        // 1. places 배열에서 meeting_point 카테고리 찾기
+        const meetingPlaces = await getMeetingPlaces(promiseId);
+        console.log("[PlaceCalculation] API places 응답:", meetingPlaces);
+        
+        const meetingPointPlaces = (meetingPlaces ?? []).filter(
+          (p: any) => p.category === "meeting_point"
         );
+
+        if (meetingPointPlaces.length > 0) {
+          // places에 meeting_point가 있으면 사용
+          mapped = meetingPointPlaces.map((p) => mapMeetingPlaceToCandidate(p));
+        } else if (detail.place) {
+          // places에 없으면 plan에서 가져온 place 정보 사용
+          mapped = [
+            {
+              id: "plan-place",
+              title: detail.place.name || detail.place.address || "만남 장소",
+              address: detail.place.address || "",
+              label: "자동 추천 만남 장소",
+              lat: detail.place.lat || 0,
+              lng: detail.place.lng || 0,
+              averageDistance:
+                "참여자들의 이동 거리를 모두 고려해 계산한 추천 위치예요.",
+              description:
+                "모든 참여자의 출발지를 기준으로 이동 시간이 가장 균형 잡히도록 계산한 대표 만남 장소예요.",
+            },
+          ];
+        }
+
+        console.log("[PlaceCalculation] 최종 매핑된 places:", mapped);
 
         setPlaces(mapped);
         setCurrentSlide(0);
@@ -280,6 +321,149 @@ export function PlaceCalculationScreen() {
     naverMapRef.current.setCenter(center);
   }, [currentSlide, places]);
 
+  // 3) 참가자 위치 마커, 이동 경로, 이동 시간 표시
+  useEffect(() => {
+    if (
+      !window.naver ||
+      !naverMapRef.current ||
+      !currentPlace ||
+      participants.length === 0
+    )
+      return;
+
+    const map = naverMapRef.current;
+
+    // 기존 참가자 마커, 폴리라인, 라벨 마커 제거
+    participantMarkersRef.current.forEach((m) => m.setMap(null));
+    participantMarkersRef.current = [];
+    polylinesRef.current.forEach((p) => p.setMap(null));
+    polylinesRef.current = [];
+    labelMarkersRef.current.forEach((m) => m.setMap(null));
+    labelMarkersRef.current = [];
+
+    // 참가자 마커 표시 및 이동 시간 계산
+    const fetchTravelTimes = async () => {
+      const colors = ["#10b981", "#3b82f6", "#8b5cf6", "#f59e0b", "#ef4444"];
+
+      for (let i = 0; i < participants.length; i++) {
+        const participant = participants[i];
+        const startLat = participant.startLat;
+        const startLng = participant.startLng;
+
+        if (!startLat || !startLng) continue;
+
+        const startPos = new window.naver.maps.LatLng(startLat, startLng);
+        const color = colors[i % colors.length];
+
+        // 참가자 마커 생성 (번호 표시)
+        const participantMarker = new window.naver.maps.Marker({
+          position: startPos,
+          map,
+          icon: {
+            content: `<div style="width: 32px; height: 32px; background-color: ${color}; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px;">${i + 1}</div>`,
+            anchor: new window.naver.maps.Point(16, 16),
+          },
+          title: participant.name,
+          zIndex: 1000,
+        });
+        participantMarkersRef.current.push(participantMarker);
+
+        // 직선 경로 + 이동 시간 (네이버 Directions API 사용)
+        try {
+          const transportation = participant.transportation || "driving";
+          const mode =
+            transportation === "도보" || transportation === "walking"
+              ? "walking"
+              : transportation === "대중교통" ||
+                  transportation === "transit"
+                ? "transit"
+                : "driving";
+
+          // travel-time으로 시간 받고 직선 표시 (네이버 실패 시 백엔드에서 추정치로 fallback)
+          const travelTimeResult = await http.request<{
+            duration_seconds: number;
+            duration_minutes: number;
+            mode: string;
+            success: boolean;
+          }>(
+            `/directions/travel-time?start_lat=${startLat}&start_lng=${startLng}&goal_lat=${currentPlace.lat}&goal_lng=${currentPlace.lng}&mode=${mode}`
+          );
+
+          if (travelTimeResult?.success) {
+            const endPos = new window.naver.maps.LatLng(
+              currentPlace.lat,
+              currentPlace.lng
+            );
+            const polyline = new window.naver.maps.Polyline({
+              map,
+              path: [startPos, endPos],
+              strokeColor: color,
+              strokeWeight: 4,
+              strokeOpacity: 0.6,
+              strokeStyle: "solid",
+              zIndex: 500,
+            });
+            polylinesRef.current.push(polyline);
+
+            const midPos = new window.naver.maps.LatLng(
+              (startLat + currentPlace.lat) / 2,
+              (startLng + currentPlace.lng) / 2
+            );
+            const modeText =
+              travelTimeResult.mode === "walking"
+                ? "도보"
+                : travelTimeResult.mode === "transit"
+                  ? "대중교통"
+                  : "자동차";
+            const minutes = Math.round(travelTimeResult.duration_minutes);
+            const labelContent = `<div style="background-color: rgba(0,0,0,0.75); color: white; padding: 6px 10px; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.25); font-size: 12px; font-weight: 700; white-space: nowrap;">
+              ${modeText} ${minutes}분
+            </div>`;
+            const labelMarker = new window.naver.maps.Marker({
+              position: midPos,
+              map,
+              icon: { content: labelContent, anchor: new window.naver.maps.Point(0, 0) },
+              zIndex: 1001,
+            });
+            labelMarkersRef.current.push(labelMarker);
+          }
+        } catch (e) {
+          console.error(
+            `[PlaceCalculation] Failed to get travel time for ${participant.name}:`,
+            e
+          );
+          
+          // API 실패 시에도 기본 경로는 표시
+          const endPos = new window.naver.maps.LatLng(
+            currentPlace.lat,
+            currentPlace.lng
+          );
+          const polyline = new window.naver.maps.Polyline({
+            map,
+            path: [startPos, endPos],
+            strokeColor: color,
+            strokeWeight: 3,
+            strokeOpacity: 0.6,
+            strokeStyle: "dashed",
+            zIndex: 500,
+          });
+          polylinesRef.current.push(polyline);
+        }
+      }
+    };
+
+    fetchTravelTimes();
+
+    return () => {
+      participantMarkersRef.current.forEach((m) => m.setMap(null));
+      participantMarkersRef.current = [];
+      polylinesRef.current.forEach((p) => p.setMap(null));
+      polylinesRef.current = [];
+      labelMarkersRef.current.forEach((m) => m.setMap(null));
+      labelMarkersRef.current = [];
+    };
+  }, [currentPlace, participants]);
+
   // ===== 로딩/에러/빈 데이터 처리 =====
 
   if (loading) {
@@ -322,18 +506,8 @@ export function PlaceCalculationScreen() {
       <div className="relative h-64 shrink-0">
         <div ref={mapRef} className="w-full h-full" />
 
-        {/* Distance indicator */}
-        <div className="absolute top-4 left-4 bg-white/95 backdrop-blur-sm px-4 py-2 rounded-xl shadow-md">
-          <div className="flex items-center">
-            <div className="w-2 h-2 bg-primary rounded-full mr-2" />
-            <span className="text-sm font-medium text-gray-700">
-              {currentPlace.averageDistance}
-            </span>
-          </div>
-        </div>
-
         {/* Slide counter */}
-        <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-md">
+        <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-md z-10">
           <span className="text-sm font-medium text-gray-900">
             {currentSlide + 1} / {places.length}
           </span>

@@ -536,7 +536,7 @@ export default class PromiseMainView extends React.PureComponent<Props, State> {
               iconLeft={<EditIcon width={16} height={16} />}
               onClick={onEditSchedule}
             >
-              수정
+              자세히
             </Button>
           }
         />
@@ -566,7 +566,7 @@ export default class PromiseMainView extends React.PureComponent<Props, State> {
               iconLeft={<EditIcon width={16} height={16} />}
               onClick={onEditPlace}
             >
-              수정
+              자세히
             </Button>
           }
         />
@@ -601,7 +601,7 @@ export default class PromiseMainView extends React.PureComponent<Props, State> {
               iconLeft={<EditIcon width={16} height={16} />}
               onClick={onEditCourse}
             >
-              수정
+              자세히
             </Button>
           }
         />
