@@ -165,8 +165,9 @@ def _call_routes_compute_routes(
             return data
 
         log.warning(
-            "[GROUTES] no routes | content_type=%s, payload=%s, raw=%s | req=%s",
+            "[GROUTES] no routes | content_type=%s, request_id=%s, payload=%s, raw=%s | req=%s",
             res.headers.get("content-type"),
+            res.headers.get("x-goog-request-id"),
             str(data)[:800],
             res.text[:800],
             {
@@ -178,9 +179,10 @@ def _call_routes_compute_routes(
 
     if last_non200 is not None:
         log.warning(
-            "[GROUTES] non-200 status=%s, content_type=%s, body=%s",
+            "[GROUTES] non-200 status=%s, content_type=%s, request_id=%s, body=%s",
             last_non200.status_code,
             last_non200.headers.get("content-type"),
+            last_non200.headers.get("x-goog-request-id"),
             last_non200.text[:800],
         )
     return None
