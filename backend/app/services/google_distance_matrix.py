@@ -112,15 +112,21 @@ def _call_routes_compute_routes(
         dt = (datetime.now(timezone.utc) + timedelta(minutes=2)).replace(microsecond=0)
         body["departureTime"] = dt.isoformat().replace("+00:00", "Z")
 
+    field_mask = "routes.duration,routes.distanceMeters,geocodingResults"
     headers = {
         "Content-Type": "application/json",
+        # header / query 둘 다 지원하지만, 환경에 따라 헤더가 누락/차단되는 케이스가 있어
+        # 안정성을 위해 둘 다 보냅니다.
         "X-Goog-Api-Key": GOOGLE_MAPS_API_KEY,
+        "X-Goog-FieldMask": field_mask,
+    }
+    params = {
+        "fields": field_mask,
+        "key": GOOGLE_MAPS_API_KEY,
     }
 
     try:
-        # Routes API는 FieldMask가 필수라서, 디버깅 단계에서는 fields=* 로 전체 응답을 받습니다.
-        # (안정화 후에는 fields를 필요한 것만으로 좁혀 비용/지연을 줄이세요)
-        res = requests.post(url, headers=headers, params={"fields": "*"}, json=body, timeout=8)
+        res = requests.post(url, headers=headers, params=params, json=body, timeout=8)
     except requests.RequestException as e:
         log.warning("[GROUTES] request error: %s", e)
         return None
@@ -147,10 +153,15 @@ def _call_routes_compute_routes(
     if not isinstance(data, dict) or not data.get("routes"):
         # Routes API는 오류 시 error 객체를 주는 경우가 많음
         log.warning(
-            "[GROUTES] no routes | content_type=%s, payload=%s, raw=%s",
+            "[GROUTES] no routes | content_type=%s, payload=%s, raw=%s | req=%s",
             res.headers.get("content-type"),
             str(data)[:800],
             res.text[:800],
+            {
+                "travelMode": travel_mode,
+                "has_routingPreference": "routingPreference" in body,
+                "has_departureTime": "departureTime" in body,
+            },
         )
         return None
 
