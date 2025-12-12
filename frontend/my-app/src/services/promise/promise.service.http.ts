@@ -21,7 +21,7 @@ import type {
  */
 function buildCourseFromPlaces(meeting: MeetingResponse): Course {
   const allPlaces = meeting.places ?? [];
-  
+
   // meeting_point 카테고리는 코스에서 제외 (일정/장소 계산 결과)
   const places = allPlaces.filter((pl: any) => pl.category !== "meeting_point");
 
@@ -134,6 +134,8 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
       name: p.name,
       avatarUrl: p.avatar_url || `https://i.pravatar.cc/40?u=${p.id}`,
       startAddress: p.start_address as string | undefined,
+      startLat: (p.start_latitude as number | undefined) ?? undefined,
+      startLng: (p.start_longitude as number | undefined) ?? undefined,
       transportation: p.transportation as string | undefined,
       favActivityRaw: fav,
       preferredCategories,

@@ -1,7 +1,7 @@
 # app/routers/meeting_plans.py
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session, joinedload 
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Tuple
 from datetime import datetime, date, time, timedelta  # ⬅️ 사용 중
 
@@ -20,10 +20,7 @@ NAVER_MAP_CLIENT_SECRET = "CgU14l9YJBqqNetcd8KiZ0chNLJmYBwmy9HkAjg5"
 CLIENT_ID = "o3qhd1pz6i"
 CLIENT_SECRET = "CgU14l9YJBqqNetcd8KiZ0chNLJmYBwmy9HkAjg5"
 
-router = APIRouter(
-    prefix="/meetings",
-    tags=["Meeting-Plans"]
-)
+router = APIRouter(prefix="/meetings", tags=["Meeting-Plans"])
 
 
 def reverse_geocode_naver(lon: float, lat: float) -> Optional[str]:
@@ -41,8 +38,8 @@ def reverse_geocode_naver(lon: float, lat: float) -> Optional[str]:
     # Naver는 coords = "경도,위도" (x,y)
     params = {
         "coords": f"{lon},{lat}",
-        "sourcecrs": "epsg:4326",             # WGS84 (osmnx 기본)
-        "orders": "addr,roadaddr,admcode",    # 필요한 형식들
+        "sourcecrs": "epsg:4326",  # WGS84 (osmnx 기본)
+        "orders": "addr,roadaddr,admcode",  # 필요한 형식들
         "output": "json",
     }
     headers = {
@@ -77,7 +74,7 @@ def reverse_geocode_naver(lon: float, lat: float) -> Optional[str]:
         area4 = region.get("area4", {}).get("name")  # 리 등
 
         # 도로명/지번 등
-        land_name = land.get("name")                 # 도로명 or 지번 이름
+        land_name = land.get("name")  # 도로명 or 지번 이름
         number1 = land.get("number1")
         number2 = land.get("number2")
 
@@ -114,7 +111,6 @@ def create_plan_for_meeting(
             joinedload(models.Meeting.participants).joinedload(
                 models.Participant.available_times
             ),
-
             # Meeting.plan + plan.available_dates 까지 eager load
             joinedload(models.Meeting.plan).joinedload(
                 models.MeetingPlan.available_dates
@@ -137,52 +133,57 @@ def create_plan_for_meeting(
     return db_plan
 
 
-@router.get("/{meeting_id}/plans", response_model=schemas.MeetingPlanResponse) 
-def get_plans_for_meeting(
-    meeting_id: int, 
-    db: Session = Depends(get_db)
-):
+@router.get("/{meeting_id}/plans", response_model=schemas.MeetingPlanResponse)
+def get_plans_for_meeting(meeting_id: int, db: Session = Depends(get_db)):
     """
     특정 meeting_id에 연결된 모든 Meeting_Plans (상세 일정) 목록을 조회합니다.
     """
-    
-    plan = db.query(models.MeetingPlan).filter(
-        models.MeetingPlan.meeting_id == meeting_id
-    ).first()
-    
+
+    plan = (
+        db.query(models.MeetingPlan)
+        .filter(models.MeetingPlan.meeting_id == meeting_id)
+        .first()
+    )
+
     # 3. [추가] Plan이 없는 경우 404 에러 반환
     if plan is None:
-        raise HTTPException(status_code=404, detail="Meeting plan not found for this meeting")
-        
+        raise HTTPException(
+            status_code=404, detail="Meeting plan not found for this meeting"
+        )
+
     # 4. [수정] 조회된 단일 plan 객체 반환
     return plan
 
 
 @router.patch(
-    "/{meeting_id}/plans", # [수정] {plan_id} 제거
-    response_model=schemas.MeetingPlanResponse
+    "/{meeting_id}/plans",  # [수정] {plan_id} 제거
+    response_model=schemas.MeetingPlanResponse,
 )
 def update_meeting_plan(
-    meeting_id: int, # [수정] {plan_id} 제거
+    meeting_id: int,  # [수정] {plan_id} 제거
     plan_in: schemas.MeetingPlanUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     특정 meeting_id에 속한 "유일한" 상세 일정을 수정합니다.
     """
     # [수정] 쿼리 변경 (meeting_id로만 조회)
-    db_plan = db.query(models.MeetingPlan).filter(
-        models.MeetingPlan.meeting_id == meeting_id
-    ).first()
+    db_plan = (
+        db.query(models.MeetingPlan)
+        .filter(models.MeetingPlan.meeting_id == meeting_id)
+        .first()
+    )
 
     if db_plan is None:
-        raise HTTPException(status_code=404, detail="Meeting plan not found for this meeting")
-    
+        raise HTTPException(
+            status_code=404, detail="Meeting plan not found for this meeting"
+        )
+
     update_data = plan_in.model_dump(exclude_unset=True)
-    
+
     for key, value in update_data.items():
         setattr(db_plan, key, value)
-            
+
     db.commit()
     db.refresh(db_plan)
     return db_plan
@@ -201,6 +202,7 @@ def get_common_available_dates_for_meeting(meeting: models.Meeting) -> List[date
 
     # 참가자별 가능한 날짜 집합
     from typing import Dict, Set
+
     dates_by_participant: Dict[int, Set[date]] = {}
 
     for p in meeting.participants:
@@ -270,8 +272,9 @@ def create_auto_plan_for_meeting(
     meeting = (
         db.query(models.Meeting)
         .options(
-            joinedload(models.Meeting.participants)
-                .joinedload(models.Participant.available_times),
+            joinedload(models.Meeting.participants).joinedload(
+                models.Participant.available_times
+            ),
             joinedload(models.Meeting.places),  # 코스 초기화를 위해 places도 로드
         )
         .filter(models.Meeting.id == meeting_id)
@@ -316,111 +319,159 @@ def create_auto_plan_for_meeting(
     addr: str = ""
 
     candidates: list[dict] = []  # MeetingPlace로 저장할 후보들
+    print(
+        f"[DEBUG] Starting plan calculation for meeting_id={meeting_id}, participants={len(participants)}"
+    )
 
     if coords:
-        # 3-1. 도로 그래프 위 minimax center + top_k 후보 계산 (1차 후보 생성)
-        center_result = find_road_center_node(
-            G,
-            coords_lonlat=coords,
-            weight="length",
-            return_paths=True,
-            top_k=3,  # 상위 3개 후보까지
-        )
-        print(center_result)
-
-        # 대표 center (보정 전)
-        raw_center_lat = float(center_result["lat"])
-        raw_center_lon = float(center_result["lon"])
-
-        # 대표 center에 대해 한 번 보정
-        adjusted_main = center_result.get("adjusted_point") or {}
-        raw_adjusted_lat = float(adjusted_main.get("lat", raw_center_lat))
-        raw_adjusted_lon = float(adjusted_main.get("lng", raw_center_lon))
-
-        # top_k 후보들
-        top_candidates_raw = center_result.get("top_candidates") or []
-
-        # 3-2. 각 후보를 "보정된 좌표" 기준으로 center 후보 리스트로 구성
-        center_candidates: List[dict] = []
-
-        if top_candidates_raw:
-            for cand in top_candidates_raw:
-                adj = cand.get("adjusted_point") or {}
-                lat = float(adj.get("lat", cand["lat"]))
-                lng = float(adj.get("lng", cand["lon"]))
-                poi_name = adj.get("poi_name")
-
-                center_candidates.append(
-                    {
-                        "lat": lat,
-                        "lng": lng,
-                        "poi_name": poi_name,
-                    }
-                )
-        else:
-            # fallback: 대표 center 하나만 후보로
-            center_candidates.append(
-                {
-                    "lat": raw_adjusted_lat,
-                    "lng": raw_adjusted_lon,
-                    "poi_name": adjusted_main.get("poi_name"),
-                }
+        print(f"[DEBUG] Found {len(coords)} participant coordinates")
+        # 3-0. 그래프 범위 확인 (서울 그래프는 서울 지역만 커버)
+        # 입력 좌표가 그래프 범위 밖이면 단순 지리적 중심점 사용
+        try:
+            # 3-1. 도로 그래프 위 minimax center + top_k 후보 계산 (1차 후보 생성)
+            center_result = find_road_center_node(
+                G,
+                coords_lonlat=coords,
+                weight="length",
+                return_paths=True,
+                top_k=3,  # 상위 3개 후보까지
             )
+            print(f"[DEBUG] center_result: {center_result}")
+        except (RuntimeError, ValueError, Exception) as e:
+            # 그래프 범위 밖이거나 경로를 찾을 수 없는 경우 지리적 중심점 사용
+            print(f"[WARNING] Graph-based calculation failed: {e}")
+            print("[WARNING] Falling back to geographic center calculation")
 
-        # 3-3. Google Distance Matrix로 공평한 center 재선택 (하이브리드)
-        best_center_lat = raw_adjusted_lat
-        best_center_lon = raw_adjusted_lon
-        best_index = 0
+            # 단순 지리적 중심점 계산 (위도/경도의 평균)
+            center_lat = sum(lat for _, lat in coords) / len(coords)
+            center_lon = sum(lon for lon, _ in coords) / len(coords)
 
-        if participant_for_matrix and center_candidates:
-            dm_result = compute_minimax_travel_times(
-                participants=participant_for_matrix,
-                candidates=center_candidates,
-            )
-            if dm_result is not None:
-                best_index = dm_result["best_index"]
-                chosen = center_candidates[best_index]
-                best_center_lat = float(chosen["lat"])
-                best_center_lon = float(chosen["lng"])
+            # 역지오코딩으로 주소 가져오기
+            resolved = reverse_geocode_naver(center_lon, center_lat)
+            addr = resolved or "자동 계산된 중간 지점"
 
-        # 최종 center 좌표
-        center_lat = best_center_lat
-        center_lon = best_center_lon
-
-        # 대표 center 기준으로 한 번만 역지오코딩 수행
-        resolved = reverse_geocode_naver(center_lon, center_lat)
-        addr = resolved or "자동 계산된 중간 지점"
-
-        # 3-4. MeetingPlace candidates 생성
-        #     - Google minimax 기준으로 고른 best_index가 "주요 만남 장소"
-        #     - 나머지는 후보 #2, #3 ...
-        for idx, c in enumerate(center_candidates):
-            lat = float(c["lat"])
-            lng = float(c["lng"])
-            poi_name = c.get("poi_name")
-
-            if idx == best_index:
-                place_name = "자동 추천 만남 장소"
-            else:
-                place_name = f"자동 추천 후보 #{idx+1}"
-
+            # 단일 후보 생성
             candidates.append(
                 {
-                    "name": place_name,         # UI 라벨
-                    "poi_name": poi_name,       # 카드 큰 제목용
-                    "address": addr,            # 대표 center 기준 주소 공통 사용
-                    "lat": lat,
-                    "lng": lng,
+                    "name": "자동 추천 만남 장소",
+                    "poi_name": None,
+                    "address": addr,
+                    "lat": center_lat,
+                    "lng": center_lon,
                     "category": "meeting_point",
                     "duration": None,
                 }
             )
+
+            # MeetingPlan 업데이트를 위한 값 설정
+            center_lat_val = center_lat
+            center_lon_val = center_lon
+            addr_val = addr
+        else:
+            # 정상적으로 계산된 경우 기존 로직 계속
+
+            # 대표 center (보정 전)
+            raw_center_lat = float(center_result["lat"])
+            raw_center_lon = float(center_result["lon"])
+
+            # 대표 center에 대해 한 번 보정
+            adjusted_main = center_result.get("adjusted_point") or {}
+            raw_adjusted_lat = float(adjusted_main.get("lat", raw_center_lat))
+            raw_adjusted_lon = float(adjusted_main.get("lng", raw_center_lon))
+
+            # top_k 후보들
+            top_candidates_raw = center_result.get("top_candidates") or []
+
+            # 3-2. 각 후보를 "보정된 좌표" 기준으로 center 후보 리스트로 구성
+            center_candidates: List[dict] = []
+
+            if top_candidates_raw:
+                for cand in top_candidates_raw:
+                    adj = cand.get("adjusted_point") or {}
+                    lat = float(adj.get("lat", cand["lat"]))
+                    lng = float(adj.get("lng", cand["lon"]))
+                    poi_name = adj.get("poi_name")
+
+                    center_candidates.append(
+                        {
+                            "lat": lat,
+                            "lng": lng,
+                            "poi_name": poi_name,
+                        }
+                    )
+            else:
+                # fallback: 대표 center 하나만 후보로
+                center_candidates.append(
+                    {
+                        "lat": raw_adjusted_lat,
+                        "lng": raw_adjusted_lon,
+                        "poi_name": adjusted_main.get("poi_name"),
+                    }
+                )
+
+            # 3-3. Google Distance Matrix로 공평한 center 재선택 (하이브리드)
+            best_center_lat = raw_adjusted_lat
+            best_center_lon = raw_adjusted_lon
+            best_index = 0
+
+            if participant_for_matrix and center_candidates:
+                dm_result = compute_minimax_travel_times(
+                    participants=participant_for_matrix,
+                    candidates=center_candidates,
+                )
+                if dm_result is not None:
+                    best_index = dm_result["best_index"]
+                    chosen = center_candidates[best_index]
+                    best_center_lat = float(chosen["lat"])
+                    best_center_lon = float(chosen["lng"])
+
+            # 최종 center 좌표
+            center_lat = best_center_lat
+            center_lon = best_center_lon
+
+            # 대표 center 기준으로 한 번만 역지오코딩 수행
+            resolved = reverse_geocode_naver(center_lon, center_lat)
+            addr = resolved or "자동 계산된 중간 지점"
+
+            # 3-4. MeetingPlace candidates 생성
+            #     - Google minimax 기준으로 고른 best_index가 "주요 만남 장소"
+            #     - 나머지는 후보 #2, #3 ...
+            for idx, c in enumerate(center_candidates):
+                lat = float(c["lat"])
+                lng = float(c["lng"])
+                poi_name = c.get("poi_name")
+
+                if idx == best_index:
+                    place_name = "자동 추천 만남 장소"
+                else:
+                    place_name = f"자동 추천 후보 #{idx+1}"
+
+                candidates.append(
+                    {
+                        "name": place_name,  # UI 라벨
+                        "poi_name": poi_name,  # 카드 큰 제목용
+                        "address": addr,  # 대표 center 기준 주소 공통 사용
+                        "lat": lat,
+                        "lng": lng,
+                        "category": "meeting_point",
+                        "duration": None,
+                    }
+                )
+
+            # 정상 계산된 경우 center_lat, center_lon, addr 사용
+            center_lat_val = center_lat
+            center_lon_val = center_lon
+            addr_val = addr
+            print(
+                f"[DEBUG] Successfully calculated {len(candidates)} candidates from graph"
+            )
     else:
         # 출발 좌표가 하나도 없으면 장소/후보 없음
-        addr = ""
-        center_lat = None
-        center_lon = None
+        addr_val = ""
+        center_lat_val = None
+        center_lon_val = None
         candidates = []
+        print("[DEBUG] No coordinates found, candidates will be empty")
 
     # 4. MeetingPlan 생성 or 업데이트
     db_plan = (
@@ -433,9 +484,9 @@ def create_auto_plan_for_meeting(
         db_plan = models.MeetingPlan(
             meeting_id=meeting_id,
             meeting_time=meeting_time,
-            address=addr,
-            latitude=center_lat,
-            longitude=center_lon,
+            address=addr_val,
+            latitude=center_lat_val,
+            longitude=center_lon_val,
             total_time=None,
         )
         db.add(db_plan)
@@ -443,9 +494,9 @@ def create_auto_plan_for_meeting(
         db.refresh(db_plan)
     else:
         db_plan.meeting_time = meeting_time
-        db_plan.address = addr
-        db_plan.latitude = center_lat
-        db_plan.longitude = center_lon
+        db_plan.address = addr_val
+        db_plan.latitude = center_lat_val
+        db_plan.longitude = center_lon_val
         db.commit()
         db.refresh(db_plan)
 
@@ -464,11 +515,68 @@ def create_auto_plan_for_meeting(
             db.add(db_date)
         db.commit()
 
-    # 6. ✅ 일정/장소 계산 시 코스 장소(MeetingPlace) 초기화
+    # 6. ✅ 일정/장소 계산 시 코스 장소만 유지하고, meeting_point 장소는 새로 계산된 것으로 교체
     # 중간 계산을 다시 하면 기존 코스 정보는 모두 삭제됩니다.
     # 코스는 별도의 "코스 계산하기" 버튼을 통해 다시 추가해야 합니다.
-    meeting.places = []
+
+    # 기존 meeting_point 장소만 삭제 (코스 장소는 그대로 유지)
+    db.query(models.MeetingPlace).filter(
+        models.MeetingPlace.meeting_id == meeting_id,
+        models.MeetingPlace.category == "meeting_point",
+    ).delete(synchronize_session=False)
     db.commit()
+
+    # 새로 계산된 meeting_point 장소들 저장
+    print(
+        f"[DEBUG] Before saving: candidates count={len(candidates)}, candidates={candidates}"
+    )
+    if candidates:
+        print(
+            f"[DEBUG] Saving {len(candidates)} candidates for meeting_id={meeting_id}"
+        )
+        new_places: list[models.MeetingPlace] = []
+        for c in candidates:
+            db_place = models.MeetingPlace(
+                meeting_id=meeting_id,
+                name=c["name"],
+                latitude=c["lat"],
+                longitude=c["lng"],
+                address=c["address"],
+                category=c.get("category", "meeting_point"),
+                duration=c.get("duration"),
+                poi_name=c.get("poi_name"),
+            )
+            db.add(db_place)
+            new_places.append(db_place)
+
+        db.commit()
+        for p in new_places:
+            db.refresh(p)
+        print(f"[DEBUG] Saved {len(new_places)} meeting places")
+        print(
+            f"[DEBUG] Saved places details: {[(p.name, p.category, p.latitude, p.longitude) for p in new_places]}"
+        )
+
+        # 저장 확인: 실제로 DB에 저장되었는지 확인
+        saved_count = (
+            db.query(models.MeetingPlace)
+            .filter(
+                models.MeetingPlace.meeting_id == meeting_id,
+                models.MeetingPlace.category == "meeting_point",
+            )
+            .count()
+        )
+        print(
+            f"[DEBUG] Verification: Found {saved_count} meeting_point places in DB after save"
+        )
+    else:
+        print(f"[WARNING] No candidates to save! candidates={candidates}")
+        print(f"[WARNING] This means either:")
+        print(f"[WARNING]   1. coords was empty (no participants with coordinates)")
+        print(
+            f"[WARNING]   2. Graph calculation failed AND fallback didn't create candidates"
+        )
+        print(f"[WARNING]   3. else block (normal calculation) didn't execute")
 
     # 7. available_dates까지 포함해서 MeetingPlan 다시 로딩해서 반환
     plan_full = (
