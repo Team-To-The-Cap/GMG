@@ -584,6 +584,7 @@ export default class PromiseMainView extends React.PureComponent<Props, State> {
     const { onEditCourse } = this.props;
 
     const items = isCourseWithItems(course) ? course.items : [];
+    const hasItems = items.length > 0;
     const summary = isCourseWithItems(course)
       ? course.summary ?? summarizeFromItems(items)
       : { totalMinutes: 0, activityMinutes: 0, travelMinutes: 0 };
@@ -605,13 +606,24 @@ export default class PromiseMainView extends React.PureComponent<Props, State> {
           }
         />
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <CourseSummaryCard
-            totalMinutes={summary.totalMinutes}
-            activityMinutes={summary.activityMinutes}
-            travelMinutes={summary.travelMinutes}
-            className={styles.courseCard}
-          />
-          <CourseDetailList items={items} />
+          {hasItems ? (
+            <>
+              <CourseSummaryCard
+                totalMinutes={summary.totalMinutes}
+                activityMinutes={summary.activityMinutes}
+                travelMinutes={summary.travelMinutes}
+                className={styles.courseCard}
+              />
+              <CourseDetailList items={items} />
+            </>
+          ) : (
+            <div
+              className={`${styles.inputLike} ${styles.staticField}`}
+              style={{ fontSize: 13 }}
+            >
+              코스 미정
+            </div>
+          )}
         </div>
       </section>
     );
