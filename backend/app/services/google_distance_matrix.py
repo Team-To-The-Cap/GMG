@@ -164,10 +164,14 @@ def _call_routes_compute_routes(
                 )
             return data
 
+        # 200인데 routes가 아예 없으면 비정상 케이스라, 디버깅을 위해 응답/헤더/URL을 함께 남김
         log.warning(
-            "[GROUTES] no routes | content_type=%s, request_id=%s, payload=%s, raw=%s | req=%s",
+            "[GROUTES] no routes | status=%s, content_type=%s, request_id=%s, url=%s, headers=%s, payload=%s, raw=%s | req=%s",
+            res.status_code,
             res.headers.get("content-type"),
-            res.headers.get("x-goog-request-id"),
+            res.headers.get("x-goog-request-id") or res.headers.get("x-goog-requestid"),
+            str(getattr(res, "url", "")),
+            dict(res.headers),
             str(data)[:800],
             res.text[:800],
             {
