@@ -17,9 +17,13 @@ import type {
 
 /**
  * 🔹 백엔드 MeetingResponse.places → 프론트 Course 구조로 변환
+ * ✅ meeting_point 카테고리는 코스에서 제외 (일정/장소 계산 결과는 코스가 아님)
  */
 function buildCourseFromPlaces(meeting: MeetingResponse): Course {
-  const places = meeting.places ?? [];
+  const allPlaces = meeting.places ?? [];
+  
+  // meeting_point 카테고리는 코스에서 제외 (일정/장소 계산 결과)
+  const places = allPlaces.filter((pl: any) => pl.category !== "meeting_point");
 
   if (!places.length) {
     return {

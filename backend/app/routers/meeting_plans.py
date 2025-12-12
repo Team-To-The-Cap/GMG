@@ -266,12 +266,13 @@ def create_auto_plan_for_meeting(
     6) 최종 MeetingPlan(available_dates 포함)을 반환
     """
 
-    # 1. Meeting + 참가자 + 참가자별 available_times 로드
+    # 1. Meeting + 참가자 + 참가자별 available_times + places 로드
     meeting = (
         db.query(models.Meeting)
         .options(
             joinedload(models.Meeting.participants)
                 .joinedload(models.Participant.available_times),
+            joinedload(models.Meeting.places),  # 코스 초기화를 위해 places도 로드
         )
         .filter(models.Meeting.id == meeting_id)
         .first()
@@ -463,10 +464,11 @@ def create_auto_plan_for_meeting(
             db.add(db_date)
         db.commit()
 
-    # 6. 계산된 후보들로 MeetingPlace 테이블 채우기
-    if candidates:
-        # 기존 places 삭제 + 새 후보들 insert
-        save_calculated_places(db, meeting_id, candidates)
+    # 6. ✅ 일정/장소 계산 시 코스 장소(MeetingPlace) 초기화
+    # 중간 계산을 다시 하면 기존 코스 정보는 모두 삭제됩니다.
+    # 코스는 별도의 "코스 계산하기" 버튼을 통해 다시 추가해야 합니다.
+    meeting.places = []
+    db.commit()
 
     # 7. available_dates까지 포함해서 MeetingPlan 다시 로딩해서 반환
     plan_full = (
