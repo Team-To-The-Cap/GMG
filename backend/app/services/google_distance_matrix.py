@@ -170,6 +170,11 @@ def _call_routes_compute_routes(
     url = "https://routes.googleapis.com/directions/v2:computeRoutes"
     travel_mode = _to_routes_travel_mode(mode)
 
+    # Routes API는 departureTime이 필수일 수 있음 (특히 TRAFFIC_AWARE 사용 시)
+    # 미래 시간으로 설정 (현재 시간 + 2분)
+    departure_time = (datetime.now(timezone.utc) + timedelta(minutes=2)).replace(microsecond=0)
+    departure_time_str = departure_time.isoformat().replace("+00:00", "Z")
+
     base_body: Dict[str, Any] = {
         "origin": {
             "location": {
@@ -186,19 +191,18 @@ def _call_routes_compute_routes(
         "regionCode": "KR",
         "units": "METRIC",
         "computeAlternativeRoutes": False,
+        # departureTime을 기본 요청에도 포함 (Routes API v2 권장)
+        "departureTime": departure_time_str,
     }
 
     def _with_traffic(b: Dict[str, Any]) -> Dict[str, Any]:
         bb = dict(b)
         bb["routingPreference"] = "TRAFFIC_AWARE"
-        # Routes API는 departureTime이 "미래"여야 하는 경우가 있어
-        dt = (datetime.now(timezone.utc) + timedelta(minutes=2)).replace(microsecond=0)
-        bb["departureTime"] = dt.isoformat().replace("+00:00", "Z")
         return bb
 
     # Routes API는 FieldMask가 필수.
-    # 문서 예시와 동일하게 polyline까지 포함해서 디버깅/확인을 쉽게 함.
-    field_mask = "routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline,geocodingResults"
+    # geocodingResults는 제외 (routes만 필요)
+    field_mask = "routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline"
     headers = {
         "Content-Type": "application/json",
         # Routes API 권장 방식: 헤더로 API Key/FieldMask 전달
@@ -217,7 +221,8 @@ def _call_routes_compute_routes(
     bodies: List[Dict[str, Any]] = []
     if travel_mode == "DRIVE":
         bodies.append(_with_traffic(base_body))
-        bodies.append(dict(base_body))  # traffic 옵션 제거 fallback
+        # traffic 옵션 제거 fallback (departureTime은 유지)
+        bodies.append(dict(base_body))
     else:
         bodies.append(dict(base_body))
 
@@ -240,12 +245,29 @@ def _call_routes_compute_routes(
             )
             return None
 
-        if isinstance(data, dict) and data.get("routes"):
-            if travel_mode == "DRIVE" and attempt_idx == 1:
+        # 에러 필드 확인
+        if isinstance(data, dict):
+            error = data.get("error")
+            if error:
+                error_code = error.get("code")
+                error_message = error.get("message")
+                error_status = error.get("status")
                 log.warning(
-                    "[GROUTES] traffic-aware returned no routes; fell back to non-traffic route"
+                    "[GROUTES] API error | code=%s, status=%s, message=%s",
+                    error_code,
+                    error_status,
+                    error_message,
                 )
-            return data
+                return None
+
+        if isinstance(data, dict) and data.get("routes"):
+            routes = data.get("routes", [])
+            if routes:
+                if travel_mode == "DRIVE" and attempt_idx == 1:
+                    log.warning(
+                        "[GROUTES] traffic-aware returned no routes; fell back to non-traffic route"
+                    )
+                return data
 
         # 200인데 routes가 아예 없으면 비정상 케이스라, 디버깅을 위해 응답/헤더/URL을 함께 남김
         log.warning(
@@ -295,7 +317,8 @@ def get_travel_time_single(
         mode=mode,
     )
     if not data:
-        # Routes가 계속 비정상(geocodingResults만)이라 Directions API로 fallback
+        # Routes API가 None을 반환하면 Directions API로 fallback
+        log.debug("[GDM] Routes API returned None, trying Directions API")
         return _call_google_directions_api(
             start_lat=start_lat,
             start_lng=start_lng,
@@ -306,7 +329,12 @@ def get_travel_time_single(
 
     routes = data.get("routes") or []
     first = routes[0] if routes else None
-    if not isinstance(first, dict):
+    
+    # routes가 없거나 geocodingResults만 있는 경우 Directions API로 fallback
+    if not isinstance(first, dict) or not routes:
+        log.warning(
+            "[GDM] Routes API returned no routes (only geocodingResults?), trying Directions API"
+        )
         return _call_google_directions_api(
             start_lat=start_lat,
             start_lng=start_lng,
@@ -318,6 +346,7 @@ def get_travel_time_single(
     distance_m = first.get("distanceMeters")
     duration_s = _parse_duration_seconds(first.get("duration"))
     if duration_s is None:
+        log.warning("[GDM] Failed to parse duration from Routes API, trying Directions API")
         return _call_google_directions_api(
             start_lat=start_lat,
             start_lng=start_lng,

@@ -56,6 +56,7 @@ def _get_naver_apigw_credentials() -> tuple[str | None, str | None]:
       - (대안) NCP_API_KEY_ID / NCP_API_KEY
     - 하위호환:
       - NAVER_CLIENT_ID / NAVER_CLIENT_SECRET
+      - client_id / client_secret (backend/core/config.py에서 로드)
     """
     key_id = (
         os.getenv("NAVER_NCP_APIGW_KEY_ID")
@@ -69,6 +70,16 @@ def _get_naver_apigw_credentials() -> tuple[str | None, str | None]:
     )
     if key_id and key:
         return key_id, key
+
+    # 하위호환: backend/core/config.py의 client_id/client_secret도 확인
+    try:
+        from core.config import client_id, client_secret
+
+        if client_id and client_secret:
+            return client_id, client_secret
+    except Exception:
+        pass
+
     return _get_naver_credentials()
 
 
@@ -450,21 +461,25 @@ async def get_travel_time(
             start_lat, start_lng, goal_lat, goal_lng, option=driving_option
         )
         if not data:
-            if ALLOW_ESTIMATED_TRAVEL_TIME:
-                return _fallback_travel_time(
-                    start_lat, start_lng, goal_lat, goal_lng, "driving"
-                )
-            return _fail_unavailable("driving")
+            # 모든 API가 실패했을 때는 최소한 추정치라도 반환 (사용자 경험 개선)
+            log.warning(
+                "[NAVER Directions] All APIs failed for driving, using fallback estimate"
+            )
+            return _fallback_travel_time(
+                start_lat, start_lng, goal_lat, goal_lng, "driving"
+            )
 
         duration = extract_travel_time_from_driving_response(
             data, option=driving_option
         )
         if duration is None:
-            if ALLOW_ESTIMATED_TRAVEL_TIME:
-                return _fallback_travel_time(
-                    start_lat, start_lng, goal_lat, goal_lng, "driving"
-                )
-            return _fail_unavailable("driving")
+            # 경로는 찾았지만 duration 추출 실패 시에도 추정치 반환
+            log.warning(
+                "[NAVER Directions] Failed to extract duration, using fallback estimate"
+            )
+            return _fallback_travel_time(
+                start_lat, start_lng, goal_lat, goal_lng, "driving"
+            )
 
         # 거리 정보 추출 (선택적)
         distance = None
@@ -511,19 +526,23 @@ async def get_travel_time(
 
         data = await get_walking_direction(start_lat, start_lng, goal_lat, goal_lng)
         if not data:
-            if ALLOW_ESTIMATED_TRAVEL_TIME:
-                return _fallback_travel_time(
-                    start_lat, start_lng, goal_lat, goal_lng, "walking"
-                )
-            return _fail_unavailable("walking")
+            # 모든 API가 실패했을 때는 최소한 추정치라도 반환
+            log.warning(
+                "[NAVER Directions] All APIs failed for walking, using fallback estimate"
+            )
+            return _fallback_travel_time(
+                start_lat, start_lng, goal_lat, goal_lng, "walking"
+            )
 
         duration = extract_travel_time_from_walking_response(data)
         if duration is None:
-            if ALLOW_ESTIMATED_TRAVEL_TIME:
-                return _fallback_travel_time(
-                    start_lat, start_lng, goal_lat, goal_lng, "walking"
-                )
-            return _fail_unavailable("walking")
+            # 경로는 찾았지만 duration 추출 실패 시에도 추정치 반환
+            log.warning(
+                "[NAVER Directions] Failed to extract duration for walking, using fallback estimate"
+            )
+            return _fallback_travel_time(
+                start_lat, start_lng, goal_lat, goal_lng, "walking"
+            )
 
         # 거리 정보 추출 (선택적)
         distance = None
@@ -572,21 +591,25 @@ async def get_travel_time(
             start_lat, start_lng, goal_lat, goal_lng, option=driving_option
         )
         if not data:
-            if ALLOW_ESTIMATED_TRAVEL_TIME:
-                return _fallback_travel_time(
-                    start_lat, start_lng, goal_lat, goal_lng, "transit"
-                )
-            return _fail_unavailable("transit")
+            # 모든 API가 실패했을 때는 최소한 추정치라도 반환
+            log.warning(
+                "[NAVER Directions] All APIs failed for transit, using fallback estimate"
+            )
+            return _fallback_travel_time(
+                start_lat, start_lng, goal_lat, goal_lng, "transit"
+            )
 
         duration = extract_travel_time_from_driving_response(
             data, option=driving_option
         )
         if duration is None:
-            if ALLOW_ESTIMATED_TRAVEL_TIME:
-                return _fallback_travel_time(
-                    start_lat, start_lng, goal_lat, goal_lng, "transit"
-                )
-            return _fail_unavailable("transit")
+            # 경로는 찾았지만 duration 추출 실패 시에도 추정치 반환
+            log.warning(
+                "[NAVER Directions] Failed to extract duration for transit, using fallback estimate"
+            )
+            return _fallback_travel_time(
+                start_lat, start_lng, goal_lat, goal_lng, "transit"
+            )
 
         distance = None
         try:
@@ -612,9 +635,8 @@ async def get_travel_time(
 
     else:
         log.warning("[NAVER Directions] Unknown mode: %s", mode)
-        if ALLOW_ESTIMATED_TRAVEL_TIME:
-            return _fallback_travel_time(start_lat, start_lng, goal_lat, goal_lng, mode)
-        return _fail_unavailable(str(mode))
+        # 알 수 없는 mode여도 최소한 추정치라도 반환
+        return _fallback_travel_time(start_lat, start_lng, goal_lat, goal_lng, mode)
 
 
 async def get_route(
