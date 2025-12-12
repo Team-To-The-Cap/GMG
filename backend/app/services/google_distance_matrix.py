@@ -115,12 +115,6 @@ def _call_routes_compute_routes(
     headers = {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": GOOGLE_MAPS_API_KEY,
-        # NOTE:
-        # - FieldMask가 너무 제한적이면 에러가 잘려 payload가 {} 처럼 보일 수 있음
-        # - 하지만 "*"는 환경/버전에 따라 기대대로 동작하지 않을 수 있어
-        #   routes/geocodingResults를 명시적으로 포함합니다.
-        #   (주의: error 는 FieldMask로 확장 불가 — 넣으면 INVALID_ARGUMENT 400)
-        "X-Goog-FieldMask": "routes,routes.distanceMeters,routes.duration,geocodingResults",
     }
 
     try:
@@ -151,9 +145,10 @@ def _call_routes_compute_routes(
     if not isinstance(data, dict) or not data.get("routes"):
         # Routes API는 오류 시 error 객체를 주는 경우가 많음
         log.warning(
-            "[GROUTES] no routes | content_type=%s, payload=%s",
+            "[GROUTES] no routes | content_type=%s, payload=%s, raw=%s",
             res.headers.get("content-type"),
             str(data)[:800],
+            res.text[:800],
         )
         return None
 
