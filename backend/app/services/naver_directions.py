@@ -269,40 +269,57 @@ async def get_driving_direction(
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            log.info(
-                "[NAVER Directions] Request URL: %s | params: %s",
+            log.warning(
+                "[NAVER Directions] [DRIVING API] Request: URL=%s | params=%s | headers_keys=%s",
                 NAVER_DRIVING_URL,
                 params,
+                list(headers.keys()),
             )
             response = await client.get(
                 NAVER_DRIVING_URL, headers=headers, params=params
             )
-            log.info(
-                "[NAVER Directions] Response status: %s | headers: %s",
+            log.warning(
+                "[NAVER Directions] [DRIVING API] Response: status=%s | content_type=%s",
                 response.status_code,
-                dict(response.headers),
+                response.headers.get("content-type"),
             )
+            
+            # 401 에러도 응답 본문을 확인하기 위해 raise_for_status 전에 처리
+            if response.status_code == 401:
+                try:
+                    error_body = response.json()
+                    log.error(
+                        "[NAVER Directions] [DRIVING API] 401 Authentication Failed | body=%s",
+                        str(error_body)[:500],
+                    )
+                except Exception:
+                    log.error(
+                        "[NAVER Directions] [DRIVING API] 401 Authentication Failed | body=%s",
+                        response.text[:500],
+                    )
+            
             response.raise_for_status()
             data = response.json()
-            
-            log.info(
-                "[NAVER Directions] Response data: code=%s, message=%s, has_route=%s",
+
+            log.warning(
+                "[NAVER Directions] [DRIVING API] Response data: code=%s, message=%s, has_route=%s, route_keys=%s",
                 data.get("code"),
                 data.get("message"),
                 "route" in data,
+                list(data.get("route", {}).keys()) if data.get("route") else None,
             )
 
             if data.get("code") != 0:
-                log.warning(
-                    "[NAVER Directions] API returned error code=%s, message=%s | full_response=%s",
+                log.error(
+                    "[NAVER Directions] [DRIVING API] ✗ API error: code=%s, message=%s | full_response=%s",
                     data.get("code"),
                     data.get("message"),
                     str(data)[:500],
                 )
                 return None
 
-            log.info(
-                "[NAVER Directions] ✓ Success | route_keys=%s",
+            log.warning(
+                "[NAVER Directions] [DRIVING API] ✓ SUCCESS | route_keys=%s",
                 list(data.get("route", {}).keys()) if data.get("route") else None,
             )
             return data
@@ -629,7 +646,7 @@ async def get_travel_time(
                 driving_option,
             )
             return _fail_unavailable("driving")
-        
+
         log.info(
             "[TRAVEL_TIME] [DRIVING] ✓ Step 2 SUCCESS: Duration extracted | duration=%ds",
             duration,
@@ -702,7 +719,9 @@ async def get_travel_time(
 
         # 대중교통: Google transit만 사용
         if _gdm_single is not None:
-            log.info("[TRAVEL_TIME] [TRANSIT] Step 1: Calling Google Distance Matrix API...")
+            log.info(
+                "[TRAVEL_TIME] [TRANSIT] Step 1: Calling Google Distance Matrix API..."
+            )
             g = _gdm_single(
                 start_lat=start_lat,
                 start_lng=start_lng,
@@ -710,14 +729,14 @@ async def get_travel_time(
                 goal_lng=goal_lng,
                 mode="transit",
             )
-            
+
             log.info(
                 "[TRAVEL_TIME] [TRANSIT] Google API response: result=%s, success=%s, source=%s",
                 "None" if g is None else "dict",
                 g.get("success") if g else None,
                 g.get("source") if g else None,
             )
-            
+
             if g and g.get("success"):
                 log.info(
                     "[TRAVEL_TIME] [TRANSIT] ✓ Step 1 SUCCESS: Google Distance Matrix | "

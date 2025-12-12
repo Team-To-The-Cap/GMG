@@ -323,12 +323,12 @@ def get_travel_time_single(
     단일 출발지→도착지에 대한 이동 시간/거리 반환.
     - driving: departure_time=now가 적용되므로 duration_in_traffic 우선 사용 가능
     """
-    log.debug(
-        "[GDM] get_travel_time_single | mode=%s | start=(%.6f,%.6f) goal=(%.6f,%.6f)",
+    log.warning(
+        "[GDM] [TRANSIT API] get_travel_time_single | mode=%s | start=(%.6f,%.6f) goal=(%.6f,%.6f)",
         mode, start_lat, start_lng, goal_lat, goal_lng
     )
     
-    log.debug("[GDM] Step 1: Trying Google Routes API (v2) for mode=%s...", mode)
+    log.warning("[GDM] [TRANSIT API] Step 1: Trying Google Routes API (v2) for mode=%s...", mode)
     data = _call_routes_compute_routes(
         start_lat=start_lat,
         start_lng=start_lng,
@@ -352,15 +352,13 @@ def get_travel_time_single(
             mode=mode,
         )
         if result:
-            log.info(
-                "[GDM] ✓ Directions API success for mode=%s | duration=%ds",
-                mode, result.get("duration_seconds")
+            log.warning(
+                "[GDM] [TRANSIT API] ✓ Step 2 SUCCESS: Directions API | mode=%s | duration=%ds | source=%s",
+                mode, result.get("duration_seconds"), result.get("source", "unknown")
             )
         else:
-            log.warning(
-                "[GDM] ✗ Directions API also failed for mode=%s | "
-                "This is common in Korea region - Google may have limited walking/driving data. "
-                "Consider using Naver API as primary source for Korea.",
+            log.error(
+                "[GDM] [TRANSIT API] ✗ Step 2 FAILED: Directions API also failed | mode=%s",
                 mode
             )
         return result
@@ -405,8 +403,8 @@ def get_travel_time_single(
             log.warning("[GDM] ✗ Directions API also failed")
         return result
     
-    log.info(
-        "[GDM] ✓ Routes API success | duration=%ds, distance=%sm, source=google_routes_api",
+    log.warning(
+        "[GDM] [TRANSIT API] ✓ Step 1 SUCCESS: Routes API | duration=%ds, distance=%sm, source=google_routes_api",
         duration_s, distance_m
     )
 
