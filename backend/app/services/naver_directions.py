@@ -293,18 +293,32 @@ async def get_driving_direction(
     """
     client_id, client_secret = _get_naver_apigw_credentials()
 
+    # 자격 증명 값 검증 및 정리
     if not client_id or not client_secret:
         log.error(
-            "[NAVER Directions] [WALKING API] ✗ API credentials not configured | "
+            "[NAVER Directions] [DRIVING API] ✗ API credentials not configured | "
             "client_id=%s, client_secret=%s",
             client_id,
             client_secret,
         )
         return None
 
+    # 공백이나 따옴표 제거
+    client_id_clean = str(client_id).strip().strip('"').strip("'")
+    client_secret_clean = str(client_secret).strip().strip('"').strip("'")
+
+    if not client_id_clean or not client_secret_clean:
+        log.error(
+            "[NAVER Directions] [DRIVING API] ✗ Credentials are empty after cleaning | "
+            "client_id_clean=%s, client_secret_clean=%s",
+            client_id_clean,
+            client_secret_clean,
+        )
+        return None
+
     headers = {
-        "X-NCP-APIGW-API-KEY-ID": client_id,
-        "X-NCP-APIGW-API-KEY": client_secret,
+        "X-NCP-APIGW-API-KEY-ID": client_id_clean,
+        "X-NCP-APIGW-API-KEY": client_secret_clean,
     }
 
     params = {
@@ -316,10 +330,22 @@ async def get_driving_direction(
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             log.warning(
-                "[NAVER Directions] [DRIVING API] Request: URL=%s | params=%s | headers_keys=%s",
+                "[NAVER Directions] [DRIVING API] Request: URL=%s | params=%s | "
+                "header_KEY_ID=%s (len=%d) | header_KEY=%s (len=%d)",
                 NAVER_DRIVING_URL,
                 params,
-                list(headers.keys()),
+                (
+                    headers.get("X-NCP-APIGW-API-KEY-ID", "MISSING")[:15] + "..."
+                    if len(headers.get("X-NCP-APIGW-API-KEY-ID", "")) > 15
+                    else headers.get("X-NCP-APIGW-API-KEY-ID", "MISSING")
+                ),
+                len(headers.get("X-NCP-APIGW-API-KEY-ID", "")),
+                (
+                    headers.get("X-NCP-APIGW-API-KEY", "MISSING")[:15] + "..."
+                    if len(headers.get("X-NCP-APIGW-API-KEY", "")) > 15
+                    else headers.get("X-NCP-APIGW-API-KEY", "MISSING")
+                ),
+                len(headers.get("X-NCP-APIGW-API-KEY", "")),
             )
             response = await client.get(
                 NAVER_DRIVING_URL, headers=headers, params=params
@@ -430,9 +456,19 @@ async def get_walking_direction(
         )
         return None
 
+    # 공백이나 따옴표 제거
+    client_id_clean = str(client_id).strip().strip('"').strip("'")
+    client_secret_clean = str(client_secret).strip().strip('"').strip("'")
+
+    if not client_id_clean or not client_secret_clean:
+        log.error(
+            "[NAVER Directions] [WALKING API] ✗ Credentials are empty after cleaning"
+        )
+        return None
+
     headers = {
-        "X-NCP-APIGW-API-KEY-ID": client_id,
-        "X-NCP-APIGW-API-KEY": client_secret,
+        "X-NCP-APIGW-API-KEY-ID": client_id_clean,
+        "X-NCP-APIGW-API-KEY": client_secret_clean,
     }
 
     params = {
