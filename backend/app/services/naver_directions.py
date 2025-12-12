@@ -7,6 +7,7 @@ import httpx
 import logging
 from pathlib import Path
 import os
+import math
 
 # ── .env 강제 로드 (backend 루트의 .env) ──
 try:
@@ -36,6 +37,46 @@ def _get_naver_credentials() -> tuple[str | None, str | None]:
 def _format_coordinates(lat: float, lng: float) -> str:
     """좌표를 네이버 API 형식으로 변환: "경도,위도" """
     return f"{lng},{lat}"
+
+
+def _haversine_meters(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """대략적인 직선거리(미터) 계산."""
+    r = 6371000.0
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lng2 - lng1)
+    a = (
+        math.sin(dphi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    )
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return r * c
+
+
+def _fallback_travel_time(
+    start_lat: float,
+    start_lng: float,
+    goal_lat: float,
+    goal_lng: float,
+    mode: Literal["driving", "walking", "transit"],
+) -> Dict[str, Any]:
+    """
+    네이버 API 실패 시 fallback 이동 시간.
+    - driving/transit: 30km/h
+    - walking: 4.5km/h
+    """
+    distance_m = _haversine_meters(start_lat, start_lng, goal_lat, goal_lng)
+    speed_kmh = 4.5 if mode == "walking" else 30.0
+    speed_mps = (speed_kmh * 1000.0) / 3600.0
+    duration_s = max(60, int(distance_m / max(speed_mps, 0.1)))  # 최소 1분
+    return {
+        "duration_seconds": duration_s,
+        "distance_meters": int(distance_m),
+        "mode": mode,
+        "success": True,
+        "is_estimated": True,
+    }
 
 
 async def get_driving_direction(
@@ -338,13 +379,17 @@ async def get_travel_time(
             start_lat, start_lng, goal_lat, goal_lng, option=driving_option
         )
         if not data:
-            return None
+            return _fallback_travel_time(
+                start_lat, start_lng, goal_lat, goal_lng, "driving"
+            )
 
         duration = extract_travel_time_from_driving_response(
             data, option=driving_option
         )
         if duration is None:
-            return None
+            return _fallback_travel_time(
+                start_lat, start_lng, goal_lat, goal_lng, "driving"
+            )
 
         # 거리 정보 추출 (선택적)
         distance = None
@@ -370,11 +415,15 @@ async def get_travel_time(
     elif mode == "walking":
         data = await get_walking_direction(start_lat, start_lng, goal_lat, goal_lng)
         if not data:
-            return None
+            return _fallback_travel_time(
+                start_lat, start_lng, goal_lat, goal_lng, "walking"
+            )
 
         duration = extract_travel_time_from_walking_response(data)
         if duration is None:
-            return None
+            return _fallback_travel_time(
+                start_lat, start_lng, goal_lat, goal_lng, "walking"
+            )
 
         # 거리 정보 추출 (선택적)
         distance = None
@@ -402,13 +451,17 @@ async def get_travel_time(
             start_lat, start_lng, goal_lat, goal_lng, option=driving_option
         )
         if not data:
-            return None
+            return _fallback_travel_time(
+                start_lat, start_lng, goal_lat, goal_lng, "transit"
+            )
 
         duration = extract_travel_time_from_driving_response(
             data, option=driving_option
         )
         if duration is None:
-            return None
+            return _fallback_travel_time(
+                start_lat, start_lng, goal_lat, goal_lng, "transit"
+            )
 
         distance = None
         try:
@@ -432,7 +485,7 @@ async def get_travel_time(
 
     else:
         log.warning("[NAVER Directions] Unknown mode: %s", mode)
-        return None
+        return _fallback_travel_time(start_lat, start_lng, goal_lat, goal_lng, mode)
 
 
 async def get_route(

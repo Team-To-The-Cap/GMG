@@ -100,7 +100,9 @@ async def calculate_travel_time(request: TravelTimeRequest):
             mode=result["mode"],
             success=True,
         )
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
         log.exception("Error calculating travel time: %s", e)
         raise HTTPException(status_code=500, detail=f"이동 시간 계산 중 오류가 발생했습니다: {str(e)}")
