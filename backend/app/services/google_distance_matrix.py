@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 import requests
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from core.config import GOOGLE_MAPS_API_KEY
 
@@ -106,7 +106,10 @@ def _call_routes_compute_routes(
 
     if travel_mode == "DRIVE":
         body["routingPreference"] = "TRAFFIC_AWARE_OPTIMAL"
-        body["departureTime"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        # Routes API는 departureTime이 "미래"여야 하는 경우가 있어
+        # now로 보내면 서버 처리 지연/시계 오차로 과거로 판정되어 400이 날 수 있음.
+        dt = (datetime.now(timezone.utc) + timedelta(minutes=2)).replace(microsecond=0)
+        body["departureTime"] = dt.isoformat().replace("+00:00", "Z")
 
     headers = {
         "Content-Type": "application/json",
