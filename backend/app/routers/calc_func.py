@@ -20,7 +20,7 @@ G = G.to_undirected()   # 또는 nx.MultiGraph(G_directed)
 
 MODE_SPEED_KMPH = {
     # 1) 도보: 시속 4.5km
-    "도": 4.5, "도보": 4.5, "walk": 4.5, "WALK": 4.5,
+    "도": 1.0, "도보": 1.0, "walk": 1.0, "WALK": 1.0,
     
     # 2) 자동차: 시속 30km (도심 평균 서행 기준)
     "차": 30.0, "자동차": 30.0, "drive": 30.0, "DRIVE": 30.0, "car": 30.0,
