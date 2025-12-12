@@ -338,12 +338,11 @@ def get_travel_time_single(
     )
     if not data:
         # Routes API가 None을 반환하면 Directions API로 fallback
-        log.warning(
-            "[GDM] ✗ Routes API returned None for mode=%s, trying Directions API (legacy) | "
-            "Note: Routes API v2 may have limited support for walking/driving in Korea region",
+        log.error(
+            "[GDM] [TRANSIT API] ✗ Step 1 FAILED: Routes API returned None for mode=%s, trying Directions API (legacy)",
             mode
         )
-        log.debug("[GDM] Step 2: Trying Google Directions API (legacy) for mode=%s...", mode)
+        log.warning("[GDM] [TRANSIT API] Step 2: Trying Google Directions API (legacy) for mode=%s...", mode)
         result = _call_google_directions_api(
             start_lat=start_lat,
             start_lng=start_lng,

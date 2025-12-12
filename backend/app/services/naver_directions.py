@@ -79,12 +79,52 @@ def _get_naver_apigw_credentials() -> tuple[str | None, str | None]:
     try:
         from core.config import client_id, client_secret
 
-        if client_id and client_secret:
-            return client_id, client_secret
-    except Exception:
-        pass
+        log.warning(
+            "[NAVER Credentials] Checking core.config: client_id=%s, client_secret=%s",
+            "SET" if client_id else "MISSING",
+            "SET" if client_secret else "MISSING",
+        )
 
-    return _get_naver_credentials()
+        if client_id and client_secret:
+            # 따옴표 제거 (혹시 .env에 따옴표가 포함된 경우)
+            client_id_clean = client_id.strip().strip('"').strip("'")
+            client_secret_clean = client_secret.strip().strip('"').strip("'")
+
+            log.warning(
+                "[NAVER Credentials] ✓ Found in core.config: client_id=%s, client_secret=%s",
+                (
+                    client_id_clean[:10] + "..."
+                    if len(client_id_clean) > 10
+                    else client_id_clean
+                ),
+                (
+                    client_secret_clean[:10] + "..."
+                    if len(client_secret_clean) > 10
+                    else client_secret_clean
+                ),
+            )
+            return client_id_clean, client_secret_clean
+    except Exception as e:
+        log.warning("[NAVER Credentials] Failed to import from core.config: %s", e)
+
+    # 마지막: NAVER_CLIENT_ID / NAVER_CLIENT_SECRET 또는 client_id / client_secret
+    result = _get_naver_credentials()
+    if result[0] and result[1]:
+        # 따옴표 제거
+        result = (
+            result[0].strip().strip('"').strip("'") if result[0] else None,
+            result[1].strip().strip('"').strip("'") if result[1] else None,
+        )
+        if result[0] and result[1]:
+            log.warning(
+                "[NAVER Credentials] ✓ Found: NAVER_CLIENT_ID/NAVER_CLIENT_SECRET or client_id/client_secret"
+            )
+    else:
+        log.error(
+            "[NAVER Credentials] ✗ No credentials found | "
+            "Checked: NAVER_NCP_APIGW_KEY_ID, core.config.client_id, NAVER_CLIENT_ID, client_id"
+        )
+    return result
 
 
 def _format_coordinates(lat: float, lng: float) -> str:
@@ -252,8 +292,14 @@ async def get_driving_direction(
         API 응답 데이터 또는 None (실패 시)
     """
     client_id, client_secret = _get_naver_apigw_credentials()
+
     if not client_id or not client_secret:
-        log.warning("[NAVER Directions] API credentials not configured")
+        log.error(
+            "[NAVER Directions] [WALKING API] ✗ API credentials not configured | "
+            "client_id=%s, client_secret=%s",
+            client_id,
+            client_secret,
+        )
         return None
 
     headers = {
@@ -374,8 +420,14 @@ async def get_walking_direction(
         API 응답 데이터 또는 None (실패 시)
     """
     client_id, client_secret = _get_naver_apigw_credentials()
+
     if not client_id or not client_secret:
-        log.warning("[NAVER Directions] API credentials not configured")
+        log.error(
+            "[NAVER Directions] [WALKING API] ✗ API credentials not configured | "
+            "client_id=%s, client_secret=%s",
+            client_id,
+            client_secret,
+        )
         return None
 
     headers = {
@@ -686,17 +738,22 @@ async def get_travel_time(
 
         # 도보: calc_func.py처럼 거리/속도로 계산 (나이브한 방법)
         # calc_func.py의 MODE_SPEED_KMPH["walking"] = 4.0 km/h 사용
+        log.warning(
+            "[TRAVEL_TIME] [WALKING] Calculating using Haversine distance and speed (calc_func.py 방식)"
+        )
+
         WALKING_SPEED_KMPH = 4.0  # calc_func.py와 동일
 
         distance_m = _haversine_meters(start_lat, start_lng, goal_lat, goal_lng)
         speed_mps = (WALKING_SPEED_KMPH * 1000.0) / 3600.0  # m/s로 변환
         duration_s = max(60, int(distance_m / max(speed_mps, 0.1)))  # 최소 1분
 
-        log.info(
-            "[TRAVEL_TIME] ✓ Walking calculated | distance=%.1fm, speed=%.1f km/h, duration=%ds",
+        log.warning(
+            "[TRAVEL_TIME] [WALKING] ✓ SUCCESS: Calculated | distance=%.1fm, speed=%.1f km/h, duration=%ds (%.1f min)",
             distance_m,
             WALKING_SPEED_KMPH,
             duration_s,
+            duration_s / 60.0,
         )
 
         return {
