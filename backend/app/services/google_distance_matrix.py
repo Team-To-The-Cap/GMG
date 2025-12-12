@@ -118,8 +118,9 @@ def _call_routes_compute_routes(
         # NOTE:
         # - FieldMask가 너무 제한적이면 에러가 잘려 payload가 {} 처럼 보일 수 있음
         # - 하지만 "*"는 환경/버전에 따라 기대대로 동작하지 않을 수 있어
-        #   routes/error/geocodingResults를 명시적으로 포함합니다.
-        "X-Goog-FieldMask": "routes.distanceMeters,routes.duration,geocodingResults,error",
+        #   routes/geocodingResults를 명시적으로 포함합니다.
+        #   (주의: error 는 FieldMask로 확장 불가 — 넣으면 INVALID_ARGUMENT 400)
+        "X-Goog-FieldMask": "routes,routes.distanceMeters,routes.duration,geocodingResults",
     }
 
     try:
