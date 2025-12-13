@@ -59,6 +59,9 @@
   text-align: right; /* ✅ 값은 우측 정렬 */
   white-space: nowrap; /* 한 줄로 유지 */
   word-break: keep-all; /* 단어 단위로 줄바꿈 */
+  overflow: hidden; /* 오버플로우 방지 */
+  text-overflow: ellipsis; /* 말줄임표 표시 */
+  max-width: 100%; /* 최대 너비 제한 */
 }
 
 /* 보조 행: 좌/우 각자 정렬 */

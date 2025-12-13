@@ -301,14 +301,27 @@ def build_steps_from_meeting(
             )
     elif not is_meal_focused:
         # 기본: 가벼운 식사 또는 활동
-        steps.append(
-            StepInput(query="가볍게 먹기 좋은 식당", type="restaurant")
-        )
+        # 식당은 meeting_duration이 5시간 이상일 때만 추가
+        if meeting_duration_minutes >= 300:
+            steps.append(
+                StepInput(query="가볍게 먹기 좋은 식당", type="restaurant")
+            )
+        else:
+            # 5시간 미만이면 카페로 대체
+            steps.append(
+                StepInput(query="카페", type="cafe")
+            )
     # meal_focused인 경우는 2코스에서 처리
 
     # ---------- 2코스: 메인 식사 (조건부 추가) ----------
-    # 간단한 목적(카페만, 회의만) + 저예산이면 식사 스킵 가능
+    # 식당은 meeting_duration이 5시간(300분) 이상일 때만 추가
     should_add_meal = True
+    
+    # meeting_duration이 5시간 미만이면 식사 스킵
+    if meeting_duration_minutes < 300:
+        should_add_meal = False
+    
+    # 간단한 목적(카페만, 회의만) + 저예산이면 식사 스킵 가능
     if (is_cafe_focused or is_meeting_focused) and is_low_budget and len(steps) >= 1:
         # 이미 카페/회의 장소가 있고 예산이 낮으면 식사 생략 가능
         should_add_meal = False
@@ -642,7 +655,28 @@ def build_and_save_courses_for_meeting(
     # Google Places API types를 내부 category로 매핑하는 함수 import
     from core.place_category import map_google_types_to_category
 
+    # 카테고리별 기본 소비 시간 정의 (프론트엔드와 동일하게)
+    category_base_durations = {
+        "cafe": 60,           # 카페: 1시간
+        "restaurant": 60,     # 맛집: 1시간
+        "activity": 120,      # 액티비티: 2시간
+        "shopping": 60,       # 쇼핑: 1시간
+        "culture": 90,        # 문화시설: 1.5시간
+        "nature": 180,        # 자연관광: 3시간
+    }
+    
+    # meeting_duration 파싱
+    meeting_duration_minutes = 0
+    if context.meeting.meeting_duration:
+        try:
+            meeting_duration_minutes = int(context.meeting.meeting_duration)
+        except (ValueError, TypeError):
+            meeting_duration_minutes = 0
+    
+    # 기본 duration 계산
     auto_candidates: list[dict] = []
+    total_base_activity_minutes = 0
+    
     for idx, p in enumerate(best_course.places):
         step_idx = getattr(p, "step_index", idx)
         step_def: Optional[StepInput] = (
@@ -670,7 +704,11 @@ def build_and_save_courses_for_meeting(
                 if step_def
                 else _category_for_step_index(step_idx)
             )
-
+        
+        # 카테고리별 기본 소비 시간 계산
+        base_duration = category_base_durations.get(category, 60)
+        total_base_activity_minutes += base_duration
+        
         auto_candidates.append(
             {
                 "name": p.name,
@@ -679,9 +717,149 @@ def build_and_save_courses_for_meeting(
                 "lat": p.lat,
                 "lng": p.lng,
                 "category": category,
-                "duration": None,
+                "duration": base_duration,  # 기본 시간 (나중에 조정)
             }
         )
+    
+    # meeting_duration에 맞춰 코스 시간 조정 (장소 추가/삭제)
+    if meeting_duration_minutes > 0 and len(auto_candidates) > 0:
+        # 현재 총 예상 시간 계산 (활동 시간 + 이동 시간 추정)
+        estimated_travel_minutes = (len(auto_candidates) - 1) * 15  # 장소 간 평균 15분 이동 시간
+        current_total_minutes = total_base_activity_minutes + estimated_travel_minutes
+        
+        # 목표 시간과의 차이
+        time_difference = meeting_duration_minutes - current_total_minutes
+        
+        # 목표 시간보다 1시간(60분) 이상 부족하면 장소 추가
+        if time_difference > 60:
+            # 필요한 추가 활동 시간 (추정 이동 시간 제외)
+            additional_places_needed = max(1, (time_difference - 60) // 90)  # 평균 90분(활동+이동)당 1개 장소 추가
+            max_additional_places = min(additional_places_needed, 3)  # 최대 3개까지만 추가
+            
+            # 추가 steps 생성
+            used_categories = {c["category"] for c in auto_candidates}
+            purposes = _normalize_list_field(context.meeting.purpose)
+            vibes = _normalize_list_field(context.meeting.vibe)
+            fav_activities = [p.fav_activity for p in context.participants if p.fav_activity]
+            subcategories = _parse_subcategories(context.participants)  # subcategories 파싱 추가
+            
+            is_drink_focused = any(p in purposes for p in ["drinks", "술", "술 한잔"])
+            is_cafe_focused = any(p in purposes for p in ["cafe", "카페", "수다"])
+            is_activity_focused = any(p in purposes for p in ["activity", "play", "game", "활동", "체험"])
+            is_calm = any(v in vibes for v in ["calm", "조용", "조용하고 편안한"])
+            is_noisy = any(v in vibes for v in ["noisy-fun", "party", "떠들기"])
+            is_mood = any(v in vibes for v in ["mood", "분위기"])
+            has_cafe_pref = any("카페" in fav for fav in fav_activities)
+            has_drink_pref = any("술" in fav or "bar" in fav.lower() for fav in fav_activities)
+            has_rest_pref = any("휴식" in fav for fav in fav_activities)
+            
+            # 추가 장소 생성 및 검색
+            additional_steps = []
+            for _ in range(max_additional_places):
+                # 아직 사용하지 않은 카테고리 우선 선택
+                if "activity" not in used_categories and (is_activity_focused or len(fav_activities) > 0):
+                    query, place_type = _pick_activity_query(fav_activities, subcategories)
+                    additional_steps.append(StepInput(query=query, type=place_type))
+                    used_categories.add("activity")
+                elif "cafe" not in used_categories:
+                    if is_calm:
+                        query = "조용한 카페"
+                    else:
+                        query = "카페"
+                    additional_steps.append(StepInput(query=query, type="cafe"))
+                    used_categories.add("cafe")
+                elif "bar" not in used_categories and (is_drink_focused or has_drink_pref):
+                    query = "술집"
+                    additional_steps.append(StepInput(query=query, type="bar"))
+                    used_categories.add("restaurant")  # bar는 restaurant로 매핑됨
+                else:
+                    # 기본: 카페
+                    additional_steps.append(StepInput(query="카페", type="cafe"))
+                    used_categories.add("cafe")
+            
+            # 추가 장소 검색
+            if additional_steps:
+                additional_req = CourseRequest(
+                    center_lat=context.center_lat,
+                    center_lng=context.center_lng,
+                    radius=1000,
+                    steps=additional_steps,
+                    per_step_limit=3,  # 추가 장소는 적게
+                )
+                additional_response = plan_courses_internal(
+                    additional_req,
+                    participant_fav_activities=participant_fav_activities,
+                )
+                
+                # 추가 장소들을 기존 코스에 추가
+                for step_idx, add_step in enumerate(additional_steps):
+                    if step_idx < len(additional_response.courses[0].places):
+                        add_place = additional_response.courses[0].places[step_idx]
+                        place_types = getattr(add_place, "types", [])
+                        
+                        # 카테고리 결정
+                        if place_types:
+                            mapped_category = map_google_types_to_category(place_types)
+                            if mapped_category:
+                                category = mapped_category
+                            else:
+                                category = _category_for_step(add_step, len(auto_candidates))
+                        else:
+                            category = _category_for_step(add_step, len(auto_candidates))
+                        
+                        add_duration = category_base_durations.get(category, 60)
+                        
+                        auto_candidates.append({
+                            "name": add_place.name,
+                            "poi_name": add_place.name,
+                            "address": add_place.address or "",
+                            "lat": add_place.lat,
+                            "lng": add_place.lng,
+                            "category": category,
+                            "duration": add_duration,
+                        })
+                        total_base_activity_minutes += add_duration
+        
+        # 목표 시간보다 1시간(60분) 이상 초과하면 장소 제거 (뒤에서부터)
+        elif time_difference < -60:
+            # 제거할 장소 수 계산
+            places_to_remove = min(
+                max(1, (-time_difference - 60) // 90),  # 평균 90분당 1개 장소 제거
+                len(auto_candidates) - 1  # 최소 1개는 남김
+            )
+            
+            # 뒤에서부터 제거 (마지막 장소들 제거)
+            for _ in range(places_to_remove):
+                if len(auto_candidates) > 1:
+                    removed = auto_candidates.pop()
+                    total_base_activity_minutes -= removed["duration"]
+        
+        # duration 미세 조정 (1시간 이내 차이는 duration으로 조정)
+        else:
+            # 목표 활동 시간 = meeting_duration - 추정 이동 시간
+            estimated_travel_minutes = (len(auto_candidates) - 1) * 15
+            target_activity_minutes = max(0, meeting_duration_minutes - estimated_travel_minutes)
+            time_diff = target_activity_minutes - total_base_activity_minutes
+            
+            # 각 장소당 최대 20분까지만 추가
+            if time_diff > 0:
+                max_additional_per_place = 20
+                total_possible_additional = len(auto_candidates) * max_additional_per_place
+                actual_additional = min(time_diff, total_possible_additional)
+                
+                additional_per_place = min(
+                    actual_additional // len(auto_candidates),
+                    max_additional_per_place
+                )
+                
+                for candidate in auto_candidates:
+                    candidate["duration"] += additional_per_place
+                
+                remaining = actual_additional - (additional_per_place * len(auto_candidates))
+                if remaining > 0 and len(auto_candidates) > 0:
+                    max_add_to_last = max_additional_per_place - additional_per_place
+                    add_to_last = min(remaining, max_add_to_last)
+                    auto_candidates[-1]["duration"] += add_to_last
 
     # 4) must-visit 장소를 코스에 포함
     #    - 좌표(lat,lng)가 있는 것만 MeetingPlace에 넣을 수 있음
