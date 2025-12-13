@@ -306,19 +306,44 @@ def build_steps_from_meeting(
     query = base_query
     steps.append(StepInput(query=query, type="restaurant"))
 
-    # ---------- 3코스: 카페 or 술 ----------
-    # 서브 카테고리에서 카페/술자리 관련 추출
+    # ---------- 3코스: 카페 or 술 or 휴식 ----------
+    # 이미 사용된 type 확인 (카테고리 중복 방지)
+    used_types = {step.type for step in steps}
+    
+    # 서브 카테고리에서 카페/술자리/휴식 관련 추출
     cafe_subcats = subcategories.get("카페", [])
     drink_subcats = subcategories.get("술자리", [])
+    rest_subcats = subcategories.get("휴식", [])
     cafe_subcat_text = " ".join(cafe_subcats).lower() if cafe_subcats else ""
     drink_subcat_text = " ".join(drink_subcats).lower() if drink_subcats else ""
+    rest_subcat_text = " ".join(rest_subcats).lower() if rest_subcats else ""
     
     noisy = any(v in vibes for v in ["noisy-fun", "party"])
     calm = any(v in vibes for v in ["calm"])
     mood = any(v in vibes for v in ["mood"])
+    
+    # 참가자 선호도 확인
+    has_cafe_pref = any("카페" in fav for fav in fav_activities) or cafe_subcats
+    has_drink_pref = any("술" in fav or "bar" in fav.lower() for fav in fav_activities) or drink_subcats
+    has_rest_pref = any("휴식" in fav for fav in fav_activities) or rest_subcats
 
-    # 술자리 선호가 있는 경우
-    if "drinks" in purposes or drink_subcats or any("술" in fav or "bar" in fav.lower() for fav in fav_activities):
+    # 휴식 선호가 있고 아직 사용되지 않았으면 휴식 우선
+    if has_rest_pref and "spa" not in used_types and "beauty_salon" not in used_types:
+        if rest_subcats:
+            if any(k in rest_subcat_text for k in ["마사지", "스파"]):
+                query = "마사지"
+                steps.append(StepInput(query=query, type="spa"))
+            elif any(k in rest_subcat_text for k in ["찜질방"]):
+                query = "찜질방"
+                steps.append(StepInput(query=query, type="tourist_attraction"))
+            else:
+                query = "스파"
+                steps.append(StepInput(query=query, type="spa"))
+        else:
+            query = "마사지 스파"
+            steps.append(StepInput(query=query, type="spa"))
+    # 술자리 선호가 있고 cafe가 이미 사용되지 않았으면
+    elif ("drinks" in purposes or has_drink_pref) and "bar" not in used_types:
         # 서브 카테고리 우선 확인
         if drink_subcats:
             if any(k in drink_subcat_text for k in ["포차"]):
@@ -344,16 +369,16 @@ def build_steps_from_meeting(
                 query = "깔끔한 주점"
         
         steps.append(StepInput(query=query, type="bar"))
-    else:
-        # 카페 방향
+    # 카페 선호가 있고 cafe가 이미 사용되지 않았으면
+    elif has_cafe_pref and "cafe" not in used_types:
         # 서브 카테고리 우선 확인
         if cafe_subcats:
             if any(k in cafe_subcat_text for k in ["브런치"]):
-                query = "브런치"  # 더 일반적인 검색어
+                query = "브런치"
             elif any(k in cafe_subcat_text for k in ["디저트"]):
-                query = "디저트"  # 더 일반적인 검색어
+                query = "디저트"
             elif any(k in cafe_subcat_text for k in ["빵집"]):
-                query = "베이커리"  # "베이커리 카페"보다 "베이커리"가 더 일반적
+                query = "베이커리"
             elif any(k in cafe_subcat_text for k in ["스터디"]):
                 query = "스터디 카페"
             elif any(k in cafe_subcat_text for k in ["애견"]):
@@ -370,6 +395,19 @@ def build_steps_from_meeting(
                 query = "수다 떨기 좋은 카페"
         
         steps.append(StepInput(query=query, type="cafe"))
+    # 모두 사용되었거나 선호가 없으면, 휴식이나 기본값
+    else:
+        if has_rest_pref and rest_subcats:
+            if any(k in rest_subcat_text for k in ["마사지"]):
+                query = "마사지"
+                steps.append(StepInput(query=query, type="spa"))
+            else:
+                query = "스파"
+                steps.append(StepInput(query=query, type="spa"))
+        else:
+            # 기본: 조용한 카페 (이미 cafe가 사용되었어도 fallback)
+            query = "조용한 카페"
+            steps.append(StepInput(query=query, type="cafe"))
 
     # 모든 steps 반환 (3개 고정 제거)
     return steps
@@ -436,6 +474,13 @@ def build_and_save_courses_for_meeting(
     # 1) 프로필 + 참가자 선호 기반 step 설계
     steps = build_steps_from_meeting(context.meeting, context.participants)
 
+    # 참가자들의 fav_activity 수집
+    participant_fav_activities = [
+        p.fav_activity
+        for p in context.participants
+        if p.fav_activity
+    ]
+
     # 2) 중심 좌표 기준 코스 요청
     req = CourseRequest(
         center_lat=context.center_lat,
@@ -445,7 +490,10 @@ def build_and_save_courses_for_meeting(
         per_step_limit=5,
     )
 
-    course_response = plan_courses_internal(req)
+    course_response = plan_courses_internal(
+        req,
+        participant_fav_activities=participant_fav_activities,
+    )
 
     # 3) 베스트 코스 하나를 MeetingPlace 후보 리스트로 변환
     best_course = course_response.courses[0]
