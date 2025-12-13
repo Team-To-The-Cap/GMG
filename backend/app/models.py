@@ -144,6 +144,7 @@ class Participant(Base):
     start_address = Column(String(255), nullable=True)
     transportation = Column(String(255), nullable=True)
     fav_activity = Column(String(255), nullable=True)
+    fav_subcategories = Column(String(1000), nullable=True)  # JSON 문자열로 서브 카테고리 저장
 
     meeting = relationship("Meeting", back_populates="participants")
     available_times = relationship(

@@ -122,6 +122,17 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
             .filter((s: string) => !!s)
         : [];
 
+    // 서브 카테고리 파싱
+    let preferredSubcategories: any = {};
+    if (p.fav_subcategories) {
+      try {
+        preferredSubcategories = JSON.parse(p.fav_subcategories);
+      } catch (e) {
+        console.warn("Failed to parse fav_subcategories:", e);
+        preferredSubcategories = {};
+      }
+    }
+
     const availableTimes: ParticipantTime[] = (p.available_times ?? []).map(
       (t: any) => ({
         start_time: t.start_time as string,
@@ -139,6 +150,7 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
       transportation: p.transportation as string | undefined,
       favActivityRaw: fav,
       preferredCategories,
+      preferredSubcategories,
       availableTimes,
     };
   });

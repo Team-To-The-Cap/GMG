@@ -20,6 +20,7 @@ export type Participant = {
   transportation?: string;
   favActivityRaw?: string; // "카페,맛집" 같은 원본 문자열
   preferredCategories?: string[]; // ["카페","맛집"] 처럼 split 해둔 것
+  preferredSubcategories?: { [key: string]: string[] }; // 서브 카테고리 맵
   availableTimes?: ParticipantTime[];
 };
 
@@ -40,6 +41,9 @@ export type ParticipantLocationState = {
 
   // 선호 카테고리 (카페, 맛집, ...)
   selectedPreferences?: PlaceCategory[];
+
+  // 선호 서브 카테고리
+  selectedSubPreferences?: { [K in PlaceCategory]?: string[] };
 
   // 가능한 시간들
   selectedTimes?: ParticipantTime[];

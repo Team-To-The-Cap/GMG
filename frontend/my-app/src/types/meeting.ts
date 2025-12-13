@@ -19,6 +19,7 @@ export type MeetingParticipant = {
 
   transportation?: string | null;
   fav_activity?: string | null;
+  fav_subcategories?: string | null;  // JSON 문자열로 서브 카테고리 저장
   available_times?: {
     id: number;
     start_time: string;

@@ -59,6 +59,7 @@ class ParticipantCreate(BaseModel):
 
     transportation: Optional[str] = None
     fav_activity: Optional[str] = None
+    fav_subcategories: Optional[str] = None  # JSON 문자열로 서브 카테고리 저장
 
     # 🔹 일정도 선택 (없으면 빈 리스트)
     available_times: List[ParticipantTimeCreate] = []
@@ -75,6 +76,7 @@ class ParticipantResponse(BaseModel):
     transportation: Optional[str] = None
 
     fav_activity: Optional[str] = None
+    fav_subcategories: Optional[str] = None  # JSON 문자열로 서브 카테고리 저장
 
     available_times: List[ParticipantTimeResponse] = []
 
@@ -93,6 +95,7 @@ class ParticipantUpdate(BaseModel):
 
     transportation: Optional[str] = None
     fav_activity: Optional[str] = None
+    fav_subcategories: Optional[str] = None  # JSON 문자열로 서브 카테고리 저장
 
     # [추가] 참가 가능 시간 목록도 (덮어쓰기용으로) 선택적 입력
     available_times: Optional[List[ParticipantTimeCreate]] = None
