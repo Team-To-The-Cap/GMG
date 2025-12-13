@@ -102,8 +102,25 @@ export default function PromiseDetailPage() {
   }, [promiseId, navigate]);
 
   const onEditCourse = useCallback(() => {
-    alert("코스 수정 기능 준비 중!");
-  }, []);
+  if (!data?.course?.items) return;
+
+  const visitItems = data.course.items
+    .filter((i) => i.type === "visit")
+    .map((v, idx) => ({
+      id: v.id,
+      name: v.place.name,
+      address: v.place.address,
+      lat: v.place.lat,
+      lng: v.place.lng,
+      stayMinutes: v.stayMinutes,
+      order: idx + 1,
+    }));
+
+  navigate(`/details/${promiseId}/course-review`, {
+  state: { courseItems: visitItems},
+  });
+}, [data, promiseId, navigate]);
+
 
   const onAddParticipant = useCallback(() => {
     if (!promiseId) return;

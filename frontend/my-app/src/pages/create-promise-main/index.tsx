@@ -222,6 +222,27 @@ export default function CreatePromiseMain() {
     [baseOnChangeMeetingProfile, setData, persistDraft]
   );
 
+  // create 전용: 코스 계산 후 draft 반영
+const onCalculateCourseFixed = useCallback(async () => {
+  if (!promiseId) return;
+
+  try {
+    await onCalculateCourse(); // ← 공통 계산 먼저 실행
+
+    // 계산된 data를 draft에 저장
+    setData(prev => {
+      if (!prev) return prev;
+      persistDraft(prev);   // ⭐⭐⭐ 여기!
+      return prev;
+    });
+  } catch (e) {
+    console.error(e);
+  }
+}, [promiseId, onCalculateCourse, persistDraft]);
+
+
+  
+
   // ✅ create 전용: 저장 후, 새 "약속 추가" 화면으로 다시 진입
   const onSave = useCallback(async () => {
     if (!data) return;
@@ -280,8 +301,24 @@ export default function CreatePromiseMain() {
   }, [promiseId, navigate]);
 
   const onEditCourse = useCallback(() => {
-    alert("코스 수정 기능 준비 중!");
-  }, []);
+  if (!data?.course?.items) return;
+
+  const visitItems = data.course.items
+    .filter((i) => i.type === "visit")
+    .map((v, idx) => ({
+      id: v.id,
+      name: v.place.name,
+      address: v.place.address,
+      lat: v.place.lat,
+      lng: v.place.lng,
+      stayMinutes: v.stayMinutes,
+      order: idx + 1,
+    }));
+
+  navigate(`/create/${promiseId}/course-review`, {
+    state: { courseItems: visitItems },
+  });
+}, [data, promiseId, navigate]);
 
   const onAddParticipant = useCallback(() => {
     if (!promiseId) return;
@@ -322,7 +359,7 @@ export default function CreatePromiseMain() {
       onRemoveParticipant={onRemoveParticipant}
       onEditParticipant={onEditParticipant}
       onCalculatePlan={onCalculatePlan}
-      onCalculateCourse={onCalculateCourse}
+      onCalculateCourse={onCalculateCourseFixed}
       onSave={onSave}
       saving={saving}
       isDraft={isDraft}

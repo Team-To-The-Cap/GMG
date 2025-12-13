@@ -3,6 +3,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List
+from pathlib import Path
+import os
 
 import requests
 
@@ -17,6 +19,12 @@ router = APIRouter(
 )
 
 GEOCODE_URL = "https://maps.apigw.ntruss.com/map-geocode/v2/geocode"
+
+def _get_naver_map_creds() -> tuple[str | None, str | None]:
+    """네이버 지도 API 크리덴셜을 환경 변수에서 가져옵니다."""
+    cid = os.getenv("NAVER_MAP_CLIENT_ID") or os.getenv("NAVER_CLIENT_ID") or os.getenv("client_id")
+    sec = os.getenv("NAVER_MAP_CLIENT_SECRET") or os.getenv("NAVER_CLIENT_SECRET") or os.getenv("client_secret")
+    return cid, sec
 
 
 def get_coords_from_address(address: str):

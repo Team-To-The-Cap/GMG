@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Tuple
 from datetime import datetime, date, time, timedelta  # ⬅️ 사용 중
+from pathlib import Path
+import os
 
 from ..database import get_db
 from .. import schemas
@@ -26,7 +28,8 @@ def reverse_geocode_naver(lon: float, lat: float) -> Optional[str]:
 
     실패하면 None 반환.
     """
-    if not NAVER_MAP_CLIENT_ID or not NAVER_MAP_CLIENT_SECRET:
+    client_id, client_secret = _get_naver_map_creds()
+    if not client_id or not client_secret:
         # 키 설정 안 된 경우
         return None
 
@@ -39,8 +42,8 @@ def reverse_geocode_naver(lon: float, lat: float) -> Optional[str]:
         "output": "json",
     }
     headers = {
-        "X-NCP-APIGW-API-KEY-ID": NAVER_MAP_CLIENT_ID,
-        "X-NCP-APIGW-API-KEY": NAVER_MAP_CLIENT_SECRET,
+        "X-NCP-APIGW-API-KEY-ID": client_id,
+        "X-NCP-APIGW-API-KEY": client_secret,
     }
 
     try:
