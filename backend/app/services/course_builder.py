@@ -536,12 +536,19 @@ def build_steps_from_meeting(
                 query = "카페"
             steps.append(StepInput(query=query, type="cafe"))
         elif "restaurant" not in used_types:
-            # 식당 추가 (간단한 음식)
-            if is_cost_effective or is_low_budget:
-                query = "가성비 좋은 맛집"
+            # 식당 추가 (간단한 음식) - 하지만 이미 restaurant가 2개 이상이면 추가하지 않음
+            # 현재 steps에서 restaurant 개수 확인
+            restaurant_count_in_steps = sum(1 for s in steps if s.type == "restaurant")
+            if restaurant_count_in_steps < 2:  # 최대 2개까지만
+                if is_cost_effective or is_low_budget:
+                    query = "가성비 좋은 맛집"
+                else:
+                    query = "간단한 식사"
+                steps.append(StepInput(query=query, type="restaurant"))
             else:
-                query = "간단한 식사"
-            steps.append(StepInput(query=query, type="restaurant"))
+                # restaurant가 이미 충분하면 카페로 대체
+                query = "카페"
+                steps.append(StepInput(query=query, type="cafe"))
         elif "tourist_attraction" not in used_types or "spa" not in used_types:
             # 활동/휴식 추가
             if has_rest_pref:
@@ -709,6 +716,16 @@ def build_and_save_courses_for_meeting(
         base_duration = category_base_durations.get(category, 60)
         total_base_activity_minutes += base_duration
         
+        # 원본 타입 정보 저장 (bar 타입 식별용)
+        # 요리주점 판단: Google Places API의 types만 사용 (실제 장소 타입이므로 가장 정확함)
+        # types에 "bar"가 포함되어 있으면 요리주점으로 판단
+        # step_def.type은 검색 의도일 뿐, 실제 장소 타입을 보장하지 않으므로 사용하지 않음
+        original_type = None
+        
+        if place_types and "bar" in place_types:
+            # Google Places API의 types에 "bar"가 포함되어 있으면 요리주점
+            original_type = "bar"
+        
         auto_candidates.append(
             {
                 "name": p.name,
@@ -718,6 +735,7 @@ def build_and_save_courses_for_meeting(
                 "lng": p.lng,
                 "category": category,
                 "duration": base_duration,  # 기본 시간 (나중에 조정)
+                "original_type": original_type,  # bar 타입 식별용
             }
         )
     
@@ -754,9 +772,14 @@ def build_and_save_courses_for_meeting(
             has_rest_pref = any("휴식" in fav for fav in fav_activities)
             
             # 추가 장소 생성 및 검색
+            # 현재 restaurant 개수 확인 (최대 2개까지만 허용)
+            restaurant_count = sum(1 for c in auto_candidates if c["category"] == "restaurant")
+            max_restaurants = 2  # 코스당 최대 restaurant 2개
+            
             additional_steps = []
             for _ in range(max_additional_places):
                 # 아직 사용하지 않은 카테고리 우선 선택
+                # restaurant는 이미 2개 이상이면 추가하지 않음
                 if "activity" not in used_categories and (is_activity_focused or len(fav_activities) > 0):
                     query, place_type = _pick_activity_query(fav_activities, subcategories)
                     additional_steps.append(StepInput(query=query, type=place_type))
@@ -768,10 +791,17 @@ def build_and_save_courses_for_meeting(
                         query = "카페"
                     additional_steps.append(StepInput(query=query, type="cafe"))
                     used_categories.add("cafe")
-                elif "bar" not in used_categories and (is_drink_focused or has_drink_pref):
-                    query = "술집"
+                elif "bar" not in used_categories and (is_drink_focused or has_drink_pref) and restaurant_count < max_restaurants:
+                    query = "술집"  # 요리주점 포함
                     additional_steps.append(StepInput(query=query, type="bar"))
                     used_categories.add("restaurant")  # bar는 restaurant로 매핑됨
+                    restaurant_count += 1
+                elif "restaurant" not in used_categories and restaurant_count < max_restaurants:
+                    # restaurant가 아직 없고 최대 개수 미만일 때만 추가
+                    query = "가성비 좋은 맛집"
+                    additional_steps.append(StepInput(query=query, type="restaurant"))
+                    used_categories.add("restaurant")
+                    restaurant_count += 1
                 else:
                     # 기본: 카페
                     additional_steps.append(StepInput(query="카페", type="cafe"))
@@ -809,6 +839,14 @@ def build_and_save_courses_for_meeting(
                         
                         add_duration = category_base_durations.get(category, 60)
                         
+                        # 원본 타입 정보 저장 (bar 타입 식별용)
+                        # 추가 장소도 Google Places API types만 사용 (실제 장소 타입)
+                        add_original_type = None
+                        
+                        if place_types and "bar" in place_types:
+                            # Google Places API의 types에 "bar"가 포함되어 있으면 요리주점
+                            add_original_type = "bar"
+                        
                         auto_candidates.append({
                             "name": add_place.name,
                             "poi_name": add_place.name,
@@ -817,8 +855,99 @@ def build_and_save_courses_for_meeting(
                             "lng": add_place.lng,
                             "category": category,
                             "duration": add_duration,
+                            "original_type": add_original_type,  # bar 타입 식별용
                         })
                         total_base_activity_minutes += add_duration
+        
+        # restaurant들이 연속되지 않도록 순서 재배치
+        # restaurant들 사이에 최소 2시간(활동 시간 기준) 간격을 두도록 조정
+        # 단, 요리주점(bar 타입)은 제외 (2차로 가는 곳이라 연속되어도 괜찮음)
+        if len(auto_candidates) > 1:
+            # bar 타입이 아닌 restaurant만 필터링
+            restaurants = [
+                c for c in auto_candidates 
+                if c["category"] == "restaurant" and c.get("original_type") != "bar"
+            ]
+            # bar 타입인 restaurant와 non-restaurant를 함께 non_restaurants로 취급
+            non_restaurants = [
+                c for c in auto_candidates 
+                if c["category"] != "restaurant" or c.get("original_type") == "bar"
+            ]
+            
+            # restaurant가 2개 이상이고, non-restaurant가 충분하면 재배치
+            if len(restaurants) >= 2 and len(non_restaurants) >= len(restaurants) - 1:
+                # 현재 restaurant들의 위치 확인 (bar 타입 제외)
+                restaurant_positions = [
+                    i for i, c in enumerate(auto_candidates) 
+                    if c["category"] == "restaurant" and c.get("original_type") != "bar"
+                ]
+                
+                # 연속된 restaurant가 있는지 확인
+                has_consecutive = False
+                for i in range(len(restaurant_positions) - 1):
+                    if restaurant_positions[i + 1] - restaurant_positions[i] == 1:
+                        has_consecutive = True
+                        break
+                
+                # 연속된 restaurant가 있거나, 사이 간격이 2시간 미만이면 재배치
+                needs_reordering = has_consecutive
+                if not needs_reordering and len(restaurant_positions) >= 2:
+                    min_gap_minutes = 120  # 2시간
+                    for i in range(len(restaurant_positions) - 1):
+                        pos1, pos2 = restaurant_positions[i], restaurant_positions[i + 1]
+                        gap_minutes = sum(
+                            auto_candidates[j]["duration"]
+                            for j in range(pos1 + 1, pos2)
+                        )
+                        if gap_minutes < min_gap_minutes:
+                            needs_reordering = True
+                            break
+                
+                if needs_reordering:
+                    # restaurant들을 균등하게 분산 배치
+                    # 예: 5개 장소 중 2개가 restaurant면, 위치 0, 3 또는 1, 4에 배치
+                    total_places = len(auto_candidates)
+                    num_restaurants = len(restaurants)
+                    num_non_restaurants = len(non_restaurants)
+                    
+                    # restaurant 배치 위치 계산 (균등 분산)
+                    restaurant_positions_new = []
+                    if num_restaurants > 0:
+                        # 첫 restaurant는 앞쪽에
+                        restaurant_positions_new.append(0)
+                        # 나머지 restaurant들은 균등하게 분산
+                        if num_restaurants > 1:
+                            gap = max(1, num_non_restaurants // (num_restaurants - 1)) if num_restaurants > 1 else 1
+                            for r_idx in range(1, num_restaurants):
+                                pos = r_idx * gap + 1
+                                restaurant_positions_new.append(min(pos, total_places - 1))
+                    
+                    # 중복 제거 및 정렬
+                    restaurant_positions_new = sorted(list(set(restaurant_positions_new)))
+                    
+                    # 새 순서 구성: restaurant(bar 제외)와 non-restaurant(bar 포함)를 배치
+                    new_order = []
+                    restaurant_idx = 0
+                    non_restaurant_idx = 0
+                    
+                    for i in range(total_places):
+                        if i in restaurant_positions_new and restaurant_idx < len(restaurants):
+                            new_order.append(restaurants[restaurant_idx])
+                            restaurant_idx += 1
+                        elif non_restaurant_idx < len(non_restaurants):
+                            new_order.append(non_restaurants[non_restaurant_idx])
+                            non_restaurant_idx += 1
+                    
+                    # 남은 장소들 추가 (혹시 모를 경우)
+                    while restaurant_idx < len(restaurants):
+                        new_order.append(restaurants[restaurant_idx])
+                        restaurant_idx += 1
+                    while non_restaurant_idx < len(non_restaurants):
+                        new_order.append(non_restaurants[non_restaurant_idx])
+                        non_restaurant_idx += 1
+                    
+                    # 재배치된 순서로 업데이트 (전체 장소 수 유지)
+                    auto_candidates = new_order[:total_places]
         
         # 목표 시간보다 1시간(60분) 이상 초과하면 장소 제거 (뒤에서부터)
         elif time_difference < -60:
