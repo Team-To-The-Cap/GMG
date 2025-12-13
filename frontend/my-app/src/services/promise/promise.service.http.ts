@@ -16,6 +16,44 @@ import type {
 } from "@/types/meeting";
 
 /**
+ * 🔹 Haversine 공식으로 두 지점 간의 직선 거리 계산 (미터 단위)
+ */
+function calculateDistance(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number
+): number {
+  const R = 6371000; // 지구 반지름 (미터)
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+/**
+ * 🔹 보행 시간 계산 (거리 기반, naive)
+ * - 보행 속도: 5 km/h = 약 83.3 m/min
+ */
+function calculateWalkingTime(
+  startLat: number,
+  startLng: number,
+  goalLat: number,
+  goalLng: number
+): number {
+  const distanceMeters = calculateDistance(startLat, startLng, goalLat, goalLng);
+  const walkingSpeedMetersPerMinute = 83.3; // 5 km/h
+  const minutes = distanceMeters / walkingSpeedMetersPerMinute;
+  return Math.round(minutes);
+}
+
+/**
  * 🔹 참가자들의 이동 수단 정보를 기반으로 코스 이동 모드 결정
  * - 대중교통 사용자가 있으면 대중교통 우선
  * - 모두 자동차면 자동차
@@ -100,56 +138,57 @@ async function buildCourseFromPlaces(
   for (let idx = 0; idx < places.length; idx++) {
     const pl = places[idx];
 
-    // 이전 장소와의 이동시간 계산 (첫 번째 장소는 제외)
-    if (idx > 0) {
-      const prevPlace = places[idx - 1];
-      try {
-        // 세 가지 모드(도보, 대중교통, 자동차) 모두 계산하여 비교
-        const travelTimeResults = await Promise.allSettled([
-          http.request<{
-            duration_seconds: number;
-            duration_minutes: number;
-            mode: string;
-            success: boolean;
-            is_estimated?: boolean;
-          }>(
-            `/directions/travel-time?start_lat=${prevPlace.latitude}&start_lng=${prevPlace.longitude}&goal_lat=${pl.latitude}&goal_lng=${pl.longitude}&mode=walking`
-          ),
-          http.request<{
-            duration_seconds: number;
-            duration_minutes: number;
-            mode: string;
-            success: boolean;
-            is_estimated?: boolean;
-          }>(
-            `/directions/travel-time?start_lat=${prevPlace.latitude}&start_lng=${prevPlace.longitude}&goal_lat=${pl.latitude}&goal_lng=${pl.longitude}&mode=transit`
-          ),
-          http.request<{
-            duration_seconds: number;
-            duration_minutes: number;
-            mode: string;
-            success: boolean;
-            is_estimated?: boolean;
-          }>(
-            `/directions/travel-time?start_lat=${prevPlace.latitude}&start_lng=${prevPlace.longitude}&goal_lat=${pl.latitude}&goal_lng=${pl.longitude}&mode=driving`
-          ),
-        ]);
+      // 이전 장소와의 이동시간 계산 (첫 번째 장소는 제외)
+      if (idx > 0) {
+        const prevPlace = places[idx - 1];
+        try {
+          // 도보 시간은 거리 기반으로 직접 계산
+          const walkingMinutes = calculateWalkingTime(
+            prevPlace.latitude,
+            prevPlace.longitude,
+            pl.latitude,
+            pl.longitude
+          );
+          const walkingResult = {
+            duration_seconds: walkingMinutes * 60,
+            duration_minutes: walkingMinutes,
+            mode: "walking",
+            success: true,
+            is_estimated: true,
+          };
+
+          // 대중교통, 자동차는 API로 계산
+          const travelTimeResults = await Promise.allSettled([
+            http.request<{
+              duration_seconds: number;
+              duration_minutes: number;
+              mode: string;
+              success: boolean;
+              is_estimated?: boolean;
+            }>(
+              `/directions/travel-time?start_lat=${prevPlace.latitude}&start_lng=${prevPlace.longitude}&goal_lat=${pl.latitude}&goal_lng=${pl.longitude}&mode=transit`
+            ).catch(() => null),
+            http.request<{
+              duration_seconds: number;
+              duration_minutes: number;
+              mode: string;
+              success: boolean;
+              is_estimated?: boolean;
+            }>(
+              `/directions/travel-time?start_lat=${prevPlace.latitude}&start_lng=${prevPlace.longitude}&goal_lat=${pl.latitude}&goal_lng=${pl.longitude}&mode=driving`
+            ).catch(() => null),
+          ]);
 
         // 성공한 결과만 추출
-        const walkingResult =
+        const transitResult =
           travelTimeResults[0].status === "fulfilled" &&
           travelTimeResults[0].value?.success
             ? travelTimeResults[0].value
             : null;
-        const transitResult =
+        const drivingResult =
           travelTimeResults[1].status === "fulfilled" &&
           travelTimeResults[1].value?.success
             ? travelTimeResults[1].value
-            : null;
-        const drivingResult =
-          travelTimeResults[2].status === "fulfilled" &&
-          travelTimeResults[2].value?.success
-            ? travelTimeResults[2].value
             : null;
 
         // 최적 이동 수단 결정
