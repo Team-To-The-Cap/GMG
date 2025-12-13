@@ -286,24 +286,47 @@ def plan_courses_internal(
             flush=True
         )
 
+        # 검색 결과가 없으면 더 단순한 검색어로 fallback 시도
         if not step_candidates:
-            # API 응답에서 상태 확인 (실패 원인 파악)
-            # places_raw가 비어있으면 fetch_nearby_places에서 이미 로그를 남겼지만
-            # 여기서도 명확하게 표시
-            error_detail = (
-                f"No valid candidates (with lat/lng) for step {idx}. "
-                f"Search params: keyword='{step.query}', type='{step.type}', "
-                f"location=({req.center_lat:.6f}, {req.center_lng:.6f}), radius={req.radius}. "
-                f"Raw results from API: {len(places_raw)} places found. "
-                f"Possible causes: 1) Google Places API not enabled/configured correctly, "
-                f"2) No places match the search criteria in the area, "
-                f"3) API key issues. Check server logs for [GGL] messages for details."
-            )
-            print(f"[COURSE] ERROR: {error_detail}", flush=True)
-            raise HTTPException(
-                status_code=404,
-                detail=error_detail,
-            )
+            # keyword가 있으면 keyword 없이 type만으로 재시도
+            if step.query:
+                print(
+                    f"[COURSE] Step {idx}: No results with keyword='{step.query}', trying without keyword (type='{step.type}' only)",
+                    flush=True
+                )
+                places_raw_fallback = fetch_nearby_places(
+                    lat=req.center_lat,
+                    lng=req.center_lng,
+                    radius=req.radius,
+                    keyword=None,  # keyword 제거
+                    type=step.type,
+                )
+                filtered_fallback = places_raw_fallback[: req.per_step_limit]
+                step_candidates = to_candidates(filtered_fallback, step_index=idx)
+                
+                if step_candidates:
+                    print(
+                        f"[COURSE] Step {idx}: Fallback successful! Found {len(step_candidates)} candidates with type='{step.type}' only",
+                        flush=True
+                    )
+            
+            # 여전히 결과가 없으면 에러
+            if not step_candidates:
+                error_detail = (
+                    f"No valid candidates (with lat/lng) for step {idx}. "
+                    f"Search params: keyword='{step.query}', type='{step.type}', "
+                    f"location=({req.center_lat:.6f}, {req.center_lng:.6f}), radius={req.radius}. "
+                    f"Raw results from API: {len(places_raw)} places found. "
+                    f"Tried fallback without keyword, still no results. "
+                    f"Possible causes: 1) Google Places API not enabled/configured correctly, "
+                    f"2) No places match the search criteria in the area, "
+                    f"3) API key issues. Check server logs for [GGL] messages for details."
+                )
+                print(f"[COURSE] ERROR: {error_detail}", flush=True)
+                raise HTTPException(
+                    status_code=404,
+                    detail=error_detail,
+                )
 
         all_candidates.append(step_candidates)
 

@@ -216,6 +216,14 @@ def build_steps_from_meeting(
     vibes = _normalize_list_field(meeting.vibe)
     with_whom = (meeting.with_whom or "").lower()
     budget = (meeting.budget or "").strip()  # "1","2","3","4" 중 하나라고 가정
+    
+    # meeting_duration 파싱 (분 단위 문자열, 예: "60", "120", "180", "240", "360", "480")
+    meeting_duration_minutes = 0
+    if meeting.meeting_duration:
+        try:
+            meeting_duration_minutes = int(meeting.meeting_duration)
+        except (ValueError, TypeError):
+            meeting_duration_minutes = 0
 
     fav_activities = [
         p.fav_activity for p in participants
@@ -239,6 +247,25 @@ def build_steps_from_meeting(
     budget_num = int(budget) if budget and budget.isdigit() else 2
     is_high_budget = budget_num >= 3  # 3만원 이상이면 더 다양한 코스
     is_low_budget = budget_num <= 1   # 1만원대면 간단한 코스
+    
+    # meeting_duration에 따른 최소 코스 개수 결정
+    # - 1시간(60분): 최소 1-2개
+    # - 2시간(120분): 최소 2개
+    # - 3시간(180분): 최소 2-3개
+    # - 4시간(240분): 최소 3개
+    # - 6시간(360분): 최소 3-4개
+    # - 8시간(480분): 최소 4-5개
+    min_steps_from_duration = 1
+    if meeting_duration_minutes >= 480:  # 8시간
+        min_steps_from_duration = 4
+    elif meeting_duration_minutes >= 360:  # 6시간
+        min_steps_from_duration = 3
+    elif meeting_duration_minutes >= 240:  # 4시간
+        min_steps_from_duration = 3
+    elif meeting_duration_minutes >= 180:  # 3시간
+        min_steps_from_duration = 2
+    elif meeting_duration_minutes >= 120:  # 2시간
+        min_steps_from_duration = 2
     
     # vibe 확인
     is_cost_effective = any(v in vibes for v in ["cheap", "가성비", "가성비 위주"])
@@ -348,16 +375,24 @@ def build_steps_from_meeting(
         steps.append(StepInput(query=query, type="restaurant"))
 
     # ---------- 3코스: 카페 or 술 or 휴식 (조건부 추가) ----------
-    # 간단한 목적 + 저예산이면 3코스 생략 가능
+    # meeting_duration과 min_steps_from_duration을 고려하여 결정
     should_add_third = True
-    if (is_cafe_focused or is_meeting_focused) and is_low_budget:
-        # 카페/회의만 목적이고 저예산이면 생략 가능
-        should_add_third = False
-    elif is_meal_focused and is_low_budget and not is_activity_focused:
-        # 식사 중심 + 저예산 + 활동 없으면 생략 가능
-        should_add_third = False
-    elif len(steps) == 0:
-        # steps가 비어있으면 최소 1개는 필요
+    
+    # 만남 시간이 짧고(2시간 미만) 간단한 목적 + 저예산이면 3코스 생략 가능
+    if meeting_duration_minutes < 120:
+        if (is_cafe_focused or is_meeting_focused) and is_low_budget:
+            # 카페/회의만 목적이고 저예산이면 생략 가능
+            should_add_third = False
+        elif is_meal_focused and is_low_budget and not is_activity_focused:
+            # 식사 중심 + 저예산 + 활동 없으면 생략 가능
+            should_add_third = False
+    
+    # meeting_duration이 3시간 이상이면 최소 3코스는 필요
+    if meeting_duration_minutes >= 180:
+        should_add_third = True
+    
+    # 현재 steps가 min_steps_from_duration보다 적으면 추가
+    if len(steps) < min_steps_from_duration:
         should_add_third = True
     
     if should_add_third:
@@ -413,14 +448,14 @@ def build_steps_from_meeting(
                 else:
                     query = "술집"
             else:
-                # 시끄럽게 놀기 좋은 술집
+                # 시끄러운 분위기면 더 일반적인 검색어 사용
                 if noisy:
-                    query = "시끄럽게 놀기 좋은 술집"
+                    query = "술집"  # "시끄럽게 놀기 좋은 술집"은 너무 구체적
                 # 비교적 조용/분위기
                 elif mood:
-                    query = "분위기 좋은 와인바"
+                    query = "와인바"  # "분위기 좋은 와인바"는 너무 구체적
                 else:
-                    query = "깔끔한 주점"
+                    query = "주점"
             
             steps.append(StepInput(query=query, type="bar"))
         # 카페 선호가 있고 cafe가 이미 사용되지 않았으면
@@ -462,6 +497,54 @@ def build_steps_from_meeting(
                 # 기본: 조용한 카페 (이미 cafe가 사용되었어도 fallback)
                 query = "조용한 카페"
                 steps.append(StepInput(query=query, type="cafe"))
+
+    # ---------- 4코스 이상: 만남 시간이 길면 추가 코스 생성 ----------
+    # meeting_duration이 6시간 이상이면 4코스 이상 고려
+    while len(steps) < min_steps_from_duration:
+        used_types = {step.type for step in steps}
+        
+        # 아직 사용하지 않은 카테고리 우선 선택
+        if "bar" not in used_types and (is_drink_focused or has_drink_pref):
+            # 술자리 추가
+            if noisy:
+                query = "시끄럽게 놀기 좋은 술집"
+            elif mood:
+                query = "분위기 좋은 와인바"
+            else:
+                query = "술집"
+            steps.append(StepInput(query=query, type="bar"))
+        elif "cafe" not in used_types:
+            # 카페 추가
+            if is_calm:
+                query = "조용한 카페"
+            elif is_mood:
+                query = "분위기 좋은 디저트 카페"
+            else:
+                query = "카페"
+            steps.append(StepInput(query=query, type="cafe"))
+        elif "restaurant" not in used_types:
+            # 식당 추가 (간단한 음식)
+            if is_cost_effective or is_low_budget:
+                query = "가성비 좋은 맛집"
+            else:
+                query = "간단한 식사"
+            steps.append(StepInput(query=query, type="restaurant"))
+        elif "tourist_attraction" not in used_types or "spa" not in used_types:
+            # 활동/휴식 추가
+            if has_rest_pref:
+                query = "마사지 스파"
+                steps.append(StepInput(query=query, type="spa"))
+            elif is_activity_focused or len(fav_activities) > 0:
+                query, place_type = _pick_activity_query(fav_activities, subcategories)
+                steps.append(StepInput(query=query, type=place_type))
+            else:
+                # 기본: 카페
+                query = "카페"
+                steps.append(StepInput(query=query, type="cafe"))
+        else:
+            # 모든 카테고리를 사용했으면 기본값으로 추가
+            query = "카페"
+            steps.append(StepInput(query=query, type="cafe"))
 
     # 최소 1개는 보장 (steps가 비어있으면 기본 코스 추가)
     if len(steps) == 0:

@@ -467,10 +467,13 @@ async function mapMeetingToPromiseDetailAsync(meeting: MeetingResponse): Promise
       // lng: (p as any).longitude,
     })) ?? [];
 
+  // vibe는 단일 선택 필드이므로 배열로 파싱하지 않음
+  const vibe = meeting.vibe && meeting.vibe.trim() ? meeting.vibe.trim() : undefined;
+  
   const meetingProfile: MeetingProfile = {
     withWhom: meeting.with_whom ?? undefined,
     purpose: parseMultiField(meeting.purpose),
-    vibe: parseMultiField(meeting.vibe) as any,
+    vibe: vibe,
     budget: parseMultiField(meeting.budget),
     meetingDuration: meeting.meeting_duration ?? undefined,
   };
@@ -513,10 +516,13 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
       address: p.address ?? undefined,
     })) ?? [];
 
+  // vibe는 단일 선택 필드이므로 배열로 파싱하지 않음
+  const vibe = meeting.vibe && meeting.vibe.trim() ? meeting.vibe.trim() : undefined;
+  
   const meetingProfile: MeetingProfile = {
     withWhom: meeting.with_whom ?? undefined,
     purpose: parseMultiField(meeting.purpose),
-    vibe: parseMultiField(meeting.vibe) as any,
+    vibe: vibe,
     budget: parseMultiField(meeting.budget),
     meetingDuration: meeting.meeting_duration ?? undefined,
   };
