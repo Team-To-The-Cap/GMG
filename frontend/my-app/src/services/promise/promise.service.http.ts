@@ -269,27 +269,6 @@ async function buildCourseFromPlaces(
           });
           travelMinutes += transferMinutes;
         }
-
-        if (travelTimeResult?.success) {
-          const transferMinutes = Math.round(travelTimeResult.duration_minutes);
-          items.push({
-            type: "transfer",
-            mode: modeLabel,
-            minutes: transferMinutes,
-            note: travelMode === "transit" ? "지하철/버스" : "자동차",
-          });
-          travelMinutes += transferMinutes;
-        } else {
-          // API 실패 시 기본값 사용 (10분)
-          const transferMinutes = 10;
-          items.push({
-            type: "transfer",
-            mode: modeLabel,
-            minutes: transferMinutes,
-            note: `${travelMode === "transit" ? "대중교통" : "자동차"} (추정)`,
-          });
-          travelMinutes += transferMinutes;
-        }
       } catch (error) {
         console.warn(
           `Failed to calculate travel time between places ${idx - 1} and ${idx}:`,
@@ -299,9 +278,9 @@ async function buildCourseFromPlaces(
         const transferMinutes = 10;
         items.push({
           type: "transfer",
-          mode: modeLabel,
+          mode: baseTravelMode === "transit" ? "subway" : "car",
           minutes: transferMinutes,
-          note: `${travelMode === "transit" ? "대중교통" : "자동차"} (추정)`,
+          note: `${baseTravelMode === "transit" ? "대중교통" : "자동차"} (추정)`,
         });
         travelMinutes += transferMinutes;
       }
