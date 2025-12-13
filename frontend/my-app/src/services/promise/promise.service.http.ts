@@ -16,11 +16,62 @@ import type {
 } from "@/types/meeting";
 
 /**
+ * 🔹 참가자들의 이동 수단 정보를 기반으로 코스 이동 모드 결정
+ * - 대중교통 사용자가 있으면 대중교통 우선
+ * - 모두 자동차면 자동차
+ * - 기본값: 대중교통
+ */
+function determineCourseTravelMode(participants: any[]): "driving" | "transit" {
+  if (!participants || participants.length === 0) {
+    return "transit"; // 기본값: 대중교통
+  }
+
+  // 참가자들의 이동 수단 카운트
+  let transitCount = 0;
+  let drivingCount = 0;
+
+  for (const p of participants) {
+    const transportation = (p.transportation || "").toLowerCase().trim();
+    
+    // 대중교통
+    if (
+      transportation === "대중교통" ||
+      transportation === "transit" ||
+      transportation === "public" ||
+      transportation === "지하철" ||
+      transportation === "버스"
+    ) {
+      transitCount++;
+    }
+    // 자동차
+    else if (
+      transportation === "자동차" ||
+      transportation === "driving" ||
+      transportation === "drive" ||
+      transportation === "car" ||
+      transportation === "차"
+    ) {
+      drivingCount++;
+    }
+    // 도보는 지원하지 않지만, 기본값으로 대중교통 카운트
+    else {
+      transitCount++;
+    }
+  }
+
+  // 대중교통 사용자가 하나라도 있으면 대중교통 우선
+  // (코스 이동은 모두가 함께 이동하므로 대중교통 사용자를 고려)
+  return transitCount > 0 ? "transit" : "driving";
+}
+
+/**
  * 🔹 백엔드 MeetingResponse.places → 프론트 Course 구조로 변환
  * ✅ meeting_point 카테고리는 코스에서 제외 (일정/장소 계산 결과는 코스가 아님)
- * ✅ 실제 이동시간 계산 (대중교통 기준)
+ * ✅ 실제 이동시간 계산 (참가자들의 이동 수단 정보 기반)
  */
-async function buildCourseFromPlaces(meeting: MeetingResponse): Promise<Course> {
+async function buildCourseFromPlaces(
+  meeting: MeetingResponse
+): Promise<Course> {
   const allPlaces = meeting.places ?? [];
 
   // meeting_point 카테고리는 코스에서 제외 (일정/장소 계산 결과)
@@ -39,35 +90,193 @@ async function buildCourseFromPlaces(meeting: MeetingResponse): Promise<Course> 
     };
   }
 
+  // 참가자들의 이동 수단 정보를 기반으로 코스 이동 모드 결정
+  const baseTravelMode = determineCourseTravelMode(meeting.participants || []);
+
   const items: Array<CourseVisit | CourseTransfer> = [];
   let activityMinutes = 0;
   let travelMinutes = 0;
 
   for (let idx = 0; idx < places.length; idx++) {
     const pl = places[idx];
-    
+
     // 이전 장소와의 이동시간 계산 (첫 번째 장소는 제외)
     if (idx > 0) {
       const prevPlace = places[idx - 1];
       try {
-        // 대중교통 기준으로 이동시간 계산
-        const travelTimeResult = await http.request<{
-          duration_seconds: number;
-          duration_minutes: number;
-          mode: string;
-          success: boolean;
-          is_estimated?: boolean;
-        }>(
-          `/directions/travel-time?start_lat=${prevPlace.latitude}&start_lng=${prevPlace.longitude}&goal_lat=${pl.latitude}&goal_lng=${pl.longitude}&mode=transit`
-        );
+        // 세 가지 모드(도보, 대중교통, 자동차) 모두 계산하여 비교
+        const travelTimeResults = await Promise.allSettled([
+          http.request<{
+            duration_seconds: number;
+            duration_minutes: number;
+            mode: string;
+            success: boolean;
+            is_estimated?: boolean;
+          }>(
+            `/directions/travel-time?start_lat=${prevPlace.latitude}&start_lng=${prevPlace.longitude}&goal_lat=${pl.latitude}&goal_lng=${pl.longitude}&mode=walking`
+          ),
+          http.request<{
+            duration_seconds: number;
+            duration_minutes: number;
+            mode: string;
+            success: boolean;
+            is_estimated?: boolean;
+          }>(
+            `/directions/travel-time?start_lat=${prevPlace.latitude}&start_lng=${prevPlace.longitude}&goal_lat=${pl.latitude}&goal_lng=${pl.longitude}&mode=transit`
+          ),
+          http.request<{
+            duration_seconds: number;
+            duration_minutes: number;
+            mode: string;
+            success: boolean;
+            is_estimated?: boolean;
+          }>(
+            `/directions/travel-time?start_lat=${prevPlace.latitude}&start_lng=${prevPlace.longitude}&goal_lat=${pl.latitude}&goal_lng=${pl.longitude}&mode=driving`
+          ),
+        ]);
+
+        // 성공한 결과만 추출
+        const walkingResult =
+          travelTimeResults[0].status === "fulfilled" &&
+          travelTimeResults[0].value?.success
+            ? travelTimeResults[0].value
+            : null;
+        const transitResult =
+          travelTimeResults[1].status === "fulfilled" &&
+          travelTimeResults[1].value?.success
+            ? travelTimeResults[1].value
+            : null;
+        const drivingResult =
+          travelTimeResults[2].status === "fulfilled" &&
+          travelTimeResults[2].value?.success
+            ? travelTimeResults[2].value
+            : null;
+
+        // 최적 이동 수단 결정
+        let selectedResult:
+          | {
+              duration_seconds: number;
+              duration_minutes: number;
+              mode: string;
+              success: boolean;
+            }
+          | null = null;
+        let selectedModeLabel = "subway";
+
+        // 도보, 대중교통, 자동차 중 최소 시간 찾기
+        const availableResults = [
+          walkingResult ? { ...walkingResult, mode: "walking" } : null,
+          transitResult ? { ...transitResult, mode: "transit" } : null,
+          drivingResult ? { ...drivingResult, mode: "driving" } : null,
+        ].filter((r): r is NonNullable<typeof r> => r !== null);
+
+        if (availableResults.length > 0) {
+          // 최소 시간 찾기
+          const minTimeResult = availableResults.reduce((min, current) =>
+            current.duration_minutes < min.duration_minutes ? current : min
+          );
+
+          // 도보 시간이 다른 모드와 크게 차이 안 나면 도보 선택
+          if (walkingResult) {
+            const walkingMinutes = walkingResult.duration_minutes;
+            const otherResults = availableResults.filter((r) => r.mode !== "walking");
+            
+            if (otherResults.length > 0) {
+              const minOtherMinutes = Math.min(
+                ...otherResults.map((r) => r.duration_minutes)
+              );
+              
+              // 절대 차이가 15분 이내이면 도보 선택
+              const isWalkingReasonable = walkingMinutes - minOtherMinutes <= 15;
+
+              if (isWalkingReasonable) {
+                selectedResult = {
+                  ...walkingResult,
+                  mode: "walking",
+                };
+                selectedModeLabel = "walk";
+              } else {
+                // 도보가 비합리적이면 원래 기준 모드 선택
+                const baseResult =
+                  baseTravelMode === "transit" ? transitResult : drivingResult;
+                if (baseResult) {
+                  selectedResult = {
+                    ...baseResult,
+                    mode: baseTravelMode,
+                  };
+                  selectedModeLabel = baseTravelMode === "transit" ? "subway" : "car";
+                } else {
+                  // 원래 모드 실패 시 최소 시간 모드 선택
+                  selectedResult = minTimeResult;
+                  selectedModeLabel =
+                    minTimeResult.mode === "walking"
+                      ? "walk"
+                      : minTimeResult.mode === "transit"
+                      ? "subway"
+                      : "car";
+                }
+              }
+            } else {
+              // 도보만 성공한 경우
+              selectedResult = {
+                ...walkingResult,
+                mode: "walking",
+              };
+              selectedModeLabel = "walk";
+            }
+          } else {
+            // 도보 실패 시 원래 기준 모드 또는 최소 시간 모드
+            const baseResult =
+              baseTravelMode === "transit" ? transitResult : drivingResult;
+            if (baseResult) {
+              selectedResult = {
+                ...baseResult,
+                mode: baseTravelMode,
+              };
+              selectedModeLabel = baseTravelMode === "transit" ? "subway" : "car";
+            } else {
+              selectedResult = minTimeResult;
+              selectedModeLabel =
+                minTimeResult.mode === "transit" ? "subway" : "car";
+            }
+          }
+        }
+
+        if (selectedResult) {
+          const transferMinutes = Math.round(selectedResult.duration_minutes);
+          const modeNote =
+            selectedModeLabel === "walk"
+              ? "도보"
+              : selectedModeLabel === "subway"
+              ? "지하철/버스"
+              : "자동차";
+          
+          items.push({
+            type: "transfer",
+            mode: selectedModeLabel,
+            minutes: transferMinutes,
+            note: modeNote,
+          });
+          travelMinutes += transferMinutes;
+        } else {
+          // 모든 모드 실패 시 기본값 사용 (10분)
+          const transferMinutes = 10;
+          items.push({
+            type: "transfer",
+            mode: baseTravelMode === "transit" ? "subway" : "car",
+            minutes: transferMinutes,
+            note: `${baseTravelMode === "transit" ? "대중교통" : "자동차"} (추정)`,
+          });
+          travelMinutes += transferMinutes;
+        }
 
         if (travelTimeResult?.success) {
           const transferMinutes = Math.round(travelTimeResult.duration_minutes);
           items.push({
             type: "transfer",
-            mode: "subway",
+            mode: modeLabel,
             minutes: transferMinutes,
-            note: "이동",
+            note: travelMode === "transit" ? "지하철/버스" : "자동차",
           });
           travelMinutes += transferMinutes;
         } else {
@@ -75,21 +284,24 @@ async function buildCourseFromPlaces(meeting: MeetingResponse): Promise<Course> 
           const transferMinutes = 10;
           items.push({
             type: "transfer",
-            mode: "subway",
+            mode: modeLabel,
             minutes: transferMinutes,
-            note: "이동 (추정)",
+            note: `${travelMode === "transit" ? "대중교통" : "자동차"} (추정)`,
           });
           travelMinutes += transferMinutes;
         }
       } catch (error) {
-        console.warn(`Failed to calculate travel time between places ${idx - 1} and ${idx}:`, error);
+        console.warn(
+          `Failed to calculate travel time between places ${idx - 1} and ${idx}:`,
+          error
+        );
         // API 실패 시 기본값 사용 (10분)
         const transferMinutes = 10;
         items.push({
           type: "transfer",
-          mode: "subway",
+          mode: modeLabel,
           minutes: transferMinutes,
-          note: "이동 (추정)",
+          note: `${travelMode === "transit" ? "대중교통" : "자동차"} (추정)`,
         });
         travelMinutes += transferMinutes;
       }

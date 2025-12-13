@@ -724,7 +724,7 @@ async def get_travel_time(
     start_lng: float,
     goal_lat: float,
     goal_lng: float,
-    mode: Literal["driving", "transit"] = "driving",
+    mode: Literal["driving", "transit", "walking"] = "driving",
     driving_option: str = "trafast",
 ) -> Optional[Dict[str, Any]]:
     """
@@ -817,7 +817,61 @@ async def get_travel_time(
         }
 
     elif mode == "walking":
-        raise ValueError("도보 이동수단은 지원하지 않습니다. 자동차 또는 대중교통을 사용해주세요.")
+        log.info(
+            "[TRAVEL_TIME] walking mode | start=(%.6f,%.6f) goal=(%.6f,%.6f)",
+            start_lat,
+            start_lng,
+            goal_lat,
+            goal_lng,
+        )
+
+        # 도보: Naver Directions API 사용
+        log.info("[TRAVEL_TIME] [WALKING] Step 1: Calling Naver Directions API (walking)...")
+        data = await get_walking_direction(
+            start_lat, start_lng, goal_lat, goal_lng
+        )
+        if not data:
+            log.error(
+                "[TRAVEL_TIME] [WALKING] ✗ Step 1 FAILED: Naver Directions API returned None - calculation failed"
+            )
+            return _fail_unavailable("walking")
+
+        log.info(
+            "[TRAVEL_TIME] [WALKING] ✓ Step 1 SUCCESS: Naver Directions API returned data"
+        )
+
+        log.info("[TRAVEL_TIME] [WALKING] Step 2: Extracting duration from response...")
+        duration = extract_travel_time_from_walking_response(data)
+        if duration is None:
+            log.error(
+                "[TRAVEL_TIME] [WALKING] ✗ Step 2 FAILED: Failed to extract duration from response"
+            )
+            return _fail_unavailable("walking")
+
+        log.info(
+            "[TRAVEL_TIME] [WALKING] ✓ Step 2 SUCCESS: Duration extracted | duration=%ds",
+            duration,
+        )
+
+        # 거리 정보 추출 (선택적)
+        distance = None
+        try:
+            route = data.get("route", {})
+            paths = route.get("traoptimal", [])
+            if paths:
+                summary = paths[0].get("summary", {})
+                distance = summary.get("distance")
+        except (KeyError, ValueError, TypeError):
+            pass
+
+        return {
+            "duration_seconds": duration,
+            "distance_meters": distance,
+            "mode": "walking",
+            "success": True,
+            "is_estimated": False,
+            "source": "naver_directions",
+        }
 
     elif mode == "transit":
         log.info(

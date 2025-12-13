@@ -24,7 +24,7 @@ class TravelTimeRequest(BaseModel):
     start_lng: float
     goal_lat: float
     goal_lng: float
-    mode: Literal["driving", "transit"] = "driving"
+    mode: Literal["driving", "transit", "walking"] = "driving"
     driving_option: Optional[str] = "trafast"  # trafast, tracomfort, traoptimal
 
 
@@ -123,7 +123,7 @@ async def calculate_travel_time_get(
     start_lng: float = Query(..., description="출발지 경도"),
     goal_lat: float = Query(..., description="도착지 위도"),
     goal_lng: float = Query(..., description="도착지 경도"),
-    mode: Literal["driving", "transit"] = Query("driving", description="이동 수단"),
+    mode: Literal["driving", "transit", "walking"] = Query("driving", description="이동 수단"),
     driving_option: str = Query("trafast", description="자동차 경로 옵션 (trafast, tracomfort, traoptimal)"),
 ):
     """
