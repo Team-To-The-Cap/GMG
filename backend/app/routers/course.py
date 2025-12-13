@@ -36,6 +36,7 @@ class PlaceCandidate(BaseModel):
     rating: float = 0.0
     user_ratings_total: int = 0
     address: str | None = None
+    types: List[str] = []  # Google Places API의 types 필드
     step_index: int  # 0: 1단계, 1: 2단계, 2: 3단계
 
 
@@ -93,6 +94,7 @@ def to_candidates(
                 rating=p.get("rating", 0.0) or 0.0,
                 user_ratings_total=p.get("user_ratings_total", 0) or 0,
                 address=p.get("vicinity"),  # google_api에서 쓰던 필드명 그대로
+                types=p.get("types", []),  # Google Places API의 types 저장
                 step_index=step_index,
             )
         )

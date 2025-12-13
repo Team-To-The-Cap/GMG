@@ -18,14 +18,18 @@ GOOGLE_TYPE_TO_CATEGORY: dict[str, Optional[PlaceCategory]] = {
     "fast_food_restaurant": "restaurant",
     "meal_takeaway": "restaurant",
     "meal_delivery": "restaurant",
+    "food": "restaurant",  # 일반 음식점
     "bar": "restaurant",
     "korean_restaurant": "restaurant",
     "japanese_restaurant": "restaurant",
     "chinese_restaurant": "restaurant",
     "italian_restaurant": "restaurant",
+    "meal_delivery_service": "restaurant",  # 배달 음식점
+    "food_court": "restaurant",  # 푸드코트
 
     "cafe": "cafe",
     "bakery": "cafe",
+    "dessert_shop": "cafe",  # 디저트샵
 
     # Shopping
     "shopping_mall": "shopping",
@@ -40,6 +44,9 @@ GOOGLE_TYPE_TO_CATEGORY: dict[str, Optional[PlaceCategory]] = {
     "movie_theater": "activity",      # 원하면 culture 로 옮겨도 됨
     "tourist_attraction": "activity",
     "zoo": "activity",
+    "spa": "activity",  # 스파/마사지
+    "beauty_salon": "activity",  # 미용실
+    "hair_care": "activity",  # 미용실
 
     "park": "nature",
     "campground": "nature",

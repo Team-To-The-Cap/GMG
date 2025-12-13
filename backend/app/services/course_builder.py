@@ -639,17 +639,37 @@ def build_and_save_courses_for_meeting(
     # 3) 베스트 코스 하나를 MeetingPlace 후보 리스트로 변환
     best_course = course_response.courses[0]
 
+    # Google Places API types를 내부 category로 매핑하는 함수 import
+    from core.place_category import map_google_types_to_category
+
     auto_candidates: list[dict] = []
     for idx, p in enumerate(best_course.places):
         step_idx = getattr(p, "step_index", idx)
         step_def: Optional[StepInput] = (
             steps[step_idx] if 0 <= step_idx < len(steps) else None
         )
-        category = (
-            _category_for_step(step_def, step_idx)
-            if step_def
-            else _category_for_step_index(step_idx)
-        )
+        
+        # 실제 Google Places API의 types를 사용하여 정확한 category 결정
+        place_types = getattr(p, "types", [])
+        if place_types:
+            # Google Places API types를 내부 category로 매핑
+            mapped_category = map_google_types_to_category(place_types)
+            if mapped_category:
+                category = mapped_category
+            else:
+                # 매핑되지 않으면 step 기반으로 fallback
+                category = (
+                    _category_for_step(step_def, step_idx)
+                    if step_def
+                    else _category_for_step_index(step_idx)
+                )
+        else:
+            # types가 없으면 step 기반으로 fallback
+            category = (
+                _category_for_step(step_def, step_idx)
+                if step_def
+                else _category_for_step_index(step_idx)
+            )
 
         auto_candidates.append(
             {
