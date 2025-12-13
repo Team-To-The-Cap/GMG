@@ -18,6 +18,7 @@ class Meeting(Base):
     purpose = Column(String(50), nullable=True)         # meal / drinks / cafe / activity / meeting ...
     vibe = Column(String(50), nullable=True)            # comma-separated : noisy-fun,calm,mood,cheap ...
     budget = Column(String(50), nullable=True)          # 1,2,3,4
+    meeting_duration = Column(String(20), nullable=True)  # 60, 120, 180, 240, 360, 480 (분 단위)
     profile_memo = Column(String(1000), nullable=True)  # 자유 텍스트 메모
 
     participants = relationship(

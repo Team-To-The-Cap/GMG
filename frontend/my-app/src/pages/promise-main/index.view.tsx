@@ -146,6 +146,16 @@ const BUDGET_CHIPS: ProfileChip[] = [
   { label: "4만 원 이상", value: "4" },
 ];
 
+// 만남 시간 길이 칩 목록
+const DURATION_CHIPS: ProfileChip[] = [
+  { label: "1시간", value: "60" },
+  { label: "2시간", value: "120" },
+  { label: "3시간", value: "180" },
+  { label: "4시간", value: "240" },
+  { label: "반나절 (6시간)", value: "360" },
+  { label: "하루 종일 (8시간)", value: "480" },
+];
+
 export default class PromiseMainView extends React.PureComponent<Props, State> {
   state: State = {
     titleDraft: this.props.data?.title ?? "",
@@ -347,7 +357,7 @@ export default class PromiseMainView extends React.PureComponent<Props, State> {
               const arr = (rawValue as string[] | undefined) ?? [];
               isSelected = arr.includes(chip.value);
             } else {
-              // withWhom 은 단일 선택
+              // withWhom, meetingDuration 은 단일 선택
               isSelected = rawValue === chip.value;
             }
 
@@ -383,6 +393,11 @@ export default class PromiseMainView extends React.PureComponent<Props, State> {
             "1인당 예산은 어느 정도인가요?",
             "budget",
             BUDGET_CHIPS
+          )}
+          {renderChipRow(
+            "얼마나 길게 만날 건가요?",
+            "meetingDuration",
+            DURATION_CHIPS
           )}
         </div>
       </section>

@@ -226,190 +226,248 @@ def build_steps_from_meeting(
     subcategories = _parse_subcategories(participants)
 
     steps: List[StepInput] = []
+    
+    # purpose 기반으로 코스 구성 전략 결정
+    purpose_str = ",".join(purposes).lower()
+    is_meal_focused = any(p in purposes for p in ["meal", "밥"])
+    is_drink_focused = any(p in purposes for p in ["drinks", "술", "술 한잔"])
+    is_cafe_focused = any(p in purposes for p in ["cafe", "카페", "수다", "카페/수다"])
+    is_activity_focused = any(p in purposes for p in ["activity", "play", "game", "활동", "체험", "활동/체험"])
+    is_meeting_focused = any(p in purposes for p in ["meeting", "미팅", "회의", "회의/미팅"])
+    
+    # budget에 따른 코스 길이 조정 (1=간단, 4=풀코스)
+    budget_num = int(budget) if budget and budget.isdigit() else 2
+    is_high_budget = budget_num >= 3  # 3만원 이상이면 더 다양한 코스
+    is_low_budget = budget_num <= 1   # 1만원대면 간단한 코스
+    
+    # vibe 확인
+    is_cost_effective = any(v in vibes for v in ["cheap", "가성비", "가성비 위주"])
+    is_calm = any(v in vibes for v in ["calm", "조용", "조용하고 편안한"])
+    is_noisy = any(v in vibes for v in ["noisy-fun", "party", "떠들기", "깔깔 떠들기 좋은"])
+    is_mood = any(v in vibes for v in ["mood", "분위기", "분위기 좋은"])
 
     # ---------- 1코스: 가볍게 / 활동 ----------
-    wants_activity = any(p in purposes for p in ["activity", "play", "game"])
-    has_fav_activity = len(fav_activities) > 0
+    wants_activity = is_activity_focused or len(fav_activities) > 0
 
-    if wants_activity or has_fav_activity:
+    if wants_activity:
         query, place_type = _pick_activity_query(fav_activities, subcategories)
         steps.append(StepInput(query=query, type=place_type))
-    else:
+    elif is_meeting_focused:
         # 회의/미팅이면 조용한 카페부터
-        if "meeting" in purposes:
+        steps.append(
+            StepInput(query="회의하기 좋은 카페", type="cafe")
+        )
+    elif is_drink_focused and not is_meal_focused:
+        # 술자리가 메인이고 식사가 아니면
+        steps.append(
+            StepInput(query="가볍게 한잔하기 좋은 술집", type="bar")
+        )
+    elif is_cafe_focused and not is_meal_focused:
+        # 카페/수다가 메인이고 식사가 아니면
+        if is_calm:
             steps.append(
-                StepInput(query="회의하기 좋은 카페", type="cafe")
+                StepInput(query="조용한 카페", type="cafe")
             )
-        # 술자리가 메인인 약속
-        elif "drinks" in purposes:
+        else:
             steps.append(
-                StepInput(query="가볍게 한잔하기 좋은 술집", type="bar")
+                StepInput(query="수다 떨기 좋은 카페", type="cafe")
             )
-        else:
-            # 기본: 가벼운 식사
-            steps.append(
-                StepInput(query="가볍게 먹기 좋은 식당", type="restaurant")
-            )
+    elif not is_meal_focused:
+        # 기본: 가벼운 식사 또는 활동
+        steps.append(
+            StepInput(query="가볍게 먹기 좋은 식당", type="restaurant")
+        )
+    # meal_focused인 경우는 2코스에서 처리
 
-    # ---------- 2코스: 메인 식사 ----------
-    # 서브 카테고리에서 맛집 관련 추출
-    restaurant_subcats = subcategories.get("맛집", [])
-    restaurant_subcat_text = " ".join(restaurant_subcats).lower() if restaurant_subcats else ""
+    # ---------- 2코스: 메인 식사 (조건부 추가) ----------
+    # 간단한 목적(카페만, 회의만) + 저예산이면 식사 스킵 가능
+    should_add_meal = True
+    if (is_cafe_focused or is_meeting_focused) and is_low_budget and len(steps) >= 1:
+        # 이미 카페/회의 장소가 있고 예산이 낮으면 식사 생략 가능
+        should_add_meal = False
     
-    # budget, vibe, with_whom, 서브 카테고리에 따라 검색어 변경
-    base_query = None
-    
-    # 서브 카테고리 우선 확인 (더 구체적)
-    if restaurant_subcats:
-        if any(k in restaurant_subcat_text for k in ["한식"]):
-            base_query = "한식당"
-        elif any(k in restaurant_subcat_text for k in ["일식"]):
-            base_query = "일식당"
-        elif any(k in restaurant_subcat_text for k in ["중식"]):
-            base_query = "중식당"
-        elif any(k in restaurant_subcat_text for k in ["양식"]):
-            base_query = "양식 레스토랑"
-        elif any(k in restaurant_subcat_text for k in ["고기"]):
-            base_query = "고기집"
-        elif any(k in restaurant_subcat_text for k in ["해산물"]):
-            base_query = "해산물 요리"
-        elif any(k in restaurant_subcat_text for k in ["돈까스"]):
-            base_query = "돈까스집"
-        elif any(k in restaurant_subcat_text for k in ["비건"]):
-            base_query = "비건 식당"
-        elif any(k in restaurant_subcat_text for k in ["분식"]):
-            base_query = "분식집"
-        elif any(k in restaurant_subcat_text for k in ["패스트푸드"]):
-            base_query = "패스트푸드"
-    
-    # 서브 카테고리가 없거나 기본값을 사용할 때
-    if not base_query:
-        if "meal" in purposes or "drinks" in purposes:
-            # 가성비 위주
-            if "cheap" in vibes or budget == "1":
-                base_query = "가성비 좋은 맛집"
-            # 커플 + 분위기 좋은
-            elif with_whom == "couple" and ("mood" in vibes or "calm" in vibes):
-                base_query = "분위기 좋은 레스토랑"
-            # 직장동료 + 조용/미팅
-            elif with_whom == "coworkers" and ("calm" in vibes or "meeting" in purposes):
-                base_query = "조용한 식당"
-            # 가족
-            elif with_whom == "family":
-                base_query = "가족 모임 하기 좋은 한식당"
-            else:
-                base_query = "맛집"
-        else:
-            # 식사가 주목적이 아니면, 그래도 하나는 식사 넣어둔다.
-            base_query = "근처 맛집"
-    
-    query = base_query
-    steps.append(StepInput(query=query, type="restaurant"))
-
-    # ---------- 3코스: 카페 or 술 or 휴식 ----------
-    # 이미 사용된 type 확인 (카테고리 중복 방지)
-    used_types = {step.type for step in steps}
-    
-    # 서브 카테고리에서 카페/술자리/휴식 관련 추출
-    cafe_subcats = subcategories.get("카페", [])
-    drink_subcats = subcategories.get("술자리", [])
-    rest_subcats = subcategories.get("휴식", [])
-    cafe_subcat_text = " ".join(cafe_subcats).lower() if cafe_subcats else ""
-    drink_subcat_text = " ".join(drink_subcats).lower() if drink_subcats else ""
-    rest_subcat_text = " ".join(rest_subcats).lower() if rest_subcats else ""
-    
-    noisy = any(v in vibes for v in ["noisy-fun", "party"])
-    calm = any(v in vibes for v in ["calm"])
-    mood = any(v in vibes for v in ["mood"])
-    
-    # 참가자 선호도 확인
-    has_cafe_pref = any("카페" in fav for fav in fav_activities) or cafe_subcats
-    has_drink_pref = any("술" in fav or "bar" in fav.lower() for fav in fav_activities) or drink_subcats
-    has_rest_pref = any("휴식" in fav for fav in fav_activities) or rest_subcats
-
-    # 휴식 선호가 있고 아직 사용되지 않았으면 휴식 우선
-    if has_rest_pref and "spa" not in used_types and "beauty_salon" not in used_types:
-        if rest_subcats:
-            if any(k in rest_subcat_text for k in ["마사지", "스파"]):
-                query = "마사지"
-                steps.append(StepInput(query=query, type="spa"))
-            elif any(k in rest_subcat_text for k in ["찜질방"]):
-                query = "찜질방"
-                steps.append(StepInput(query=query, type="tourist_attraction"))
-            else:
-                query = "스파"
-                steps.append(StepInput(query=query, type="spa"))
-        else:
-            query = "마사지 스파"
-            steps.append(StepInput(query=query, type="spa"))
-    # 술자리 선호가 있고 cafe가 이미 사용되지 않았으면
-    elif ("drinks" in purposes or has_drink_pref) and "bar" not in used_types:
-        # 서브 카테고리 우선 확인
-        if drink_subcats:
-            if any(k in drink_subcat_text for k in ["포차"]):
-                query = "포차"
-            elif any(k in drink_subcat_text for k in ["펍", "펍바"]):
-                query = "펍"
-            elif any(k in drink_subcat_text for k in ["와인바"]):
-                query = "와인바"
-            elif any(k in drink_subcat_text for k in ["칵테일바"]):
-                query = "칵테일바"
-            elif any(k in drink_subcat_text for k in ["이자카야"]):
-                query = "이자카야"
-            else:
-                query = "술집"
-        else:
-            # 시끄럽게 놀기 좋은 술집
-            if noisy:
-                query = "시끄럽게 놀기 좋은 술집"
-            # 비교적 조용/분위기
-            elif mood:
-                query = "분위기 좋은 와인바"
-            else:
-                query = "깔끔한 주점"
+    if should_add_meal:
+        # 서브 카테고리에서 맛집 관련 추출
+        restaurant_subcats = subcategories.get("맛집", [])
+        restaurant_subcat_text = " ".join(restaurant_subcats).lower() if restaurant_subcats else ""
         
-        steps.append(StepInput(query=query, type="bar"))
-    # 카페 선호가 있고 cafe가 이미 사용되지 않았으면
-    elif has_cafe_pref and "cafe" not in used_types:
-        # 서브 카테고리 우선 확인
-        if cafe_subcats:
-            if any(k in cafe_subcat_text for k in ["브런치"]):
-                query = "브런치"
-            elif any(k in cafe_subcat_text for k in ["디저트"]):
-                query = "디저트"
-            elif any(k in cafe_subcat_text for k in ["빵집"]):
-                query = "베이커리"
-            elif any(k in cafe_subcat_text for k in ["스터디"]):
-                query = "스터디 카페"
-            elif any(k in cafe_subcat_text for k in ["애견"]):
-                query = "애견카페"
-            else:
-                query = "카페"
-        else:
-            # 카페 방향 (기존 로직)
-            if calm or "meeting" in purposes:
-                query = "조용한 카페"
-            elif mood:
-                query = "분위기 좋은 디저트 카페"
-            else:
-                query = "수다 떨기 좋은 카페"
+        # budget, vibe, with_whom, 서브 카테고리에 따라 검색어 변경
+        base_query = None
         
-        steps.append(StepInput(query=query, type="cafe"))
-    # 모두 사용되었거나 선호가 없으면, 휴식이나 기본값
-    else:
-        if has_rest_pref and rest_subcats:
-            if any(k in rest_subcat_text for k in ["마사지"]):
-                query = "마사지"
-                steps.append(StepInput(query=query, type="spa"))
+        # 서브 카테고리 우선 확인 (더 구체적)
+        if restaurant_subcats:
+            if any(k in restaurant_subcat_text for k in ["한식"]):
+                base_query = "한식당"
+            elif any(k in restaurant_subcat_text for k in ["일식"]):
+                base_query = "일식당"
+            elif any(k in restaurant_subcat_text for k in ["중식"]):
+                base_query = "중식당"
+            elif any(k in restaurant_subcat_text for k in ["양식"]):
+                base_query = "양식 레스토랑"
+            elif any(k in restaurant_subcat_text for k in ["고기"]):
+                base_query = "고기집"
+            elif any(k in restaurant_subcat_text for k in ["해산물"]):
+                base_query = "해산물 요리"
+            elif any(k in restaurant_subcat_text for k in ["돈까스"]):
+                base_query = "돈까스집"
+            elif any(k in restaurant_subcat_text for k in ["비건"]):
+                base_query = "비건 식당"
+            elif any(k in restaurant_subcat_text for k in ["분식"]):
+                base_query = "분식집"
+            elif any(k in restaurant_subcat_text for k in ["패스트푸드"]):
+                base_query = "패스트푸드"
+        
+        # 서브 카테고리가 없거나 기본값을 사용할 때
+        if not base_query:
+            if is_meal_focused or is_drink_focused:
+                # 가성비 위주
+                if is_cost_effective or budget_num == 1:
+                    base_query = "가성비 좋은 맛집"
+                # 커플 + 분위기 좋은
+                elif with_whom == "couple" and (is_mood or is_calm):
+                    base_query = "분위기 좋은 레스토랑"
+                # 직장동료 + 조용/미팅
+                elif with_whom == "coworkers" and (is_calm or is_meeting_focused):
+                    base_query = "조용한 식당"
+                # 가족
+                elif with_whom == "family":
+                    base_query = "가족 모임 하기 좋은 한식당"
+                # 고예산
+                elif is_high_budget:
+                    base_query = "고급 식당"
+                else:
+                    base_query = "맛집"
             else:
-                query = "스파"
+                # 식사가 주목적이 아니면, 그래도 하나는 식사 넣어둔다.
+                if is_low_budget:
+                    base_query = "가성비 좋은 맛집"
+                else:
+                    base_query = "근처 맛집"
+        
+        query = base_query
+        steps.append(StepInput(query=query, type="restaurant"))
+
+    # ---------- 3코스: 카페 or 술 or 휴식 (조건부 추가) ----------
+    # 간단한 목적 + 저예산이면 3코스 생략 가능
+    should_add_third = True
+    if (is_cafe_focused or is_meeting_focused) and is_low_budget:
+        # 카페/회의만 목적이고 저예산이면 생략 가능
+        should_add_third = False
+    elif is_meal_focused and is_low_budget and not is_activity_focused:
+        # 식사 중심 + 저예산 + 활동 없으면 생략 가능
+        should_add_third = False
+    elif len(steps) == 0:
+        # steps가 비어있으면 최소 1개는 필요
+        should_add_third = True
+    
+    if should_add_third:
+        # 이미 사용된 type 확인 (카테고리 중복 방지)
+        used_types = {step.type for step in steps}
+        
+        # 서브 카테고리에서 카페/술자리/휴식 관련 추출
+        cafe_subcats = subcategories.get("카페", [])
+        drink_subcats = subcategories.get("술자리", [])
+        rest_subcats = subcategories.get("휴식", [])
+        cafe_subcat_text = " ".join(cafe_subcats).lower() if cafe_subcats else ""
+        drink_subcat_text = " ".join(drink_subcats).lower() if drink_subcats else ""
+        rest_subcat_text = " ".join(rest_subcats).lower() if rest_subcats else ""
+        
+        noisy = any(v in vibes for v in ["noisy-fun", "party"])
+        calm = any(v in vibes for v in ["calm"])
+        mood = any(v in vibes for v in ["mood"])
+        
+        # 참가자 선호도 확인
+        has_cafe_pref = any("카페" in fav for fav in fav_activities) or cafe_subcats
+        has_drink_pref = any("술" in fav or "bar" in fav.lower() for fav in fav_activities) or drink_subcats
+        has_rest_pref = any("휴식" in fav for fav in fav_activities) or rest_subcats
+
+        # 휴식 선호가 있고 아직 사용되지 않았으면 휴식 우선
+        if has_rest_pref and "spa" not in used_types and "beauty_salon" not in used_types:
+            if rest_subcats:
+                if any(k in rest_subcat_text for k in ["마사지", "스파"]):
+                    query = "마사지"
+                    steps.append(StepInput(query=query, type="spa"))
+                elif any(k in rest_subcat_text for k in ["찜질방"]):
+                    query = "찜질방"
+                    steps.append(StepInput(query=query, type="tourist_attraction"))
+                else:
+                    query = "스파"
+                    steps.append(StepInput(query=query, type="spa"))
+            else:
+                query = "마사지 스파"
                 steps.append(StepInput(query=query, type="spa"))
-        else:
-            # 기본: 조용한 카페 (이미 cafe가 사용되었어도 fallback)
-            query = "조용한 카페"
+        # 술자리 선호가 있고 cafe가 이미 사용되지 않았으면
+        elif (is_drink_focused or has_drink_pref) and "bar" not in used_types:
+            # 서브 카테고리 우선 확인
+            if drink_subcats:
+                if any(k in drink_subcat_text for k in ["포차"]):
+                    query = "포차"
+                elif any(k in drink_subcat_text for k in ["펍", "펍바"]):
+                    query = "펍"
+                elif any(k in drink_subcat_text for k in ["와인바"]):
+                    query = "와인바"
+                elif any(k in drink_subcat_text for k in ["칵테일바"]):
+                    query = "칵테일바"
+                elif any(k in drink_subcat_text for k in ["이자카야"]):
+                    query = "이자카야"
+                else:
+                    query = "술집"
+            else:
+                # 시끄럽게 놀기 좋은 술집
+                if noisy:
+                    query = "시끄럽게 놀기 좋은 술집"
+                # 비교적 조용/분위기
+                elif mood:
+                    query = "분위기 좋은 와인바"
+                else:
+                    query = "깔끔한 주점"
+            
+            steps.append(StepInput(query=query, type="bar"))
+        # 카페 선호가 있고 cafe가 이미 사용되지 않았으면
+        elif has_cafe_pref and "cafe" not in used_types:
+            # 서브 카테고리 우선 확인
+            if cafe_subcats:
+                if any(k in cafe_subcat_text for k in ["브런치"]):
+                    query = "브런치"
+                elif any(k in cafe_subcat_text for k in ["디저트"]):
+                    query = "디저트"
+                elif any(k in cafe_subcat_text for k in ["빵집"]):
+                    query = "베이커리"
+                elif any(k in cafe_subcat_text for k in ["스터디"]):
+                    query = "스터디 카페"
+                elif any(k in cafe_subcat_text for k in ["애견"]):
+                    query = "애견카페"
+                else:
+                    query = "카페"
+            else:
+                # 카페 방향 (기존 로직)
+                if is_calm or is_meeting_focused:
+                    query = "조용한 카페"
+                elif is_mood:
+                    query = "분위기 좋은 디저트 카페"
+                else:
+                    query = "수다 떨기 좋은 카페"
+            
             steps.append(StepInput(query=query, type="cafe"))
+        # 모두 사용되었거나 선호가 없으면, 휴식이나 기본값
+        else:
+            if has_rest_pref and rest_subcats:
+                if any(k in rest_subcat_text for k in ["마사지"]):
+                    query = "마사지"
+                    steps.append(StepInput(query=query, type="spa"))
+                else:
+                    query = "스파"
+                    steps.append(StepInput(query=query, type="spa"))
+            else:
+                # 기본: 조용한 카페 (이미 cafe가 사용되었어도 fallback)
+                query = "조용한 카페"
+                steps.append(StepInput(query=query, type="cafe"))
 
-    # 모든 steps 반환 (3개 고정 제거)
+    # 최소 1개는 보장 (steps가 비어있으면 기본 코스 추가)
+    if len(steps) == 0:
+        steps.append(StepInput(query="카페", type="cafe"))
+    
+    # 모든 steps 반환 (동적 개수)
     return steps
 
 

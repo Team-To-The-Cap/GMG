@@ -71,6 +71,7 @@ export type MeetingResponse = {
   purpose?: string | null;
   vibe?: string | null;
   budget?: string | null;
+  meeting_duration?: string | null;  // 60, 120, 180, 240, 360, 480 (분 단위)
   profile_memo?: string | null;
 
   participants: MeetingParticipant[];

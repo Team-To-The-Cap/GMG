@@ -112,6 +112,7 @@ class MeetingBase(BaseModel):
     purpose: Optional[str] = None
     vibe: Optional[str] = None
     budget: Optional[str] = None
+    meeting_duration: Optional[str] = None  # 60, 120, 180, 240, 360, 480 (분 단위)
     profile_memo: Optional[str] = None
 
 
@@ -125,6 +126,7 @@ class MeetingUpdate(BaseModel):
     purpose: Optional[str] = None
     vibe: Optional[str] = None
     budget: Optional[str] = None
+    meeting_duration: Optional[str] = None  # 60, 120, 180, 240, 360, 480 (분 단위)
     profile_memo: Optional[str] = None
 
 

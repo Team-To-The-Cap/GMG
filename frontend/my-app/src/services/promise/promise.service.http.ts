@@ -463,7 +463,7 @@ async function mapMeetingToPromiseDetailAsync(meeting: MeetingResponse): Promise
       name: p.name,
       address: p.address ?? undefined,
       // MeetingMustVisitPlace 타입에 lat/lng 있으면 여기서 같이 매핑 가능
-      // lat: (p as any).latitude,
+      //       lat: (p as any).latitude,
       // lng: (p as any).longitude,
     })) ?? [];
 
@@ -472,6 +472,7 @@ async function mapMeetingToPromiseDetailAsync(meeting: MeetingResponse): Promise
     purpose: parseMultiField(meeting.purpose),
     vibe: parseMultiField(meeting.vibe) as any,
     budget: parseMultiField(meeting.budget),
+    meetingDuration: meeting.meeting_duration ?? undefined,
   };
 
   return {
@@ -517,6 +518,7 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
     purpose: parseMultiField(meeting.purpose),
     vibe: parseMultiField(meeting.vibe) as any,
     budget: parseMultiField(meeting.budget),
+    meetingDuration: meeting.meeting_duration ?? undefined,
   };
 
   const scheduleISO = meeting.plan?.meeting_time ?? null;
@@ -650,6 +652,11 @@ export async function savePromiseDetail(
   const purpose = serializeMultiField(profile.purpose);
   const vibe = serializeMultiField(profile.vibe);
   const budget = serializeMultiField(profile.budget);
+  
+  const meetingDuration =
+    typeof profile.meetingDuration === "string" && profile.meetingDuration.trim()
+      ? profile.meetingDuration.trim()
+      : null;
 
   await http.request(`/meetings/${meetingId}`, {
     method: "PATCH",
@@ -662,6 +669,7 @@ export async function savePromiseDetail(
       purpose,
       vibe,
       budget,
+      meeting_duration: meetingDuration,
     }),
   });
 
