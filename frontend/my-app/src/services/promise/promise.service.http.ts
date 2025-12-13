@@ -325,13 +325,13 @@ async function buildCourseFromPlaces(
       }
     }
 
-    // 카테고리별 기본 소비 시간 정의
+    // 카테고리별 기본 소비 시간 정의 (현실적인 시간으로 조정)
     const categoryBaseDurations: Record<string, number> = {
       cafe: 60,           // 카페: 1시간
-      restaurant: 90,     // 맛집: 1.5시간
+      restaurant: 60,     // 맛집: 1시간 (90분 -> 60분으로 단축)
       activity: 120,      // 액티비티: 2시간
       shopping: 60,       // 쇼핑: 1시간
-      culture: 120,       // 문화시설: 2시간
+      culture: 90,        // 문화시설: 1.5시간 (120분 -> 90분으로 단축)
       nature: 180,        // 자연관광: 3시간
     };
     
@@ -354,35 +354,66 @@ async function buildCourseFromPlaces(
     activityMinutes += baseStay;
   }
 
-  // meeting_duration에 맞춰 총 시간 조정
+  // meeting_duration에 맞춰 총 시간 조정 (1시간 내외 오차 허용)
   const meetingDurationMinutes = meeting.meeting_duration 
     ? parseInt(meeting.meeting_duration, 10) 
     : null;
   
   if (meetingDurationMinutes && meetingDurationMinutes > 0) {
     const currentTotalMinutes = activityMinutes + travelMinutes;
+    const timeDifference = meetingDurationMinutes - currentTotalMinutes;
     
-    // 현재 총 시간이 meeting_duration보다 적으면 비율로 조정
-    if (currentTotalMinutes < meetingDurationMinutes) {
-      // 활동 시간과 이동 시간을 유지하면서, 활동 시간을 늘려서 목표 시간에 맞춤
+    // 목표 시간과 현재 시간의 차이가 1시간(60분) 이상이면 시간을 조정
+    // 하지만 각 장소당 최대 20분까지만 추가
+    if (timeDifference > 60) {
       const targetActivityMinutes = meetingDurationMinutes - travelMinutes;
+      const additionalMinutes = targetActivityMinutes - activityMinutes;
       
-      if (targetActivityMinutes > activityMinutes) {
-        // 각 장소의 체류 시간을 비율로 늘림
-        const ratio = targetActivityMinutes / activityMinutes;
+      if (additionalMinutes > 0) {
+        // 각 장소당 최대 20분까지만 추가
+        const maxAdditionalPerPlace = 20;
+        const visitItems = items.filter((item) => item.type === "visit");
+        const totalPossibleAdditional = visitItems.length * maxAdditionalPerPlace;
+        
+        // 실제 추가할 시간 = min(필요한 추가 시간, 가능한 최대 추가 시간)
+        const actualAdditional = Math.min(additionalMinutes, totalPossibleAdditional);
+        
+        // 각 장소에 균등하게 분배 (최대 20분씩)
+        const additionalPerPlace = Math.min(
+          Math.floor(actualAdditional / visitItems.length),
+          maxAdditionalPerPlace
+        );
         
         // visit 타입 아이템의 stayMinutes를 조정
         for (let i = 0; i < items.length; i++) {
           const item = items[i];
           if (item.type === "visit") {
-            item.stayMinutes = Math.round(item.stayMinutes * ratio);
+            item.stayMinutes += additionalPerPlace;
+            activityMinutes += additionalPerPlace;
           }
         }
         
-        // activityMinutes 재계산
-        activityMinutes = targetActivityMinutes;
+        // 나머지 시간이 있으면 마지막 장소에 분배
+        const remaining = actualAdditional - (additionalPerPlace * visitItems.length);
+        if (remaining > 0 && visitItems.length > 0) {
+          // 마지막 visit 아이템 찾기
+          let lastItem: CourseVisit | null = null;
+          for (let i = items.length - 1; i >= 0; i--) {
+            if (items[i].type === "visit") {
+              lastItem = items[i] as CourseVisit;
+              break;
+            }
+          }
+          if (lastItem) {
+            const maxAddToLast = maxAdditionalPerPlace - additionalPerPlace;
+            const addToLast = Math.min(remaining, maxAddToLast);
+            lastItem.stayMinutes += addToLast;
+            activityMinutes += addToLast;
+          }
+        }
       }
     }
+    // 1시간 이내 오차는 허용하므로 조정하지 않음
   }
 
   return {

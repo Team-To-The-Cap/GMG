@@ -199,23 +199,23 @@ def score_course(
                 place_category = "기타"
         
         category_list.append(place_category)
+        
+        # 참가자들의 fav_activity와 매칭 확인
+        for fav_activity in participant_fav_activities:
+            fav_lower = fav_activity.lower().strip()
+            category_lower = place_category.lower()
             
-            # 참가자들의 fav_activity와 매칭 확인
-            for fav_activity in participant_fav_activities:
-                fav_lower = fav_activity.lower().strip()
-                category_lower = place_category.lower()
-                
-                # 직접 매칭
-                if fav_lower == category_lower:
-                    preference_bonus += 3.0  # 높은 보너스 (2.0 -> 3.0 증가)
-                # 부분 매칭 (예: "카페" in "카페/디저트")
-                elif fav_lower in category_lower or category_lower in fav_lower:
-                    preference_bonus += 1.5  # 1.0 -> 1.5 증가
-                # 유사 매칭 (예: "맛집"과 "restaurant")
-                elif (fav_lower in ["맛집", "식당"] and category_lower == "맛집") or \
-                     (fav_lower in ["술자리", "술집"] and category_lower == "술자리") or \
-                     (fav_lower in ["액티비티", "놀거리"] and category_lower == "액티비티"):
-                    preference_bonus += 2.0  # 1.5 -> 2.0 증가
+            # 직접 매칭
+            if fav_lower == category_lower:
+                preference_bonus += 3.0  # 높은 보너스 (2.0 -> 3.0 증가)
+            # 부분 매칭 (예: "카페" in "카페/디저트")
+            elif fav_lower in category_lower or category_lower in fav_lower:
+                preference_bonus += 1.5  # 1.0 -> 1.5 증가
+            # 유사 매칭 (예: "맛집"과 "restaurant")
+            elif (fav_lower in ["맛집", "식당"] and category_lower == "맛집") or \
+                 (fav_lower in ["술자리", "술집"] and category_lower == "술자리") or \
+                 (fav_lower in ["액티비티", "놀거리"] and category_lower == "액티비티"):
+                preference_bonus += 2.0  # 1.5 -> 2.0 증가
     
     # 카테고리 중복 패널티 계산 (강화)
     category_penalty = 0.0
