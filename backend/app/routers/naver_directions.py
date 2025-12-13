@@ -74,6 +74,17 @@ async def calculate_travel_time(request: TravelTimeRequest):
     - driving: 자동차 경로
     - transit: 대중교통
     """
+    # 같은 좌표인 경우 이동 시간 0분으로 반환 (API 호출 스킵)
+    if request.start_lat == request.goal_lat and request.start_lng == request.goal_lng:
+        return TravelTimeResponse(
+            duration_seconds=0,
+            duration_minutes=0.0,
+            distance_meters=0,
+            mode=request.mode,
+            success=True,
+            is_estimated=False,
+        )
+    
     try:
         result = await get_travel_time(
             start_lat=request.start_lat,
@@ -129,6 +140,17 @@ async def calculate_travel_time_get(
     """
     두 지점 간의 이동 시간 계산 (GET 방식)
     """
+    # 같은 좌표인 경우 이동 시간 0분으로 반환 (API 호출 스킵)
+    if start_lat == goal_lat and start_lng == goal_lng:
+        return TravelTimeResponse(
+            duration_seconds=0,
+            duration_minutes=0.0,
+            distance_meters=0,
+            mode=mode,
+            success=True,
+            is_estimated=False,
+        )
+    
     request = TravelTimeRequest(
         start_lat=start_lat,
         start_lng=start_lng,
@@ -221,6 +243,19 @@ async def calculate_multi_point_travel_time(request: MultiPointTravelTimeRequest
                     status_code=400,
                     detail=f"{i+1}번째 지점에 lat, lng 정보가 없습니다."
                 )
+            
+            # 같은 좌표인 경우 이동 시간 0분으로 처리 (API 호출 스킵)
+            if start["lat"] == goal["lat"] and start["lng"] == goal["lng"]:
+                routes.append({
+                    "from": i,
+                    "to": i + 1,
+                    "success": True,
+                    "duration_seconds": 0,
+                    "duration_minutes": 0.0,
+                    "distance_meters": 0,
+                    "mode": request.mode,
+                })
+                continue
             
             result = await get_travel_time(
                 start_lat=start["lat"],

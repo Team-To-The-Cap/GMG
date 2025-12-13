@@ -141,6 +141,52 @@ async function buildCourseFromPlaces(
       // 이전 장소와의 이동시간 계산 (첫 번째 장소는 제외)
       if (idx > 0) {
         const prevPlace = places[idx - 1];
+        
+        // 같은 좌표인 경우 이동 시간 0분으로 처리 (API 호출 스킵)
+        const isSameLocation =
+          prevPlace.latitude === pl.latitude &&
+          prevPlace.longitude === pl.longitude;
+        
+        if (isSameLocation) {
+          // 같은 장소이면 이동 시간 0분으로 설정
+          items.push({
+            type: "transfer",
+            from: {
+              name: prevPlace.name,
+              address: prevPlace.address,
+              lat: prevPlace.latitude,
+              lng: prevPlace.longitude,
+              category: prevPlace.category || "activity",
+            },
+            to: {
+              name: pl.name,
+              address: pl.address,
+              lat: pl.latitude,
+              lng: pl.longitude,
+              category: pl.category || "activity",
+            },
+            minutes: 0,
+            mode: "walking",
+          });
+          
+          // 다음 장소로 넘어감
+          items.push({
+            type: "visit",
+            id: String(pl.id),
+            place: {
+              name: pl.name,
+              address: pl.address,
+              lat: pl.latitude,
+              lng: pl.longitude,
+              category: pl.category || "activity",
+            },
+            stayMinutes: pl.duration ?? 60,
+            note: pl.address,
+          });
+          activityMinutes += pl.duration ?? 60;
+          continue; // 다음 반복으로 넘어감
+        }
+        
         try {
           // 도보 시간은 거리 기반으로 직접 계산
           const walkingMinutes = calculateWalkingTime(
