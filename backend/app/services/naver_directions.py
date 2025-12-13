@@ -97,15 +97,16 @@ def _fallback_travel_time(
     start_lng: float,
     goal_lat: float,
     goal_lng: float,
-    mode: Literal["driving", "walking", "transit"],
+    mode: Literal["driving", "transit"],
 ) -> Dict[str, Any]:
     """
     네이버 API 실패 시 fallback 이동 시간.
     - driving/transit: 30km/h
-    - walking: 4.5km/h
     """
+    if mode == "walking":
+        raise ValueError("도보 이동수단은 지원하지 않습니다.")
     distance_m = _haversine_meters(start_lat, start_lng, goal_lat, goal_lng)
-    speed_kmh = 4.5 if mode == "walking" else 30.0
+    speed_kmh = 30.0
     speed_mps = (speed_kmh * 1000.0) / 3600.0
     duration_s = max(60, int(distance_m / max(speed_mps, 0.1)))  # 최소 1분
     return {
@@ -126,22 +127,23 @@ async def _call_openrouteservice(
     start_lng: float,
     goal_lat: float,
     goal_lng: float,
-    mode: Literal["driving", "walking"],
+    mode: Literal["driving"],
 ) -> Optional[Dict[str, Any]]:
     """
     OpenRouteService (OpenStreetMap 기반) API 호출
     - driving: driving-car 프로필
-    - walking: foot-walking 프로필
     - 한국 지역 지원, 무료 티어 제공
     """
     if not ORS_API_KEY:
         log.debug("[ORS] API key not configured")
         return None
 
+    if mode == "walking":
+        raise ValueError("도보 이동수단은 지원하지 않습니다.")
+
     # OpenRouteService 프로필 매핑
     profile_map = {
         "driving": "driving-car",
-        "walking": "foot-walking",
     }
     profile = profile_map.get(mode)
     if not profile:
@@ -722,7 +724,7 @@ async def get_travel_time(
     start_lng: float,
     goal_lat: float,
     goal_lng: float,
-    mode: Literal["driving", "walking", "transit"] = "driving",
+    mode: Literal["driving", "transit"] = "driving",
     driving_option: str = "trafast",
 ) -> Optional[Dict[str, Any]]:
     """
@@ -733,7 +735,7 @@ async def get_travel_time(
         start_lng: 출발지 경도
         goal_lat: 도착지 위도
         goal_lng: 도착지 경도
-        mode: 이동 수단 (driving, walking, transit)
+        mode: 이동 수단 (driving, transit)
         driving_option: 자동차 경로 옵션 (trafast, tracomfort, traoptimal)
 
     Returns:
@@ -815,42 +817,7 @@ async def get_travel_time(
         }
 
     elif mode == "walking":
-        log.info(
-            "[TRAVEL_TIME] walking mode | start=(%.6f,%.6f) goal=(%.6f,%.6f)",
-            start_lat,
-            start_lng,
-            goal_lat,
-            goal_lng,
-        )
-
-        # 도보: calc_func.py처럼 거리/속도로 계산 (나이브한 방법)
-        # calc_func.py의 MODE_SPEED_KMPH["walking"] = 4.0 km/h 사용
-        log.warning(
-            "[TRAVEL_TIME] [WALKING] Calculating using Haversine distance and speed (calc_func.py 방식)"
-        )
-
-        WALKING_SPEED_KMPH = 4.0  # calc_func.py와 동일
-
-        distance_m = _haversine_meters(start_lat, start_lng, goal_lat, goal_lng)
-        speed_mps = (WALKING_SPEED_KMPH * 1000.0) / 3600.0  # m/s로 변환
-        duration_s = max(60, int(distance_m / max(speed_mps, 0.1)))  # 최소 1분
-
-        log.warning(
-            "[TRAVEL_TIME] [WALKING] ✓ SUCCESS: Calculated | distance=%.1fm, speed=%.1f km/h, duration=%ds (%.1f min)",
-            distance_m,
-            WALKING_SPEED_KMPH,
-            duration_s,
-            duration_s / 60.0,
-        )
-
-        return {
-            "duration_seconds": duration_s,
-            "distance_meters": int(distance_m),
-            "mode": "walking",
-            "success": True,
-            "is_estimated": False,  # calc_func.py와 동일한 방식이므로 정상 계산값
-            "source": "haversine_calculation",
-        }
+        raise ValueError("도보 이동수단은 지원하지 않습니다. 자동차 또는 대중교통을 사용해주세요.")
 
     elif mode == "transit":
         log.info(
@@ -927,7 +894,7 @@ async def get_route(
     start_lng: float,
     goal_lat: float,
     goal_lng: float,
-    mode: Literal["driving", "walking", "transit"] = "driving",
+    mode: Literal["driving", "transit"] = "driving",
     driving_option: str = "trafast",
 ) -> Optional[Dict[str, Any]]:
     """
@@ -977,32 +944,7 @@ async def get_route(
         }
 
     if mode == "walking":
-        data = await get_walking_direction(start_lat, start_lng, goal_lat, goal_lng)
-        if not data:
-            return None
-
-        duration = extract_travel_time_from_walking_response(data)
-        path = extract_route_path_from_walking_response(data)
-        if duration is None or not path:
-            return None
-
-        distance = None
-        try:
-            route = data.get("route", {})
-            paths = route.get("traoptimal", [])
-            if paths:
-                summary = paths[0].get("summary", {})
-                distance = summary.get("distance")
-        except Exception:
-            pass
-
-        return {
-            "duration_seconds": int(duration),
-            "distance_meters": distance,
-            "mode": "walking",
-            "path": path,
-            "success": True,
-        }
+        raise ValueError("도보 이동수단은 지원하지 않습니다. 자동차 또는 대중교통을 사용해주세요.")
 
     # NOTE: transit은 임시로 driving route를 반환 (도로 기반)
     if mode == "transit":

@@ -15,16 +15,17 @@ log = logging.getLogger(__name__)
 def _transportation_to_google_mode(transportation: Optional[str]) -> str:
     """
     Participant.transportation 문자열을
-    Google Distance Matrix mode(driving/walking/transit)로 변환.
+    Google Distance Matrix mode(driving/transit)로 변환.
+    도보는 지원하지 않습니다.
     """
     if not transportation:
         return "driving"
 
     s = transportation.strip().lower()
 
-    # 도보
+    # 도보는 지원하지 않음
     if s in {"도보", "걷기", "walk", "walking", "w"}:
-        return "walking"
+        raise ValueError(f"도보 이동수단은 지원하지 않습니다: {transportation}")
 
     # 대중교통
     if s in {"대중교통", "지하철", "버스", "subway", "train", "transit", "t"}:
@@ -43,7 +44,7 @@ def _to_routes_travel_mode(mode: str) -> str:
     if m == "driving":
         return "DRIVE"
     if m == "walking":
-        return "WALK"
+        raise ValueError("도보 이동수단은 지원하지 않습니다")
     if m == "transit":
         return "TRANSIT"
     return "DRIVE"
@@ -468,67 +469,16 @@ def compute_minimax_travel_times(
             transportation = p.get("transportation", "").strip().lower()
             mode = _transportation_to_google_mode(transportation)
             
-            # 도보는 Naver Walking API 사용 (한국 지역에서 더 정확)
-            if mode == "walking":
-                try:
-                    from ..services.naver_directions import extract_travel_time_from_walking_response, get_walking_direction
-                    import asyncio
-                    
-                    # 동기 함수에서 비동기 함수 호출
-                    # 새 이벤트 루프 생성 (기존 루프가 있으면 사용)
-                    try:
-                        loop = asyncio.get_event_loop()
-                        if loop.is_closed():
-                            loop = asyncio.new_event_loop()
-                            asyncio.set_event_loop(loop)
-                    except RuntimeError:
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                    
-                    # Naver Walking Directions API 호출
-                    walking_data = loop.run_until_complete(
-                        get_walking_direction(
-                            start_lat=float(plat),
-                            start_lng=float(plng),
-                            goal_lat=float(clat),
-                            goal_lng=float(clng),
-                        )
-                    )
-                    
-                    if walking_data:
-                        duration_sec = extract_travel_time_from_walking_response(walking_data)
-                        if duration_sec:
-                            r = {
-                                "duration_seconds": duration_sec,
-                                "distance_meters": None,  # 필요시 추출 가능
-                                "mode": "walking",
-                                "success": True,
-                                "source": "naver_walking",
-                            }
-                        else:
-                            raise ValueError("Failed to extract duration from Naver response")
-                    else:
-                        raise ValueError("Naver Walking API returned None")
-                except Exception as e:
-                    log.warning(
-                        "[GDM] Naver Walking API failed, falling back to Google: %s", e
-                    )
-                    r = get_travel_time_single(
-                        start_lat=float(plat),
-                        start_lng=float(plng),
-                        goal_lat=float(clat),
-                        goal_lng=float(clng),
-                        mode=mode,
-                    )
-            else:
-                # 자동차/대중교통은 Google API 사용
-                r = get_travel_time_single(
-                    start_lat=float(plat),
-                    start_lng=float(plng),
-                    goal_lat=float(clat),
-                    goal_lng=float(clng),
-                    mode=mode,
-                )
+            # 도보는 지원하지 않음 (_transportation_to_google_mode에서 에러 발생)
+            # 대중교통과 자동차만 처리
+            # 자동차/대중교통은 Google API 사용
+            r = get_travel_time_single(
+                start_lat=float(plat),
+                start_lng=float(plng),
+                goal_lat=float(clat),
+                goal_lng=float(clng),
+                mode=mode,
+            )
             
             if not r or not r.get("success"):
                 ok_any = False

@@ -304,10 +304,14 @@ def create_auto_plan_for_meeting(
 
         coords.append((p.start_longitude, p.start_latitude))  # (lon, lat)
         
-        # transportation을 mode로 변환 (도보/자동차/대중교통 -> walk/drive/public)
+        # transportation을 mode로 변환 (자동차/대중교통 -> drive/public)
+        # 도보는 지원하지 않음
         transport = (p.transportation or "").strip()
         if transport in ["도보", "walking", "walk"]:
-            mode_str = "walk"
+            raise HTTPException(
+                status_code=400,
+                detail=f"도보 이동수단은 지원하지 않습니다. 참가자 '{p.name or f'#{idx+1}'}'의 이동수단을 자동차 또는 대중교통으로 변경해주세요."
+            )
         elif transport in ["대중교통", "transit", "public"]:
             mode_str = "public"
         else:  # "자동차", "driving", "drive", None 등

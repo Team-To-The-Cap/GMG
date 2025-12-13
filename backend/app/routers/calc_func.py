@@ -40,18 +40,13 @@ import networkx as nx
 G = G.to_undirected()  # 또는 nx.MultiGraph(G_directed)
 
 MODE_SPEED_KMPH = {
-    # 1) 도보: 시속 1km (테스트용으로 아주 느리게)
-    "도": 4.0,
-    "도보": 4.0,
-    "walk": 4.0,
-    "walking": 4.0,
-    # 2) 자동차: 시속 30km (도심 평균 서행 기준)
+    # 자동차: 시속 10km (도심 평균 서행 기준)
     "차": 10.0,
     "자동차": 10.0,
     "drive": 10.0,
     "driving": 10.0,
     "car": 10.0,
-    # 3) 대중교통: 지하철 평균 속도 (도심 평균 35km/h, 환승 시간 고려)
+    # 대중교통: 지하철 평균 속도 (도심 평균 35km/h, 환승 시간 고려)
     "대중교통": 25.0,  # 지하철 평균 속도 (환승 대기 시간 포함)
     "public": 25.0,
     "transit": 25.0,
@@ -72,7 +67,8 @@ def mode_to_speed_kph(mode: str) -> float:
         raise HTTPException(
             status_code=400,
             detail=f"알 수 없는 이동 수단 모드입니다: {mode!r}. "
-            f"지원하는 값 예시: 도보, 자동차, walk, drive, public, bus, subway ...",
+            f"지원하는 값 예시: 자동차, 대중교통, drive, public, bus, subway ... "
+            f"(도보는 지원하지 않습니다)",
         )
 
     return MODE_SPEED_KMPH[key]
@@ -274,17 +270,18 @@ def find_road_center_node_multi_mode(
         c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
         return R * c
 
-    # 1. 이동수단별 분류
-    walking_indices = [i for i, mode in enumerate(modes) if mode_to_speed_kph(mode) == 4.0]
+    # 1. 이동수단별 분류 및 사용자 확인
     transit_indices = [
         i for i, mode in enumerate(modes) 
         if mode_to_speed_kph(mode) >= 20.0 and mode_to_speed_kph(mode) < 50.0
     ]
     driving_indices = [
         i for i, mode in enumerate(modes) 
-        if mode_to_speed_kph(mode) < 20.0 and i not in walking_indices
+        if mode_to_speed_kph(mode) < 20.0
     ]
-    non_walking_indices = [i for i in range(len(modes)) if i not in walking_indices]
+    
+    # 대중교통 사용자 확인
+    has_transit_user = len(transit_indices) > 0
     
     # 자동차: 그래프 기반 계산
     for idx in driving_indices:
@@ -343,39 +340,6 @@ def find_road_center_node_multi_mode(
                 if t_sec < node_stats[v]["min"]:
                     node_stats[v]["min"] = t_sec
     
-    # 도보: 직선거리 기반 계산 (도로를 따라가므로 1.4배 보정)
-    WALKING_DETOUR_FACTOR = 1.4  # 도보는 직선거리보다 약 40% 더 걸림
-    for idx in walking_indices:
-        s = sources[idx]
-        mode = modes[idx]
-        speed_kph = mode_to_speed_kph(mode)
-        start_lat = G.nodes[s]["y"]
-        start_lon = G.nodes[s]["x"]
-        
-        # 모든 노드에 대해 직선거리 계산
-        walking_dists: Dict[int, float] = {}
-        for v in G.nodes():
-            v_lat = G.nodes[v]["y"]
-            v_lon = G.nodes[v]["x"]
-            # 직선거리 * 보정계수 = 실제 도보 거리
-            straight_dist = haversine_distance_m(start_lat, start_lon, v_lat, v_lon)
-            walking_dists[v] = straight_dist * WALKING_DETOUR_FACTOR
-        
-        dist_matrix[idx] = walking_dists
-        
-        for v, dist_m in walking_dists.items():
-            t_sec = (dist_m / 1000.0) / max(speed_kph, 0.1) * 3600.0
-
-            counts[v] = counts.get(v, 0) + 1
-
-            if v not in node_stats:
-                node_stats[v] = {"min": t_sec, "max": t_sec}
-            else:
-                if t_sec > node_stats[v]["max"]:
-                    node_stats[v]["max"] = t_sec
-                if t_sec < node_stats[v]["min"]:
-                    node_stats[v]["min"] = t_sec
-
     if not counts:
         raise RuntimeError("No reachable nodes.")
 
@@ -383,6 +347,8 @@ def find_road_center_node_multi_mode(
     candidates = [v for v, c in counts.items() if c == k]
     if not candidates:
         candidates = [v for v, c in counts.items() if c == max_reach]
+    
+    print(f"[DEBUG] 초기 후보군: {len(candidates)}개 (모든 참가자가 도달 가능한 노드)")
     
     # 대중교통 사용자가 있으면 후보군을 더 많이 확장 (더 넓은 범위 탐색)
     if has_transit_user and len(candidates) < top_k * 2:
@@ -400,31 +366,20 @@ def find_road_center_node_multi_mode(
         candidates.extend(additional[:top_k * 2])
 
     # [DEBUG] 후보군 점수 계산 로그 (상위 3개만 출력)
-    # 이동수단별 가중치: 도보와 대중교통은 더 중요하게 반영
+    # 이동수단별 가중치: 대중교통 >> 자동차 순으로 우선순위 (자동차 불리하게)
     MODE_WEIGHTS = {
-        "walk": 1.5,      # 도보는 가중치 높게
-        "walking": 1.5,
-        "도보": 1.5,
-        "drive": 1.0,     # 자동차는 기본
-        "driving": 1.0,
-        "자동차": 1.0,
-        "transit": 1.3,   # 대중교통도 가중치 높게 (도보 다음으로 중요)
-        "public": 1.3,
-        "대중교통": 1.3,
-        "bus": 1.3,
-        "subway": 1.3,
+        "transit": 1.5,   # 대중교통은 유리하게
+        "public": 1.5,
+        "대중교통": 1.5,
+        "bus": 1.5,
+        "subway": 1.5,
+        "drive": 0.7,     # 자동차는 불리하게 (패널티)
+        "driving": 0.7,
+        "자동차": 0.7,
+        "car": 0.7,
     }
     
-    FAIRNESS_WEIGHT = 1.2  # 공평성 가중치 약간 감소
-
-    # 대중교통 사용자가 있는지 확인
-    has_transit_user = any(
-        mode_to_speed_kph(m) >= 20.0 and mode_to_speed_kph(m) < 50.0 
-        for m in modes
-    )
-    
-    # 도보 사용자가 있는지 확인
-    has_walking_user = any(mode_to_speed_kph(m) == 4.0 for m in modes)
+    FAIRNESS_WEIGHT = 1.3  # 공평성 가중치 (대중교통 사용자 고려)
     
     def calculate_score(v_id):
         stats = node_stats[v_id]
@@ -434,7 +389,6 @@ def find_road_center_node_multi_mode(
         
         # 각 참가자별 시간을 가중치 적용하여 재계산
         weighted_times = []
-        walking_times = []  # 도보 시간만 별도 추적
         for idx, mode in enumerate(modes):
             d_m = dist_matrix.get(idx, {}).get(v_id)
             if d_m is not None:
@@ -443,10 +397,6 @@ def find_road_center_node_multi_mode(
                 # 대중교통은 환승 시간 추가
                 if speed_kph >= 20.0 and speed_kph < 50.0:
                     t_sec += TRANSIT_TRANSFER_TIME
-                
-                # 도보 시간 추적
-                if speed_kph == 4.0:
-                    walking_times.append(t_sec)
                 
                 weight = MODE_WEIGHTS.get(mode.lower(), 1.0)
                 weighted_times.append(t_sec * weight)
@@ -468,71 +418,115 @@ def find_road_center_node_multi_mode(
             weighted_diff = weighted_max - weighted_min
             raw_max = max(raw_times) if raw_times else weighted_max
             
-            # 도보 사용자가 있을 때는 도보 시간을 더 강하게 반영
-            if has_walking_user and walking_times:
-                max_walking_time = max(walking_times)
-                
-                # 도보 시간이 최댓값인 경우, 도보 시간을 더 직접적으로 반영
-                # minimax의 목표: 도보 시간의 최댓값을 최소화
-                if max_walking_time == raw_max:
-                    # 도보 시간이 최댓값이면, 도보 시간에 강한 가중치 적용
-                    # 도보 시간이 길수록 기하급수적으로 패널티
-                    if max_walking_time > 3600:  # 60분 초과
-                        # 제곱 패널티로 강하게 제한
-                        score = max_walking_time * 3.0 + (weighted_diff * FAIRNESS_WEIGHT * 0.5)
-                    elif max_walking_time > 2700:  # 45분 초과
-                        # 선형 패널티
-                        score = max_walking_time * 2.5 + (weighted_diff * FAIRNESS_WEIGHT * 0.7)
+            # 대중교통/자동차 사용자를 우선 고려한 점수 계산
+            # 대중교통 > 자동차 순으로 우선순위
+            transit_times = []
+            driving_times = []
+            
+            for idx, mode in enumerate(modes):
+                d_m = dist_matrix.get(idx, {}).get(v_id)
+                if d_m is not None:
+                    speed_kph = mode_to_speed_kph(mode)
+                    t_sec = (d_m / 1000.0) / max(speed_kph, 0.1) * 3600.0
+                    if speed_kph >= 20.0 and speed_kph < 50.0:
+                        t_sec += TRANSIT_TRANSFER_TIME
+                        transit_times.append(t_sec)
                     else:
-                        # 45분 이하: 정상 범위
-                        score = max_walking_time * 2.0 + (weighted_diff * FAIRNESS_WEIGHT)
+                        driving_times.append(t_sec)
+            
+            # 대중교통 사용자가 있을 때
+            if has_transit_user and transit_times:
+                max_transit_time = max(transit_times)
+                # 대중교통 시간이 최댓값이면 강하게 반영
+                if max_transit_time == raw_max:
+                    score = max_transit_time * 2.0 + (weighted_diff * FAIRNESS_WEIGHT)
                 else:
-                    # 도보 시간이 최댓값이 아니면 일반적인 계산
-                    score = weighted_max + (weighted_diff * FAIRNESS_WEIGHT)
+                    score = weighted_max * 1.3 + (weighted_diff * FAIRNESS_WEIGHT)
             else:
-                # 도보 사용자가 없으면 기존 방식
-                score = weighted_max + (weighted_diff * FAIRNESS_WEIGHT)
+                # 자동차만 있거나 일반적인 경우 - 자동차에 강한 패널티
+                if driving_times:
+                    max_driving_time = max(driving_times)
+                    # 자동차 시간에 강한 패널티 적용
+                    score = weighted_max * 1.3 + max_driving_time * 0.5 + (weighted_diff * FAIRNESS_WEIGHT * 0.7)
+                else:
+                    score = weighted_max * 1.3 + (weighted_diff * FAIRNESS_WEIGHT * 0.7)
         else:
             # fallback: 기존 방식
             score = max_t + (diff * FAIRNESS_WEIGHT)
         
         return score
 
-    # 도보 사용자가 있으면 도보 시간이 너무 긴 후보는 제외
-    if has_walking_user:
-        # 도보 시간이 60분(3600초)을 넘는 후보는 제외
+    # 대중교통 사용자가 있을 때 후보 품질 개선
+    if has_transit_user:
+        # 대중교통 시간이 너무 긴 후보는 제외 (90분 초과)
         filtered_candidates = []
         for v_id in candidates:
-            # 이 노드에서 도보 사용자들의 최대 시간 확인
-            max_walking_time = 0.0
-            for idx in walking_indices:
+            max_transit_time = 0.0
+            for idx in transit_indices:
                 d_m = dist_matrix.get(idx, {}).get(v_id)
                 if d_m is not None:
                     speed_kph = mode_to_speed_kph(modes[idx])
-                    t_sec = (d_m / 1000.0) / max(speed_kph, 0.1) * 3600.0
-                    if t_sec > max_walking_time:
-                        max_walking_time = t_sec
+                    t_sec = (d_m / 1000.0) / max(speed_kph, 0.1) * 3600.0 + TRANSIT_TRANSFER_TIME
+                    if t_sec > max_transit_time:
+                        max_transit_time = t_sec
             
-            # 도보 시간이 60분 이하인 후보만 포함
-            if max_walking_time <= 3600:  # 60분 = 3600초
+            # 대중교통 시간이 90분 이하인 후보만 포함
+            if max_transit_time <= 5400:  # 90분 = 5400초
                 filtered_candidates.append(v_id)
         
-        # 필터링된 후보가 있으면 그것만 사용, 없으면 원래 후보 사용
         if filtered_candidates:
             candidates = filtered_candidates
-            print(f"[DEBUG] 도보 시간 필터링: {len(candidates)}개 후보 (60분 이하)")
-        else:
-            print(f"[DEBUG] 경고: 모든 후보가 도보 60분 초과, 필터링 없이 진행")
+            print(f"[DEBUG] 대중교통 시간 필터링: {len(candidates)}개 후보 (90분 이하)")
+    
+    print(f"[DEBUG] 필터링 후 최종 후보군: {len(candidates)}개")
     
     sorted_candidates = sorted(candidates, key=calculate_score)
     top_nodes = sorted_candidates[:top_k]
     best_node = top_nodes[0]
 
-    print(f"[DEBUG] 최종 선정 노드: {best_node}")
-    print(
-        f"[DEBUG] 점수: {calculate_score(best_node):.2f}, MaxTime: {node_stats[best_node]['max']:.2f}s"
-    )
-    print("=" * 50 + "\n")
+    # 상세 로그: 모든 후보군 정보 출력
+    print("\n" + "=" * 80)
+    print(f"[CANDIDATE DETAILS] 후보군 상세 정보 (총 {len(sorted_candidates)}개 후보 중 상위 {len(top_nodes)}개)")
+    print("=" * 80)
+    
+    for rank, node_id in enumerate(sorted_candidates[:top_k], 1):
+        node_lat = G.nodes[node_id]["y"]
+        node_lon = G.nodes[node_id]["x"]
+        score = calculate_score(node_id)
+        max_time = node_stats[node_id]["max"]
+        min_time = node_stats[node_id]["min"]
+        
+        print(f"\n[후보 #{rank}] 노드 ID: {node_id}")
+        print(f"  위치: 위도 {node_lat:.6f}, 경도 {node_lon:.6f}")
+        print(f"  점수: {score:.2f}")
+        print(f"  최소 시간: {min_time/60:.1f}분 ({min_time:.0f}초)")
+        print(f"  최대 시간: {max_time/60:.1f}분 ({max_time:.0f}초)")
+        print(f"  참가자별 시간:")
+        
+        # 각 참가자별 시간 출력
+        for idx, (coord, mode) in enumerate(zip(coords_lonlat, modes)):
+            d_m = dist_matrix.get(idx, {}).get(node_id)
+            if d_m is not None:
+                speed_kph = mode_to_speed_kph(mode)
+                t_sec = (d_m / 1000.0) / max(speed_kph, 0.1) * 3600.0
+                # 대중교통은 환승 시간 추가
+                if speed_kph >= 20.0 and speed_kph < 50.0:
+                    t_sec += TRANSIT_TRANSFER_TIME
+                
+                participant_coord = f"({coord[0]:.6f}, {coord[1]:.6f})"
+                print(f"    - 참가자 {idx+1} [{mode}]: {t_sec/60:.1f}분 ({t_sec:.0f}초) | 출발지: {participant_coord}")
+            else:
+                print(f"    - 참가자 {idx+1} [{mode}]: 도달 불가")
+        
+        if rank == 1:
+            print(f"  ⭐ 최종 선택됨!")
+    
+    print("\n" + "=" * 80)
+    print(f"[FINAL SELECTION] 최종 선정 노드: {best_node}")
+    print(f"  위치: 위도 {G.nodes[best_node]['y']:.6f}, 경도 {G.nodes[best_node]['x']:.6f}")
+    print(f"  점수: {calculate_score(best_node):.2f}")
+    print(f"  최대 시간: {node_stats[best_node]['max']/60:.1f}분 ({node_stats[best_node]['max']:.0f}초)")
+    print("=" * 80 + "\n")
 
     # 결과 구성 (기존 코드와 동일)
     worst_cost = node_stats[best_node]["max"]

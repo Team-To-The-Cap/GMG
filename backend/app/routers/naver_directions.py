@@ -8,7 +8,6 @@ import logging
 from ..services.naver_directions import (
     get_travel_time,
     get_driving_direction,
-    get_walking_direction,
     get_route,
 )
 
@@ -25,7 +24,7 @@ class TravelTimeRequest(BaseModel):
     start_lng: float
     goal_lat: float
     goal_lng: float
-    mode: Literal["driving", "walking", "transit"] = "driving"
+    mode: Literal["driving", "transit"] = "driving"
     driving_option: Optional[str] = "trafast"  # trafast, tracomfort, traoptimal
 
 
@@ -56,7 +55,7 @@ class RouteResponse(BaseModel):
 class MultiPointTravelTimeRequest(BaseModel):
     """여러 지점 간 이동 시간 계산 요청 모델"""
     points: List[dict]  # [{"lat": float, "lng": float}, ...]
-    mode: Literal["driving", "walking", "transit"] = "driving"
+    mode: Literal["driving", "transit"] = "driving"
     driving_option: Optional[str] = "trafast"
 
 
@@ -73,8 +72,7 @@ async def calculate_travel_time(request: TravelTimeRequest):
     두 지점 간의 이동 시간 계산
     
     - driving: 자동차 경로
-    - walking: 도보 경로
-    - transit: 대중교통 (아직 미구현)
+    - transit: 대중교통
     """
     try:
         result = await get_travel_time(
@@ -89,7 +87,6 @@ async def calculate_travel_time(request: TravelTimeRequest):
         if not result or not result.get("success"):
             mode_name = {
                 "driving": "자동차",
-                "walking": "도보",
                 "transit": "대중교통",
             }.get(request.mode, request.mode)
             
@@ -126,7 +123,7 @@ async def calculate_travel_time_get(
     start_lng: float = Query(..., description="출발지 경도"),
     goal_lat: float = Query(..., description="도착지 위도"),
     goal_lng: float = Query(..., description="도착지 경도"),
-    mode: Literal["driving", "walking", "transit"] = Query("driving", description="이동 수단"),
+    mode: Literal["driving", "transit"] = Query("driving", description="이동 수단"),
     driving_option: str = Query("trafast", description="자동차 경로 옵션 (trafast, tracomfort, traoptimal)"),
 ):
     """
@@ -149,12 +146,12 @@ async def get_route_get(
     start_lng: float = Query(..., description="출발지 경도"),
     goal_lat: float = Query(..., description="도착지 위도"),
     goal_lng: float = Query(..., description="도착지 경도"),
-    mode: Literal["driving", "walking", "transit"] = Query("driving", description="이동 수단"),
+    mode: Literal["driving", "transit"] = Query("driving", description="이동 수단"),
     driving_option: str = Query("trafast", description="자동차 경로 옵션 (trafast, tracomfort, traoptimal)"),
 ):
     """
     두 지점 간의 경로(geometry) + 이동 시간 반환 (GET 방식)
-    - driving/walking: 네이버 Directions의 path를 반환
+    - driving: 네이버 Directions의 path를 반환
     - transit: 미구현 (404)
     """
     try:
@@ -271,7 +268,7 @@ async def calculate_multi_point_travel_time(request: MultiPointTravelTimeRequest
 @router.get("/travel-time/multi-point")
 async def calculate_multi_point_travel_time_get(
     points: str = Query(..., description='지점 좌표들: "lat1,lng1|lat2,lng2|lat3,lng3" 형식'),
-    mode: Literal["driving", "walking", "transit"] = Query("driving", description="이동 수단"),
+    mode: Literal["driving", "transit"] = Query("driving", description="이동 수단"),
     driving_option: str = Query("trafast", description="자동차 경로 옵션"),
 ):
     """
@@ -313,7 +310,7 @@ async def test_all_modes(
     goal_lng: float = Query(126.9813785, description="도착지 경도"),
 ):
     """
-    모든 mode(자동차, 도보, 대중교통)를 테스트하는 엔드포인트
+    모든 mode(자동차, 대중교통)를 테스트하는 엔드포인트
     각 mode별로 어떤 API/함수가 사용되는지, 성공/실패 여부를 확인할 수 있습니다.
     """
     results = {}
@@ -325,7 +322,7 @@ async def test_all_modes(
     }
     
     # 각 mode별 테스트
-    for mode in ["driving", "walking", "transit"]:
+    for mode in ["driving", "transit"]:
         try:
             log.info(f"[TEST] Testing mode: {mode}")
             result = await get_travel_time(
@@ -371,11 +368,6 @@ async def test_all_modes(
                 "expected": "Naver Directions API",
                 "status": results.get("driving", {}).get("status"),
                 "source": results.get("driving", {}).get("source"),
-            },
-            "walking": {
-                "expected": "Haversine calculation (calc_func.py 방식)",
-                "status": results.get("walking", {}).get("status"),
-                "source": results.get("walking", {}).get("source"),
             },
             "transit": {
                 "expected": "Google Distance Matrix API",
