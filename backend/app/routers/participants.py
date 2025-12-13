@@ -9,16 +9,13 @@ import requests
 from ..database import get_db
 from .. import schemas
 from .. import models
+from core.config import NAVER_MAP_CLIENT_ID, NAVER_MAP_CLIENT_SECRET
 
 router = APIRouter(
     prefix="/meetings/{meeting_id}/participants",
     tags=["Participants"],
 )
 
-# 🔹 Naver Geocoding (APIGW) 인증 정보
-#    - 여기 값은 실제 사용 중인 APIGW 키로 유지
-CLIENT_ID = "o3qhd1pz6i"
-CLIENT_SECRET = "CgU14l9YJBqqNetcd8KiZ0chNLJmYBwmy9HkAjg5"
 GEOCODE_URL = "https://maps.apigw.ntruss.com/map-geocode/v2/geocode"
 
 
@@ -27,9 +24,13 @@ def get_coords_from_address(address: str):
     Naver Geocoding API를 호출하여 주소로부터 (위도, 경도)를 반환합니다.
     성공 시 (lat, lon) 튜플, 실패 시 None.
     """
+    if not NAVER_MAP_CLIENT_ID or not NAVER_MAP_CLIENT_SECRET:
+        print("!!! [Geocoding] NAVER_MAP_CLIENT_ID or NAVER_MAP_CLIENT_SECRET not configured")
+        return None
+
     headers = {
-        "X-NCP-APIGW-API-KEY-ID": CLIENT_ID,
-        "X-NCP-APIGW-API-KEY": CLIENT_SECRET,
+        "X-NCP-APIGW-API-KEY-ID": NAVER_MAP_CLIENT_ID,
+        "X-NCP-APIGW-API-KEY": NAVER_MAP_CLIENT_SECRET,
         "Accept": "application/json",
     }
     params = {"query": address}
@@ -37,7 +38,7 @@ def get_coords_from_address(address: str):
     print("--- [Geocoding Debug] ---")
     print("Endpoint     :", GEOCODE_URL)
     print("Query        :", address)
-    print("ClientID tail:", CLIENT_ID[-4:] if CLIENT_ID else "None")
+    print("ClientID tail:", NAVER_MAP_CLIENT_ID[-4:] if NAVER_MAP_CLIENT_ID else "None")
     print("-------------------------")
 
     try:

@@ -36,6 +36,7 @@ class TravelTimeResponse(BaseModel):
     distance_meters: Optional[int] = None
     mode: str
     success: bool
+    is_estimated: Optional[bool] = False
 
 
 class RoutePoint(BaseModel):
@@ -86,9 +87,19 @@ async def calculate_travel_time(request: TravelTimeRequest):
         )
         
         if not result or not result.get("success"):
+            mode_name = {
+                "driving": "자동차",
+                "walking": "도보",
+                "transit": "대중교통",
+            }.get(request.mode, request.mode)
+            
+            error_msg = result.get("error", "unknown_error") if result else "no_result"
             raise HTTPException(
-                status_code=404,
-                detail="경로를 찾을 수 없습니다. 좌표나 이동 수단을 확인해주세요."
+                status_code=503,
+                detail=(
+                    f"{mode_name} 이동시간 계산에 실패했습니다. "
+                    f"API 상태를 확인해주세요. (오류: {error_msg})"
+                ),
             )
         
         duration_sec = result["duration_seconds"]
@@ -99,6 +110,7 @@ async def calculate_travel_time(request: TravelTimeRequest):
             distance_meters=result.get("distance_meters"),
             mode=result["mode"],
             success=True,
+            is_estimated=bool(result.get("is_estimated", False)),
         )
 
     except HTTPException:
@@ -291,4 +303,85 @@ async def calculate_multi_point_travel_time_get(
     except Exception as e:
         log.exception("Error parsing points: %s", e)
         raise HTTPException(status_code=400, detail=f"요청 파라미터 오류: {str(e)}")
+
+
+@router.get("/travel-time/test")
+async def test_all_modes(
+    start_lat: float = Query(37.5507353, description="출발지 위도"),
+    start_lng: float = Query(126.9256698, description="출발지 경도"),
+    goal_lat: float = Query(37.56148, description="도착지 위도"),
+    goal_lng: float = Query(126.9813785, description="도착지 경도"),
+):
+    """
+    모든 mode(자동차, 도보, 대중교통)를 테스트하는 엔드포인트
+    각 mode별로 어떤 API/함수가 사용되는지, 성공/실패 여부를 확인할 수 있습니다.
+    """
+    results = {}
+    
+    # 테스트할 좌표
+    test_coords = {
+        "start": (start_lat, start_lng),
+        "goal": (goal_lat, goal_lng),
+    }
+    
+    # 각 mode별 테스트
+    for mode in ["driving", "walking", "transit"]:
+        try:
+            log.info(f"[TEST] Testing mode: {mode}")
+            result = await get_travel_time(
+                start_lat=start_lat,
+                start_lng=start_lng,
+                goal_lat=goal_lat,
+                goal_lng=goal_lng,
+                mode=mode,
+                driving_option="trafast",
+            )
+            
+            if result and result.get("success"):
+                results[mode] = {
+                    "status": "success",
+                    "duration_seconds": result.get("duration_seconds"),
+                    "duration_minutes": round(result.get("duration_seconds", 0) / 60.0, 2),
+                    "distance_meters": result.get("distance_meters"),
+                    "source": result.get("source", "unknown"),
+                    "is_estimated": result.get("is_estimated", False),
+                }
+            else:
+                results[mode] = {
+                    "status": "failed",
+                    "error": "API returned no result or success=False",
+                    "result": result,
+                }
+        except Exception as e:
+            log.exception(f"[TEST] Error testing mode {mode}: {e}")
+            results[mode] = {
+                "status": "error",
+                "error": str(e),
+                "error_type": type(e).__name__,
+            }
+    
+    return {
+        "test_coordinates": {
+            "start": {"lat": start_lat, "lng": start_lng},
+            "goal": {"lat": goal_lat, "lng": goal_lng},
+        },
+        "results": results,
+        "summary": {
+            "driving": {
+                "expected": "Naver Directions API",
+                "status": results.get("driving", {}).get("status"),
+                "source": results.get("driving", {}).get("source"),
+            },
+            "walking": {
+                "expected": "Haversine calculation (calc_func.py 방식)",
+                "status": results.get("walking", {}).get("status"),
+                "source": results.get("walking", {}).get("source"),
+            },
+            "transit": {
+                "expected": "Google Distance Matrix API",
+                "status": results.get("transit", {}).get("status"),
+                "source": results.get("transit", {}).get("source"),
+            },
+        },
+    }
 

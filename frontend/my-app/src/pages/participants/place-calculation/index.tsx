@@ -385,6 +385,7 @@ export function PlaceCalculationScreen() {
             duration_minutes: number;
             mode: string;
             success: boolean;
+            is_estimated?: boolean;
           }>(
             `/directions/travel-time?start_lat=${startLat}&start_lng=${startLng}&goal_lat=${currentPlace.lat}&goal_lng=${currentPlace.lng}&mode=${mode}`
           );
@@ -416,8 +417,9 @@ export function PlaceCalculationScreen() {
                   ? "대중교통"
                   : "자동차";
             const minutes = Math.round(travelTimeResult.duration_minutes);
-            const labelContent = `<div style="background-color: rgba(0,0,0,0.75); color: white; padding: 6px 10px; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.25); font-size: 12px; font-weight: 700; white-space: nowrap;">
-              ${modeText} ${minutes}분
+            const estimated = travelTimeResult.is_estimated === true;
+            const labelContent = `<div style="background-color: rgba(0,0,0,0.78); color: white; padding: 6px 10px; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.25); font-size: 12px; font-weight: 800; white-space: nowrap;">
+              ${modeText} ${minutes}분${estimated ? " (추정)" : ""}
             </div>`;
             const labelMarker = new window.naver.maps.Marker({
               position: midPos,
@@ -448,6 +450,24 @@ export function PlaceCalculationScreen() {
             zIndex: 500,
           });
           polylinesRef.current.push(polyline);
+
+          // 실패 라벨(정확한 시간 계산 실패)
+          try {
+            const midPos = new window.naver.maps.LatLng(
+              (startLat + currentPlace.lat) / 2,
+              (startLng + currentPlace.lng) / 2
+            );
+            const labelContent = `<div style="background-color: rgba(0,0,0,0.70); color: white; padding: 6px 10px; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.25); font-size: 12px; font-weight: 700; white-space: nowrap;">
+              시간 계산 실패
+            </div>`;
+            const labelMarker = new window.naver.maps.Marker({
+              position: midPos,
+              map,
+              icon: { content: labelContent, anchor: new window.naver.maps.Point(0, 0) },
+              zIndex: 1001,
+            });
+            labelMarkersRef.current.push(labelMarker);
+          } catch {}
         }
       }
     };

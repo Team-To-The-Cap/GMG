@@ -18,20 +18,58 @@ except Exception:
     pass
 
 log = logging.getLogger(__name__)
+# Google Distance Matrix (교통 반영)
+try:
+    from ..services.google_distance_matrix import get_travel_time_single as _gdm_single
+except Exception:
+    _gdm_single = None
+
+# 정확한(실시간) 값만 허용할지 여부
+# - 기본값: 정확값만 (추정치 금지)
+# - 필요 시 서버 env로 ALLOW_ESTIMATED_TRAVEL_TIME=true 설정
+ALLOW_ESTIMATED_TRAVEL_TIME = os.getenv(
+    "ALLOW_ESTIMATED_TRAVEL_TIME", ""
+).strip().lower() in {"1", "true", "yes", "y"}
+
 
 # 네이버 Directions API 엔드포인트
-NAVER_DRIVING_URL = "https://naveropenapi.apigw.ntruss.com/map-direction/v1/driving"
-NAVER_WALKING_URL = "https://naveropenapi.apigw.ntruss.com/map-direction/v1/walking"
+# 공식 문서: https://maps.apigw.ntruss.com/map-direction/v1/driving
+NAVER_DRIVING_URL = "https://maps.apigw.ntruss.com/map-direction/v1/driving"
+NAVER_WALKING_URL = "https://maps.apigw.ntruss.com/map-direction/v1/walking"
+
+# OpenRouteService (OpenStreetMap 기반) API 엔드포인트
+ORS_API_KEY = os.getenv("OPENROUTESERVICE_API_KEY") or os.getenv("ORS_API_KEY")
+ORS_BASE_URL = "https://api.openrouteservice.org/v2"
 
 # 대중교통은 네이버에서 별도 API가 있거나, 다른 방식으로 처리해야 할 수 있습니다
 # 일단 자동차/도보만 구현하고, 대중교통은 추후 확장 가능하도록 구조 설계
 
 
-def _get_naver_credentials() -> tuple[str | None, str | None]:
-    """네이버 클라우드 플랫폼 인증 정보 가져오기"""
-    client_id = os.getenv("NAVER_CLIENT_ID") or os.getenv("client_id")
-    client_secret = os.getenv("NAVER_CLIENT_SECRET") or os.getenv("client_secret")
-    return client_id, client_secret
+def _get_naver_apigw_credentials() -> tuple[str | None, str | None]:
+    """
+    Naver Maps/Directions(APIGW) 인증키.
+    .env 파일의 NAVER_MAP_CLIENT_ID/NAVER_MAP_CLIENT_SECRET을 사용합니다.
+    """
+    try:
+        from core.config import NAVER_MAP_CLIENT_ID, NAVER_MAP_CLIENT_SECRET
+
+        if NAVER_MAP_CLIENT_ID and NAVER_MAP_CLIENT_SECRET:
+            # 따옴표 제거
+            client_id_clean = str(NAVER_MAP_CLIENT_ID).strip().strip('"').strip("'")
+            client_secret_clean = str(NAVER_MAP_CLIENT_SECRET).strip().strip('"').strip("'")
+
+            log.info(
+                "[NAVER Credentials] Using NAVER_MAP_CLIENT_ID/NAVER_MAP_CLIENT_SECRET from core.config (.env)"
+            )
+            return client_id_clean, client_secret_clean
+    except Exception as e:
+        log.warning("[NAVER Credentials] Failed to import from core.config: %s", e)
+
+    log.error(
+        "[NAVER Credentials] ✗ No credentials found | "
+        "Please set NAVER_MAP_CLIENT_ID and NAVER_MAP_CLIENT_SECRET in .env file"
+    )
+    return None, None
 
 
 def _format_coordinates(lat: float, lng: float) -> str:
@@ -79,6 +117,105 @@ def _fallback_travel_time(
     }
 
 
+def _fail_unavailable(mode: str) -> Dict[str, Any]:
+    return {"success": False, "mode": mode, "error": "travel_time_unavailable"}
+
+
+async def _call_openrouteservice(
+    start_lat: float,
+    start_lng: float,
+    goal_lat: float,
+    goal_lng: float,
+    mode: Literal["driving", "walking"],
+) -> Optional[Dict[str, Any]]:
+    """
+    OpenRouteService (OpenStreetMap 기반) API 호출
+    - driving: driving-car 프로필
+    - walking: foot-walking 프로필
+    - 한국 지역 지원, 무료 티어 제공
+    """
+    if not ORS_API_KEY:
+        log.debug("[ORS] API key not configured")
+        return None
+
+    # OpenRouteService 프로필 매핑
+    profile_map = {
+        "driving": "driving-car",
+        "walking": "foot-walking",
+    }
+    profile = profile_map.get(mode)
+    if not profile:
+        return None
+
+    url = f"{ORS_BASE_URL}/directions/{profile}"
+    headers = {
+        "Authorization": ORS_API_KEY,
+        "Content-Type": "application/json",
+    }
+
+    # OpenRouteService는 [경도, 위도] 형식 사용
+    body = {
+        "coordinates": [[start_lng, start_lat], [goal_lng, goal_lat]],
+        "units": "m",
+        "format": "json",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(url, headers=headers, json=body)
+            response.raise_for_status()
+            data = response.json()
+
+            routes = data.get("routes", [])
+            if not routes:
+                log.warning("[ORS] No routes returned")
+                return None
+
+            route = routes[0]
+            summary = route.get("summary", {})
+            duration_s = summary.get("duration")
+            distance_m = summary.get("distance")
+
+            if duration_s is None:
+                log.warning("[ORS] Duration not found in response")
+                return None
+
+            log.info(
+                "[ORS] ✓ Success for mode=%s | duration=%.1fs, distance=%.1fm",
+                mode,
+                duration_s,
+                distance_m or 0,
+            )
+
+            return {
+                "duration_seconds": int(duration_s),
+                "distance_meters": int(distance_m) if distance_m else None,
+                "mode": mode,
+                "success": True,
+                "source": "openrouteservice",
+            }
+
+    except httpx.HTTPStatusError as e:
+        body_text = None
+        try:
+            body_text = e.response.text
+        except Exception:
+            pass
+        log.warning(
+            "[ORS] HTTP error: %s | status=%s | body=%s",
+            e,
+            e.response.status_code,
+            body_text[:200] if body_text else None,
+        )
+        return None
+    except httpx.RequestError as e:
+        log.warning("[ORS] Request error: %s", e)
+        return None
+    except (KeyError, ValueError, TypeError) as e:
+        log.warning("[ORS] Response parse error: %s", e)
+        return None
+
+
 async def get_driving_direction(
     start_lat: float,
     start_lng: float,
@@ -99,14 +236,67 @@ async def get_driving_direction(
     Returns:
         API 응답 데이터 또는 None (실패 시)
     """
-    client_id, client_secret = _get_naver_credentials()
+    client_id, client_secret = _get_naver_apigw_credentials()
+
+    # 자격 증명 값 검증 및 정리
     if not client_id or not client_secret:
-        log.warning("[NAVER Directions] API credentials not configured")
+        log.error(
+            "[NAVER Directions] [DRIVING API] ✗ API credentials not configured | "
+            "client_id=%s, client_secret=%s",
+            client_id,
+            client_secret,
+        )
+        return None
+
+    # 공백이나 따옴표 제거
+    client_id_clean = str(client_id).strip().strip('"').strip("'")
+    client_secret_clean = str(client_secret).strip().strip('"').strip("'")
+
+    if not client_id_clean or not client_secret_clean:
+        log.error(
+            "[NAVER Directions] [DRIVING API] ✗ Credentials are empty after cleaning | "
+            "client_id_clean=%s, client_secret_clean=%s",
+            client_id_clean,
+            client_secret_clean,
+        )
+        return None
+
+    # 자격 증명 값 상세 검증
+    log.warning(
+        "[NAVER Directions] [DRIVING API] Credential details: "
+        "key_id=%r (len=%d, repr=%s) | key=%r (len=%d, repr=%s)",
+        client_id_clean,
+        len(client_id_clean),
+        repr(client_id_clean),
+        client_secret_clean,
+        len(client_secret_clean),
+        repr(client_secret_clean),
+    )
+
+    # 숨겨진 공백이나 특수문자 확인
+    if (
+        client_id_clean != client_id_clean.strip()
+        or client_secret_clean != client_secret_clean.strip()
+    ):
+        log.error(
+            "[NAVER Directions] [DRIVING API] ✗ Credentials contain hidden whitespace!"
+        )
+
+    # 빈 문자열이나 None 체크
+    if not client_id_clean or client_id_clean.isspace():
+        log.error(
+            "[NAVER Directions] [DRIVING API] ✗ client_id is empty or whitespace only"
+        )
+        return None
+    if not client_secret_clean or client_secret_clean.isspace():
+        log.error(
+            "[NAVER Directions] [DRIVING API] ✗ client_secret is empty or whitespace only"
+        )
         return None
 
     headers = {
-        "X-NCP-APIGW-API-KEY-ID": client_id,
-        "X-NCP-APIGW-API-KEY": client_secret,
+        "X-NCP-APIGW-API-KEY-ID": client_id_clean,
+        "X-NCP-APIGW-API-KEY": client_secret_clean,
     }
 
     params = {
@@ -117,24 +307,123 @@ async def get_driving_direction(
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
+            log.warning(
+                "[NAVER Directions] [DRIVING API] Request: URL=%s | params=%s | "
+                "header_KEY_ID=%s (len=%d) | header_KEY=%s (len=%d)",
+                NAVER_DRIVING_URL,
+                params,
+                (
+                    headers.get("X-NCP-APIGW-API-KEY-ID", "MISSING")[:15] + "..."
+                    if len(headers.get("X-NCP-APIGW-API-KEY-ID", "")) > 15
+                    else headers.get("X-NCP-APIGW-API-KEY-ID", "MISSING")
+                ),
+                len(headers.get("X-NCP-APIGW-API-KEY-ID", "")),
+                (
+                    headers.get("X-NCP-APIGW-API-KEY", "MISSING")[:15] + "..."
+                    if len(headers.get("X-NCP-APIGW-API-KEY", "")) > 15
+                    else headers.get("X-NCP-APIGW-API-KEY", "MISSING")
+                ),
+                len(headers.get("X-NCP-APIGW-API-KEY", "")),
+            )
             response = await client.get(
                 NAVER_DRIVING_URL, headers=headers, params=params
             )
-            response.raise_for_status()
+            log.warning(
+                "[NAVER Directions] [DRIVING API] Response: status=%s | content_type=%s",
+                response.status_code,
+                response.headers.get("content-type"),
+            )
+
+            # 401 에러도 응답 본문을 확인하기 위해 raise_for_status 전에 처리
+            if response.status_code == 401:
+                try:
+                    error_body = response.json()
+                    log.error(
+                        "[NAVER Directions] [DRIVING API] 401 Authentication Failed | body=%s",
+                        str(error_body)[:500],
+                    )
+                except Exception:
+                    log.error(
+                        "[NAVER Directions] [DRIVING API] 401 Authentication Failed | body=%s",
+                        response.text[:500],
+                    )
+
+            # 네이버 API는 인증 실패 시 HTTP 200으로 응답하지만 본문에 error 객체를 포함
             data = response.json()
+            
+            # 인증 실패 체크 (errorCode: 200, message: "Authentication Failed")
+            if "error" in data:
+                error_info = data.get("error", {})
+                error_code = error_info.get("errorCode")
+                error_message = error_info.get("message", "")
+                
+                if error_code == "200" or "Authentication Failed" in error_message:
+                    log.error(
+                        "[NAVER Directions] [DRIVING API] ✗ Authentication Failed | "
+                        "errorCode=%s, message=%s, details=%s | "
+                        "해결 방법: 네이버 클라우드 플랫폼 콘솔에서 Application에 'Directions 5' 또는 'Directions 15' 서비스를 등록했는지 확인하세요. "
+                        "또한 API 키가 Directions API용인지 확인하세요.",
+                        error_code,
+                        error_message,
+                        error_info.get("details", ""),
+                    )
+                    return None
+                else:
+                    log.error(
+                        "[NAVER Directions] [DRIVING API] ✗ API error: errorCode=%s, message=%s, details=%s",
+                        error_code,
+                        error_message,
+                        error_info.get("details", ""),
+                    )
+                    return None
+
+            response.raise_for_status()
+
+            log.warning(
+                "[NAVER Directions] [DRIVING API] Response data: code=%s, message=%s, has_route=%s, route_keys=%s",
+                data.get("code"),
+                data.get("message"),
+                "route" in data,
+                list(data.get("route", {}).keys()) if data.get("route") else None,
+            )
 
             if data.get("code") != 0:
-                log.warning(
-                    "[NAVER Directions] API returned error code=%s, message=%s",
+                log.error(
+                    "[NAVER Directions] [DRIVING API] ✗ API error: code=%s, message=%s | full_response=%s",
                     data.get("code"),
                     data.get("message"),
+                    str(data)[:500],
                 )
                 return None
 
+            log.warning(
+                "[NAVER Directions] [DRIVING API] ✓ SUCCESS | route_keys=%s",
+                list(data.get("route", {}).keys()) if data.get("route") else None,
+            )
             return data
 
     except httpx.HTTPStatusError as e:
-        log.warning("[NAVER Directions] HTTP error: %s", e)
+        body = None
+        try:
+            body = e.response.text
+        except Exception:
+            body = None
+
+        # 401 Unauthorized는 인증 실패 (API 키 문제)
+        if e.response.status_code == 401:
+            log.error(
+                "[NAVER Directions] Authentication failed (401) - API credentials invalid or missing | "
+                "Please check client_id and client_secret in .env file | "
+                "body=%s",
+                body,
+            )
+        else:
+            log.warning(
+                "[NAVER Directions] HTTP error: %s | status=%s | body=%s",
+                e,
+                e.response.status_code,
+                body,
+            )
         return None
     except httpx.RequestError as e:
         log.warning("[NAVER Directions] Request error: %s", e)
@@ -162,14 +451,30 @@ async def get_walking_direction(
     Returns:
         API 응답 데이터 또는 None (실패 시)
     """
-    client_id, client_secret = _get_naver_credentials()
+    client_id, client_secret = _get_naver_apigw_credentials()
+
     if not client_id or not client_secret:
-        log.warning("[NAVER Directions] API credentials not configured")
+        log.error(
+            "[NAVER Directions] [WALKING API] ✗ API credentials not configured | "
+            "client_id=%s, client_secret=%s",
+            client_id,
+            client_secret,
+        )
+        return None
+
+    # 공백이나 따옴표 제거
+    client_id_clean = str(client_id).strip().strip('"').strip("'")
+    client_secret_clean = str(client_secret).strip().strip('"').strip("'")
+
+    if not client_id_clean or not client_secret_clean:
+        log.error(
+            "[NAVER Directions] [WALKING API] ✗ Credentials are empty after cleaning"
+        )
         return None
 
     headers = {
-        "X-NCP-APIGW-API-KEY-ID": client_id,
-        "X-NCP-APIGW-API-KEY": client_secret,
+        "X-NCP-APIGW-API-KEY-ID": client_id_clean,
+        "X-NCP-APIGW-API-KEY": client_secret_clean,
     }
 
     params = {
@@ -182,8 +487,35 @@ async def get_walking_direction(
             response = await client.get(
                 NAVER_WALKING_URL, headers=headers, params=params
             )
-            response.raise_for_status()
+            
+            # 네이버 API는 인증 실패 시 HTTP 200으로 응답하지만 본문에 error 객체를 포함
             data = response.json()
+            
+            # 인증 실패 체크 (errorCode: 200, message: "Authentication Failed")
+            if "error" in data:
+                error_info = data.get("error", {})
+                error_code = error_info.get("errorCode")
+                error_message = error_info.get("message", "")
+                
+                if error_code == "200" or "Authentication Failed" in error_message:
+                    log.error(
+                        "[NAVER Directions] [WALKING API] ✗ Authentication Failed | "
+                        "errorCode=%s, message=%s, details=%s | "
+                        "해결 방법: 네이버 클라우드 플랫폼 콘솔에서 Application에 'Directions 5' 또는 'Directions 15' 서비스를 등록했는지 확인하세요.",
+                        error_code,
+                        error_message,
+                        error_info.get("details", ""),
+                    )
+                    return None
+                else:
+                    log.error(
+                        "[NAVER Directions] [WALKING API] ✗ API error: errorCode=%s, message=%s",
+                        error_code,
+                        error_message,
+                    )
+                    return None
+
+            response.raise_for_status()
 
             if data.get("code") != 0:
                 log.warning(
@@ -196,7 +528,27 @@ async def get_walking_direction(
             return data
 
     except httpx.HTTPStatusError as e:
-        log.warning("[NAVER Directions] HTTP error: %s", e)
+        body = None
+        try:
+            body = e.response.text
+        except Exception:
+            body = None
+
+        # 401 Unauthorized는 인증 실패 (API 키 문제)
+        if e.response.status_code == 401:
+            log.error(
+                "[NAVER Directions] Authentication failed (401) - API credentials invalid or missing | "
+                "Please check client_id and client_secret in .env file | "
+                "body=%s",
+                body,
+            )
+        else:
+            log.warning(
+                "[NAVER Directions] HTTP error: %s | status=%s | body=%s",
+                e,
+                e.response.status_code,
+                body,
+            )
         return None
     except httpx.RequestError as e:
         log.warning("[NAVER Directions] Request error: %s", e)
@@ -238,10 +590,19 @@ def extract_travel_time_from_driving_response(
 
         # 첫 번째 경로의 summary에서 duration 추출
         summary = paths[0].get("summary", {})
-        duration = summary.get("duration")
+        duration_ms = summary.get("duration")
 
-        if duration is not None:
-            return int(duration)
+        if duration_ms is not None:
+            # 네이버 Directions API는 duration을 밀리초(ms) 단위로 반환
+            # 초 단위로 변환 (1000으로 나누기)
+            duration_seconds = int(duration_ms / 1000)
+            log.info(
+                "[NAVER Directions] Driving duration extracted: %d ms -> %d seconds (%.1f minutes)",
+                duration_ms,
+                duration_seconds,
+                duration_seconds / 60.0,
+            )
+            return duration_seconds
 
         return None
 
@@ -272,10 +633,19 @@ def extract_travel_time_from_walking_response(data: Dict[str, Any]) -> Optional[
 
         # 첫 번째 경로의 summary에서 duration 추출
         summary = paths[0].get("summary", {})
-        duration = summary.get("duration")
+        duration_ms = summary.get("duration")
 
-        if duration is not None:
-            return int(duration)
+        if duration_ms is not None:
+            # 네이버 Directions API는 duration을 밀리초(ms) 단위로 반환
+            # 초 단위로 변환 (1000으로 나누기)
+            duration_seconds = int(duration_ms / 1000)
+            log.info(
+                "[NAVER Directions] Walking duration extracted: %d ms -> %d seconds (%.1f minutes)",
+                duration_ms,
+                duration_seconds,
+                duration_seconds / 60.0,
+            )
+            return duration_seconds
 
         return None
 
@@ -375,21 +745,51 @@ async def get_travel_time(
         } 또는 None
     """
     if mode == "driving":
+        log.info(
+            "[TRAVEL_TIME] driving mode | start=(%.6f,%.6f) goal=(%.6f,%.6f)",
+            start_lat,
+            start_lng,
+            goal_lat,
+            goal_lng,
+        )
+
+        # 자동차: Naver Directions API만 사용
+        log.info("[TRAVEL_TIME] [DRIVING] Step 1: Calling Naver Directions API...")
         data = await get_driving_direction(
             start_lat, start_lng, goal_lat, goal_lng, option=driving_option
         )
         if not data:
-            return _fallback_travel_time(
-                start_lat, start_lng, goal_lat, goal_lng, "driving"
+            # Naver API 실패 시 계산 실패 반환
+            log.error(
+                "[TRAVEL_TIME] [DRIVING] ✗ Step 1 FAILED: Naver Directions API returned None - calculation failed"
             )
+            return _fail_unavailable("driving")
 
+        log.info(
+            "[TRAVEL_TIME] [DRIVING] ✓ Step 1 SUCCESS: Naver Directions API returned data | "
+            "route_keys=%s, option=%s",
+            list(data.get("route", {}).keys()) if data.get("route") else None,
+            driving_option,
+        )
+
+        log.info("[TRAVEL_TIME] [DRIVING] Step 2: Extracting duration from response...")
         duration = extract_travel_time_from_driving_response(
             data, option=driving_option
         )
         if duration is None:
-            return _fallback_travel_time(
-                start_lat, start_lng, goal_lat, goal_lng, "driving"
+            # 경로는 찾았지만 duration 추출 실패 시 계산 실패 반환
+            log.error(
+                "[TRAVEL_TIME] [DRIVING] ✗ Step 2 FAILED: Failed to extract duration from response | "
+                "data_keys=%s, option=%s",
+                list(data.keys()) if isinstance(data, dict) else None,
+                driving_option,
             )
+            return _fail_unavailable("driving")
+
+        log.info(
+            "[TRAVEL_TIME] [DRIVING] ✓ Step 2 SUCCESS: Duration extracted | duration=%ds",
+            duration,
+        )
 
         # 거리 정보 추출 (선택적)
         distance = None
@@ -410,82 +810,116 @@ async def get_travel_time(
             "distance_meters": distance,
             "mode": "driving",
             "success": True,
+            "is_estimated": False,
+            "source": "naver_directions",
         }
 
     elif mode == "walking":
-        data = await get_walking_direction(start_lat, start_lng, goal_lat, goal_lng)
-        if not data:
-            return _fallback_travel_time(
-                start_lat, start_lng, goal_lat, goal_lng, "walking"
-            )
+        log.info(
+            "[TRAVEL_TIME] walking mode | start=(%.6f,%.6f) goal=(%.6f,%.6f)",
+            start_lat,
+            start_lng,
+            goal_lat,
+            goal_lng,
+        )
 
-        duration = extract_travel_time_from_walking_response(data)
-        if duration is None:
-            return _fallback_travel_time(
-                start_lat, start_lng, goal_lat, goal_lng, "walking"
-            )
+        # 도보: calc_func.py처럼 거리/속도로 계산 (나이브한 방법)
+        # calc_func.py의 MODE_SPEED_KMPH["walking"] = 4.0 km/h 사용
+        log.warning(
+            "[TRAVEL_TIME] [WALKING] Calculating using Haversine distance and speed (calc_func.py 방식)"
+        )
 
-        # 거리 정보 추출 (선택적)
-        distance = None
-        try:
-            route = data.get("route", {})
-            paths = route.get("traoptimal", [])
-            if paths:
-                summary = paths[0].get("summary", {})
-                distance = summary.get("distance")
-        except (KeyError, ValueError, TypeError):
-            pass
+        WALKING_SPEED_KMPH = 4.0  # calc_func.py와 동일
+
+        distance_m = _haversine_meters(start_lat, start_lng, goal_lat, goal_lng)
+        speed_mps = (WALKING_SPEED_KMPH * 1000.0) / 3600.0  # m/s로 변환
+        duration_s = max(60, int(distance_m / max(speed_mps, 0.1)))  # 최소 1분
+
+        log.warning(
+            "[TRAVEL_TIME] [WALKING] ✓ SUCCESS: Calculated | distance=%.1fm, speed=%.1f km/h, duration=%ds (%.1f min)",
+            distance_m,
+            WALKING_SPEED_KMPH,
+            duration_s,
+            duration_s / 60.0,
+        )
 
         return {
-            "duration_seconds": duration,
-            "distance_meters": distance,
+            "duration_seconds": duration_s,
+            "distance_meters": int(distance_m),
             "mode": "walking",
             "success": True,
+            "is_estimated": False,  # calc_func.py와 동일한 방식이므로 정상 계산값
+            "source": "haversine_calculation",
         }
 
     elif mode == "transit":
-        # NOTE: 네이버 대중교통 경로 API는 별도 스펙/상품이어서 여기서는 "임시 fallback" 제공
-        # - 사용자 경험을 위해 최소한의 time/route를 제공 (도로 기반)
-        # - mode는 transit으로 반환 (UI에서 "대중교통"으로 표기 가능)
-        data = await get_driving_direction(
-            start_lat, start_lng, goal_lat, goal_lng, option=driving_option
+        log.info(
+            "[TRAVEL_TIME] transit mode | start=(%.6f,%.6f) goal=(%.6f,%.6f)",
+            start_lat,
+            start_lng,
+            goal_lat,
+            goal_lng,
         )
-        if not data:
-            return _fallback_travel_time(
-                start_lat, start_lng, goal_lat, goal_lng, "transit"
+
+        # 대중교통: Google transit만 사용
+        if _gdm_single is not None:
+            log.info(
+                "[TRAVEL_TIME] [TRANSIT] Step 1: Calling Google Distance Matrix API..."
+            )
+            g = _gdm_single(
+                start_lat=start_lat,
+                start_lng=start_lng,
+                goal_lat=goal_lat,
+                goal_lng=goal_lng,
+                mode="transit",
             )
 
-        duration = extract_travel_time_from_driving_response(
-            data, option=driving_option
+            log.info(
+                "[TRAVEL_TIME] [TRANSIT] Google API response: result=%s, success=%s, source=%s",
+                "None" if g is None else "dict",
+                g.get("success") if g else None,
+                g.get("source") if g else None,
+            )
+
+            if g and g.get("success"):
+                log.info(
+                    "[TRAVEL_TIME] [TRANSIT] ✓ Step 1 SUCCESS: Google Distance Matrix | "
+                    "duration=%ds, distance=%sm, source=%s",
+                    g.get("duration_seconds"),
+                    g.get("distance_meters"),
+                    g.get("source", "unknown"),
+                )
+                return {
+                    "duration_seconds": int(g["duration_seconds"]),
+                    "distance_meters": g.get("distance_meters"),
+                    "mode": "transit",
+                    "success": True,
+                    "is_estimated": False,
+                    "source": "google_distance_matrix",
+                }
+            else:
+                log.error(
+                    "[TRAVEL_TIME] [TRANSIT] ✗ Step 1 FAILED: Google Distance Matrix | "
+                    "result=%s, success=%s, error=%s",
+                    "None" if g is None else "dict",
+                    g.get("success") if g else None,
+                    g.get("error") if g else None,
+                )
+        else:
+            log.error(
+                "[TRAVEL_TIME] [TRANSIT] ✗ Google Distance Matrix not available (_gdm_single is None)"
+            )
+
+        # Google API 실패 시 계산 실패 반환
+        log.error(
+            "[TRAVEL_TIME] [TRANSIT] ✗ FINAL FAILED: Google API failed for transit - calculation failed"
         )
-        if duration is None:
-            return _fallback_travel_time(
-                start_lat, start_lng, goal_lat, goal_lng, "transit"
-            )
-
-        distance = None
-        try:
-            route = data.get("route", {})
-            path_key = (
-                driving_option if driving_option in route else list(route.keys())[0]
-            )
-            paths = route.get(path_key, [])
-            if paths:
-                summary = paths[0].get("summary", {})
-                distance = summary.get("distance")
-        except Exception:
-            pass
-
-        return {
-            "duration_seconds": int(duration),
-            "distance_meters": distance,
-            "mode": "transit",
-            "success": True,
-        }
+        return _fail_unavailable("transit")
 
     else:
         log.warning("[NAVER Directions] Unknown mode: %s", mode)
-        return _fallback_travel_time(start_lat, start_lng, goal_lat, goal_lng, mode)
+        # 알 수 없는 mode는 계산 실패 반환
+        return _fail_unavailable(str(mode))
 
 
 async def get_route(
