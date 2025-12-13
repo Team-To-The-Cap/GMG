@@ -6,61 +6,54 @@ MeetingPlace 테이블에 이동시간 관련 컬럼 추가 스크립트
     python3 add_travel_time_columns.py
 """
 
-import psycopg2
+import sys
 import os
-from dotenv import load_dotenv
+from sqlalchemy import create_engine, text, inspect
 
-load_dotenv()
+# 현재 스크립트의 디렉토리를 Python 경로에 추가
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
 
-# 환경 변수에서 DB 정보 가져오기
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_PORT = os.getenv("DB_PORT", "5432")
-DB_NAME = os.getenv("DB_NAME", "gmg")
-DB_USER = os.getenv("DB_USER", "postgres")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "")
+# 데이터베이스 URL 설정 (database.py와 동일한 설정 사용)
+SQLALCHEMY_DATABASE_URL = "postgresql://duram:duram@localhost:5432/mydatabase"
 
 def add_travel_time_columns():
+    engine = create_engine(SQLALCHEMY_DATABASE_URL)
     conn = None
     try:
-        conn = psycopg2.connect(
-            host=DB_HOST,
-            port=DB_PORT,
-            database=DB_NAME,
-            user=DB_USER,
-            password=DB_PASSWORD,
-        )
-        cursor = conn.cursor()
+        conn = engine.connect()
+        inspector = inspect(engine)
+        table_names = inspector.get_table_names()
 
-        # travel_time_from_prev 컬럼 추가
-        print("Adding travel_time_from_prev column...")
-        cursor.execute("""
-            ALTER TABLE meeting_places 
-            ADD COLUMN IF NOT EXISTS travel_time_from_prev INTEGER NULL;
-        """)
+        if "meeting_places" not in table_names:
+            print("❌ Table 'meeting_places' does not exist. Skipping column addition.")
+            return
 
-        # travel_mode_from_prev 컬럼 추가
-        print("Adding travel_mode_from_prev column...")
-        cursor.execute("""
-            ALTER TABLE meeting_places 
-            ADD COLUMN IF NOT EXISTS travel_mode_from_prev VARCHAR(20) NULL;
-        """)
+        columns = inspector.get_columns("meeting_places")
+        column_names = [col["name"] for col in columns]
+
+        if "travel_time_from_prev" not in column_names:
+            print("Adding column 'travel_time_from_prev' to 'meeting_places' table...")
+            conn.execute(text("ALTER TABLE meeting_places ADD COLUMN travel_time_from_prev INTEGER NULL;"))
+            print("✅ Column 'travel_time_from_prev' added successfully.")
+        else:
+            print("⚠️  Column 'travel_time_from_prev' already exists.")
+
+        if "travel_mode_from_prev" not in column_names:
+            print("Adding column 'travel_mode_from_prev' to 'meeting_places' table...")
+            conn.execute(text("ALTER TABLE meeting_places ADD COLUMN travel_mode_from_prev VARCHAR(50) NULL;"))
+            print("✅ Column 'travel_mode_from_prev' added successfully.")
+        else:
+            print("⚠️  Column 'travel_mode_from_prev' already exists.")
 
         conn.commit()
-        print("✅ Successfully added travel_time_from_prev and travel_mode_from_prev columns to meeting_places table")
+        print("\n✅ Successfully completed column addition process")
 
-    except psycopg2.Error as e:
-        print(f"❌ Database error: {e}")
-        if conn:
-            conn.rollback()
-        raise
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"❌ Error adding columns: {e}")
         if conn:
             conn.rollback()
         raise
     finally:
-        if cursor:
-            cursor.close()
         if conn:
             conn.close()
 

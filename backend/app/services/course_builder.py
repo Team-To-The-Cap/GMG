@@ -751,7 +751,9 @@ async def build_and_save_courses_for_meeting(
         time_difference = meeting_duration_minutes - current_total_minutes
         
         # 목표 시간보다 1시간(60분) 이상 부족하면 장소 추가
-        if time_difference > 60:
+        # 또는 목표 시간의 15% 이상 부족하면 장소 추가 (더 유연한 기준)
+        threshold = max(60, int(meeting_duration_minutes * 0.15))
+        if time_difference > threshold:
             # 필요한 추가 활동 시간 (추정 이동 시간 제외)
             additional_places_needed = max(1, (time_difference - 60) // 90)  # 평균 90분(활동+이동)당 1개 장소 추가
             max_additional_places = min(additional_places_needed, 3)  # 최대 3개까지만 추가
@@ -1136,6 +1138,59 @@ async def build_and_save_courses_for_meeting(
     if final_candidates:
         final_candidates[0]["travel_time_from_prev"] = None
         final_candidates[0]["travel_mode_from_prev"] = None
+    
+    # 6-2) 실제 이동시간 계산 후 재조정 (목표 시간과의 차이가 크면 추가 조정)
+    if meeting_duration_minutes > 0 and len(final_candidates) > 0:
+        # 실제 총 시간 계산 (활동 시간 + 실제 이동 시간)
+        actual_travel_minutes = sum(
+            c.get("travel_time_from_prev", 0) or 0 
+            for c in final_candidates
+        )
+        actual_activity_minutes = sum(c.get("duration", 0) for c in final_candidates)
+        actual_total_minutes = actual_activity_minutes + actual_travel_minutes
+        
+        # 목표 시간과의 차이
+        time_difference = meeting_duration_minutes - actual_total_minutes
+        
+        # 목표 시간과 30분 이상 차이나면 추가 조정
+        if abs(time_difference) > 30:
+            if time_difference > 30:  # 목표 시간보다 부족
+                # 장소당 최대 20분씩 추가할 수 있는 시간
+                max_additional_per_place = 20
+                total_possible_additional = len(final_candidates) * max_additional_per_place
+                actual_additional = min(time_difference, total_possible_additional)
+                
+                if actual_additional > 0:
+                    additional_per_place = actual_additional // len(final_candidates)
+                    remaining = actual_additional % len(final_candidates)
+                    
+                    for candidate in final_candidates:
+                        candidate["duration"] += additional_per_place
+                    
+                    # 남은 시간은 마지막 장소에 추가
+                    if remaining > 0 and len(final_candidates) > 0:
+                        final_candidates[-1]["duration"] += remaining
+                    
+                    print(f"[COURSE] 실제 이동시간 반영 후 duration 조정: +{actual_additional}분 분배")
+            
+            elif time_difference < -30:  # 목표 시간보다 초과
+                # 장소당 최대 20분씩 감소
+                max_reduction_per_place = 20
+                total_possible_reduction = len(final_candidates) * max_reduction_per_place
+                actual_reduction = min(abs(time_difference), total_possible_reduction)
+                
+                if actual_reduction > 0:
+                    reduction_per_place = actual_reduction // len(final_candidates)
+                    remaining = actual_reduction % len(final_candidates)
+                    
+                    for candidate in final_candidates:
+                        candidate["duration"] = max(10, candidate.get("duration", 60) - reduction_per_place)
+                    
+                    # 남은 시간은 마지막 장소에서 감소
+                    if remaining > 0 and len(final_candidates) > 0:
+                        final_candidates[-1]["duration"] = max(10, final_candidates[-1].get("duration", 60) - remaining)
+                    
+                    print(f"[COURSE] 실제 이동시간 반영 후 duration 조정: -{actual_reduction}분 감소")
 
     # 7) calc_func.save_calculated_places 재사용
     save_calculated_places(db, meeting_id, final_candidates)
