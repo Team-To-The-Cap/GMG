@@ -18,8 +18,9 @@ import type {
 /**
  * 🔹 백엔드 MeetingResponse.places → 프론트 Course 구조로 변환
  * ✅ meeting_point 카테고리는 코스에서 제외 (일정/장소 계산 결과는 코스가 아님)
+ * ✅ 실제 이동시간 계산 (대중교통 기준)
  */
-function buildCourseFromPlaces(meeting: MeetingResponse): Course {
+async function buildCourseFromPlaces(meeting: MeetingResponse): Promise<Course> {
   const allPlaces = meeting.places ?? [];
 
   // meeting_point 카테고리는 코스에서 제외 (일정/장소 계산 결과)
@@ -42,16 +43,56 @@ function buildCourseFromPlaces(meeting: MeetingResponse): Course {
   let activityMinutes = 0;
   let travelMinutes = 0;
 
-  places.forEach((pl, idx) => {
+  for (let idx = 0; idx < places.length; idx++) {
+    const pl = places[idx];
+    
+    // 이전 장소와의 이동시간 계산 (첫 번째 장소는 제외)
     if (idx > 0) {
-      const transferMinutes = 10; // TODO: 실제 이동시간 계산으로 교체 가능
-      items.push({
-        type: "transfer",
-        mode: "subway",
-        minutes: transferMinutes,
-        note: "이동",
-      });
-      travelMinutes += transferMinutes;
+      const prevPlace = places[idx - 1];
+      try {
+        // 대중교통 기준으로 이동시간 계산
+        const travelTimeResult = await http.request<{
+          duration_seconds: number;
+          duration_minutes: number;
+          mode: string;
+          success: boolean;
+          is_estimated?: boolean;
+        }>(
+          `/directions/travel-time?start_lat=${prevPlace.latitude}&start_lng=${prevPlace.longitude}&goal_lat=${pl.latitude}&goal_lng=${pl.longitude}&mode=transit`
+        );
+
+        if (travelTimeResult?.success) {
+          const transferMinutes = Math.round(travelTimeResult.duration_minutes);
+          items.push({
+            type: "transfer",
+            mode: "subway",
+            minutes: transferMinutes,
+            note: "이동",
+          });
+          travelMinutes += transferMinutes;
+        } else {
+          // API 실패 시 기본값 사용 (10분)
+          const transferMinutes = 10;
+          items.push({
+            type: "transfer",
+            mode: "subway",
+            minutes: transferMinutes,
+            note: "이동 (추정)",
+          });
+          travelMinutes += transferMinutes;
+        }
+      } catch (error) {
+        console.warn(`Failed to calculate travel time between places ${idx - 1} and ${idx}:`, error);
+        // API 실패 시 기본값 사용 (10분)
+        const transferMinutes = 10;
+        items.push({
+          type: "transfer",
+          mode: "subway",
+          minutes: transferMinutes,
+          note: "이동 (추정)",
+        });
+        travelMinutes += transferMinutes;
+      }
     }
 
     const stay = pl.duration ?? 60;
@@ -69,7 +110,7 @@ function buildCourseFromPlaces(meeting: MeetingResponse): Course {
       note: pl.address,
     });
     activityMinutes += stay;
-  });
+  }
 
   return {
     title: meeting.name || "추천 코스",
@@ -107,9 +148,9 @@ function serializeMultiField(val: unknown): string | null {
 }
 
 /**
- * 🔹 MeetingResponse -> PromiseDetail 매핑
+ * 🔹 MeetingResponse -> PromiseDetail 매핑 (비동기 버전, 실제 이동시간 계산 포함)
  */
-function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
+async function mapMeetingToPromiseDetailAsync(meeting: MeetingResponse): Promise<PromiseDetail> {
   const participants: Participant[] = meeting.participants.map((raw) => {
     const p: any = raw;
 
@@ -184,7 +225,7 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
         }
       : undefined;
 
-  const course = buildCourseFromPlaces(meeting);
+  const course = await buildCourseFromPlaces(meeting);
 
   const mustVisitPlaces =
     (meeting.must_visit_places ?? []).map((p) => ({
@@ -218,8 +259,122 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
 }
 
 /**
+ * 🔹 MeetingResponse -> PromiseDetail 매핑 (동기 버전, 이동시간 계산 없음)
+ * @deprecated 실제 이동시간 계산이 필요하면 mapMeetingToPromiseDetailAsync 사용
+ */
+function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
+  // 동기 버전에서는 코스를 나중에 계산하도록 빈 코스 반환
+  const course: Course = {
+    title: "코스 계산 필요",
+    summary: {
+      totalMinutes: 0,
+      activityMinutes: 0,
+      travelMinutes: 0,
+    },
+    items: [],
+    source: "pending",
+  };
+
+  const mustVisitPlaces =
+    (meeting.must_visit_places ?? []).map((p) => ({
+      id: String(p.id),
+      name: p.name,
+      address: p.address ?? undefined,
+    })) ?? [];
+
+  const meetingProfile: MeetingProfile = {
+    withWhom: meeting.with_whom ?? undefined,
+    purpose: parseMultiField(meeting.purpose),
+    vibe: parseMultiField(meeting.vibe) as any,
+    budget: parseMultiField(meeting.budget),
+  };
+
+  const scheduleISO = meeting.plan?.meeting_time ?? null;
+  let dday: number | null = null;
+  if (scheduleISO) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const target = new Date(scheduleISO);
+    target.setHours(0, 0, 0, 0);
+    const diffMs = target.getTime() - today.getTime();
+    dday = Math.round(diffMs / (1000 * 60 * 60 * 24));
+  }
+
+  const primaryPlace =
+    meeting.plan?.address && meeting.plan.address.trim()
+      ? {
+          name: meeting.plan.address,
+          address: meeting.plan.address,
+          lat: meeting.plan.latitude ?? undefined,
+          lng: meeting.plan.longitude ?? undefined,
+        }
+      : meeting.places && meeting.places.length > 0
+      ? {
+          name: meeting.places[0].name,
+          address: meeting.places[0].address,
+          lat: meeting.places[0].latitude,
+          lng: meeting.places[0].longitude,
+        }
+      : undefined;
+
+  const participants: Participant[] = meeting.participants.map((raw) => {
+    const p: any = raw;
+    const fav: string = p.fav_activity ?? "";
+    const preferredCategories =
+      fav.length > 0
+        ? fav
+            .split(",")
+            .map((s: string) => s.trim())
+            .filter((s: string) => !!s)
+        : [];
+    let preferredSubcategories: any = {};
+    if (p.fav_subcategories) {
+      try {
+        preferredSubcategories = JSON.parse(p.fav_subcategories);
+      } catch (e) {
+        console.warn("Failed to parse fav_subcategories:", e);
+        preferredSubcategories = {};
+      }
+    }
+    const availableTimes: ParticipantTime[] = (p.available_times ?? []).map(
+      (t: any) => ({
+        start_time: t.start_time as string,
+        end_time: t.end_time as string,
+      })
+    );
+    return {
+      id: String(p.id),
+      name: p.name,
+      avatarUrl: p.avatar_url || `https://i.pravatar.cc/40?u=${p.id}`,
+      startAddress: p.start_address as string | undefined,
+      startLat: (p.start_latitude as number | undefined) ?? undefined,
+      startLng: (p.start_longitude as number | undefined) ?? undefined,
+      transportation: p.transportation as string | undefined,
+      favActivityRaw: fav,
+      preferredCategories,
+      preferredSubcategories,
+      availableTimes,
+    };
+  });
+
+  return {
+    id: String(meeting.id),
+    title: meeting.name,
+    dday,
+    schedule: scheduleISO ? { dateISO: scheduleISO } : undefined,
+    participants,
+    place: primaryPlace,
+    course,
+    plan: meeting.plan as any,
+    mustVisitPlaces,
+    meetingProfile,
+  } as PromiseDetail;
+}
+
+/**
  * 🔹 약속 상세 조회
  * - FastAPI: GET /meetings/{meeting_id}
+ * - 실제 이동시간 계산 포함
  */
 export async function getPromiseDetail(
   promiseId: string
@@ -230,16 +385,17 @@ export async function getPromiseDetail(
   }
 
   const meeting = await http.request<MeetingResponse>(`/meetings/${meetingId}`);
-  return mapMeetingToPromiseDetail(meeting);
+  return mapMeetingToPromiseDetailAsync(meeting);
 }
 
 /**
  * 🔹 약속 리스트 조회
  * - FastAPI: GET /meetings/
+ * - 리스트는 빠른 표시를 위해 이동시간 계산 없이 반환
  */
 export async function getPromiseList(): Promise<PromiseDetail[]> {
   const meetings = await http.request<MeetingResponse[]>("/meetings/");
-  return meetings.map(mapMeetingToPromiseDetail);
+  return Promise.all(meetings.map(mapMeetingToPromiseDetailAsync));
 }
 
 /**
@@ -281,7 +437,7 @@ export async function savePromiseDetail(
 
   // 서버 상태가 변경됐다고 가정하고 다시 한 번 상세 조회
   const meeting = await http.request<MeetingResponse>(`/meetings/${meetingId}`);
-  return mapMeetingToPromiseDetail(meeting);
+  return mapMeetingToPromiseDetailAsync(meeting);
 }
 
 /**
@@ -296,7 +452,7 @@ export async function createEmptyPromise(): Promise<PromiseDetail> {
     body: JSON.stringify({ name: "" }),
   });
 
-  return mapMeetingToPromiseDetail(meeting);
+  return mapMeetingToPromiseDetailAsync(meeting);
 }
 
 /**
@@ -358,7 +514,7 @@ export async function calculateAutoPlan(
   });
 
   const meeting = await http.request<MeetingResponse>(`/meetings/${meetingId}`);
-  return mapMeetingToPromiseDetail(meeting);
+  return mapMeetingToPromiseDetailAsync(meeting);
 }
 
 /**
@@ -379,7 +535,7 @@ export async function calculateAutoCourse(
   });
 
   const meeting = await http.request<MeetingResponse>(`/meetings/${meetingId}`);
-  return mapMeetingToPromiseDetail(meeting);
+  return mapMeetingToPromiseDetailAsync(meeting);
 }
 
 /**
@@ -468,7 +624,7 @@ export async function resetPromiseOnServer(
   });
 
   const meeting = await http.request<MeetingResponse>(`/meetings/${meetingId}`);
-  return mapMeetingToPromiseDetail(meeting);
+  return mapMeetingToPromiseDetailAsync(meeting);
 }
 
 /**

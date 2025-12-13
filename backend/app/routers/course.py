@@ -24,7 +24,7 @@ class CourseRequest(BaseModel):
     center_lat: float
     center_lng: float
     radius: int = Field(1000, description="미터 단위 검색 반경")
-    steps: List[StepInput] = Field(..., min_items=3, max_items=3)
+    steps: List[StepInput] = Field(..., min_items=1, description="코스 단계 (최소 1개 이상)")
     per_step_limit: int = Field(5, description="각 단계별 후보 최대 개수")
 
 
@@ -99,17 +99,33 @@ def to_candidates(
     return candidates
 
 
-def score_course(a: PlaceCandidate, b: PlaceCandidate, c: PlaceCandidate) -> Course:
+def score_course(places: List[PlaceCandidate]) -> Course:
     """
-    길이 3 코스의 점수를 계산한다.
+    가변 길이 코스의 점수를 계산한다.
     - 평점 보너스: rating 합
     - 이동 거리 패널티: 총 거리(m)에 -lambda 곱
     """
-    d1 = haversine_distance(a.lat, a.lng, b.lat, b.lng)
-    d2 = haversine_distance(b.lat, b.lng, c.lat, c.lng)
-    total_d = d1 + d2
+    if len(places) < 1:
+        raise ValueError("course must have at least 1 place")
+    
+    if len(places) == 1:
+        # 장소가 1개만 있으면 거리 패널티 없음
+        return Course(
+            score=places[0].rating,
+            total_distance_m=0.0,
+            places=places,
+        )
+    
+    # 연속된 장소들 간의 거리 계산
+    total_d = 0.0
+    for i in range(len(places) - 1):
+        d = haversine_distance(
+            places[i].lat, places[i].lng,
+            places[i + 1].lat, places[i + 1].lng
+        )
+        total_d += d
 
-    rating_sum = a.rating + b.rating + c.rating
+    rating_sum = sum(p.rating for p in places)
 
     # 거리 패널티 정도는 나중에 튜닝 가능
     lambda_ = 0.05 / 100.0
@@ -118,7 +134,7 @@ def score_course(a: PlaceCandidate, b: PlaceCandidate, c: PlaceCandidate) -> Cou
     return Course(
         score=score,
         total_distance_m=total_d,
-        places=[a, b, c],
+        places=places,
     )
 
 
@@ -129,9 +145,10 @@ def plan_courses_internal(req: CourseRequest) -> CourseResponse:
     실제 코스 생성 로직.
     - FastAPI 의존성 없이 순수 Python 함수라
       /courses/plan 이나 /meetings/{id}/courses/auto 에서 재사용 가능.
+    - 유연한 개수의 steps 지원 (최소 1개 이상)
     """
-    if len(req.steps) != 3:
-        raise HTTPException(status_code=400, detail="steps must have length 3")
+    if len(req.steps) < 1:
+        raise HTTPException(status_code=400, detail="steps must have at least 1 item")
 
     all_candidates: List[List[PlaceCandidate]] = []
 
@@ -186,18 +203,15 @@ def plan_courses_internal(req: CourseRequest) -> CourseResponse:
 
         all_candidates.append(step_candidates)
 
-    movies = all_candidates[0]
-    meals = all_candidates[1]
-    cafes = all_candidates[2]
-
     best_courses: List[Course] = []
 
-    # 길이 3 완전 탐색 (movie × meal × cafe)
-    for a in movies:
-        for b in meals:
-            for c in cafes:
-                course = score_course(a, b, c)
-                best_courses.append(course)
+    # 동적 길이 완전 탐색 (모든 조합 생성)
+    # 예: 2 steps면 candidates[0] × candidates[1], 3 steps면 candidates[0] × candidates[1] × candidates[2]
+    from itertools import product
+    
+    for place_combination in product(*all_candidates):
+        course = score_course(list(place_combination))
+        best_courses.append(course)
 
     if not best_courses:
         raise HTTPException(status_code=404, detail="No course candidates generated")

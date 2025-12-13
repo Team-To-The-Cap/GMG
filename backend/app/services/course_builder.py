@@ -204,7 +204,7 @@ def build_steps_from_meeting(
 ) -> List[StepInput]:
     """
     Meeting.with_whom / purpose / vibe / budget + 참가자 fav_activity 및 서브 카테고리를 보고
-    길이 3 코스를 설계하는 함수.
+    코스를 설계하는 함수 (최소 1개 이상의 steps 생성).
 
     대략적인 규칙:
       - purpose=activity / fav_activity 있으면 1코스는 놀거리/체험
@@ -371,8 +371,8 @@ def build_steps_from_meeting(
         
         steps.append(StepInput(query=query, type="cafe"))
 
-    # 정확히 3개만 사용
-    return steps[:3]
+    # 모든 steps 반환 (3개 고정 제거)
+    return steps
 
 
 # ----------------------------------------
