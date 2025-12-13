@@ -21,6 +21,13 @@ from core.config import GOOGLE_MAPS_API_KEY, NAVER_MAP_CLIENT_ID, NAVER_MAP_CLIE
 router = APIRouter(prefix="/meetings", tags=["Meeting-Plans"])
 
 
+def _get_naver_map_creds() -> tuple[str | None, str | None]:
+    """네이버 지도 API 크리덴셜을 환경 변수에서 가져옵니다."""
+    cid = os.getenv("NAVER_MAP_CLIENT_ID") or os.getenv("NAVER_CLIENT_ID") or os.getenv("client_id")
+    sec = os.getenv("NAVER_MAP_CLIENT_SECRET") or os.getenv("NAVER_CLIENT_SECRET") or os.getenv("client_secret")
+    return cid, sec
+
+
 def reverse_geocode_naver(lon: float, lat: float) -> Optional[str]:
     """
     네이버 Reverse Geocoding API를 사용해서
