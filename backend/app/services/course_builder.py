@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import List, Optional, Dict
 import json
+import math
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
@@ -18,6 +19,7 @@ from ..routers.course import (
     CourseResponse,
     plan_courses_internal,
 )
+from ..services.naver_directions import get_travel_time
 
 
 @dataclass

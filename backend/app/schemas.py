@@ -179,6 +179,11 @@ class MeetingPlaceCreate(BaseModel):
     duration: Optional[int] = None
 
     poi_name: Optional[str] = None
+    
+    # 이전 장소로부터의 이동시간 (분 단위), 첫 번째 장소는 None
+    travel_time_from_prev: Optional[int] = None
+    # 이동 수단: walking, transit, driving
+    travel_mode_from_prev: Optional[str] = None
 
 
 class MeetingPlaceResponse(MeetingPlaceCreate):

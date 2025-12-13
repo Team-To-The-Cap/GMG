@@ -1268,6 +1268,9 @@ def save_calculated_places(db: Session, meeting_id: int, candidates: list[dict])
             duration=c.get("duration"),
             # ⭐ 추가
             poi_name=c.get("poi_name"),
+            # 이동시간 정보 저장
+            travel_time_from_prev=c.get("travel_time_from_prev"),
+            travel_mode_from_prev=c.get("travel_mode_from_prev"),
         )
         db.add(db_place)
         new_places.append(db_place)

@@ -124,6 +124,11 @@ class MeetingPlace(Base):
     # restaurant / cafe / activity / shopping / culture / nature ...
     category = Column(String, nullable=True)
     duration = Column(Integer, nullable=True)
+    
+    # 이전 장소로부터의 이동시간 (분 단위), 첫 번째 장소는 None
+    travel_time_from_prev = Column(Integer, nullable=True)
+    # 이동 수단: walking, transit, driving
+    travel_mode_from_prev = Column(String(20), nullable=True)
 
     meeting = relationship("Meeting", back_populates="places")
 
