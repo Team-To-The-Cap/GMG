@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload 
 from typing import List, Tuple
 from datetime import datetime, date, time, timedelta  # ⬅️ 사용 중
+from pathlib import Path
+import os
 
 from ..database import get_db
 from .. import schemas
@@ -12,13 +14,20 @@ from .calc_func import *  # find_road_center_node, save_calculated_places 등
 from typing import Optional
 import requests
 
-from ..services.google_distance_matrix import compute_minimax_travel_times
+from ..routers.google_distance_matrix import compute_minimax_travel_times
 
-NAVER_MAP_CLIENT_ID = "o3qhd1pz6i"
-NAVER_MAP_CLIENT_SECRET = "CgU14l9YJBqqNetcd8KiZ0chNLJmYBwmy9HkAjg5"
+# ── .env 강제 로드 (backend 루트의 .env) ──
+try:
+    from dotenv import load_dotenv
+    load_dotenv(dotenv_path=Path(__file__).resolve().parents[2] / ".env")
+except Exception:
+    pass
 
-CLIENT_ID = "o3qhd1pz6i"
-CLIENT_SECRET = "CgU14l9YJBqqNetcd8KiZ0chNLJmYBwmy9HkAjg5"
+def _get_naver_map_creds() -> tuple[str | None, str | None]:
+    """네이버 지도 API 크리덴셜을 환경 변수에서 가져옵니다."""
+    cid = os.getenv("NAVER_MAP_CLIENT_ID") or os.getenv("NAVER_CLIENT_ID") or os.getenv("client_id")
+    sec = os.getenv("NAVER_MAP_CLIENT_SECRET") or os.getenv("NAVER_CLIENT_SECRET") or os.getenv("client_secret")
+    return cid, sec
 
 router = APIRouter(
     prefix="/meetings",
@@ -33,7 +42,8 @@ def reverse_geocode_naver(lon: float, lat: float) -> Optional[str]:
 
     실패하면 None 반환.
     """
-    if not NAVER_MAP_CLIENT_ID or not NAVER_MAP_CLIENT_SECRET:
+    client_id, client_secret = _get_naver_map_creds()
+    if not client_id or not client_secret:
         # 키 설정 안 된 경우
         return None
 
@@ -46,8 +56,8 @@ def reverse_geocode_naver(lon: float, lat: float) -> Optional[str]:
         "output": "json",
     }
     headers = {
-        "X-NCP-APIGW-API-KEY-ID": NAVER_MAP_CLIENT_ID,
-        "X-NCP-APIGW-API-KEY": NAVER_MAP_CLIENT_SECRET,
+        "X-NCP-APIGW-API-KEY-ID": client_id,
+        "X-NCP-APIGW-API-KEY": client_secret,
     }
 
     try:

@@ -3,6 +3,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List
+from pathlib import Path
+import os
 
 import requests
 
@@ -15,9 +17,20 @@ router = APIRouter(
     tags=["Participants"],
 )
 
-CLIENT_ID = "o3qhd1pz6i"
-CLIENT_SECRET = "CgU14l9YJBqqNetcd8KiZ0chNLJmYBwmy9HkAjg5"
+# ── .env 강제 로드 (backend 루트의 .env) ──
+try:
+    from dotenv import load_dotenv
+    load_dotenv(dotenv_path=Path(__file__).resolve().parents[2] / ".env")
+except Exception:
+    pass
+
 GEOCODE_URL = "https://maps.apigw.ntruss.com/map-geocode/v2/geocode"
+
+def _get_naver_map_creds() -> tuple[str | None, str | None]:
+    """네이버 지도 API 크리덴셜을 환경 변수에서 가져옵니다."""
+    cid = os.getenv("NAVER_MAP_CLIENT_ID") or os.getenv("NAVER_CLIENT_ID") or os.getenv("client_id")
+    sec = os.getenv("NAVER_MAP_CLIENT_SECRET") or os.getenv("NAVER_CLIENT_SECRET") or os.getenv("client_secret")
+    return cid, sec
 
 
 def get_coords_from_address(address: str):
@@ -25,9 +38,14 @@ def get_coords_from_address(address: str):
     Naver Geocoding API를 호출하여 주소로부터 (위도, 경도)를 반환합니다.
     성공 시 (lat, lon) 튜플, 실패 시 None.
     """
+    client_id, client_secret = _get_naver_map_creds()
+    if not client_id or not client_secret:
+        print("!!! [Geocoding] Naver API credentials not configured")
+        return None
+
     headers = {
-        "X-NCP-APIGW-API-KEY-ID": CLIENT_ID,
-        "X-NCP-APIGW-API-KEY": CLIENT_SECRET,
+        "X-NCP-APIGW-API-KEY-ID": client_id,
+        "X-NCP-APIGW-API-KEY": client_secret,
         "Accept": "application/json",
     }
     params = {"query": address}
@@ -35,7 +53,7 @@ def get_coords_from_address(address: str):
     print("--- [Geocoding Debug] ---")
     print("Endpoint     :", GEOCODE_URL)
     print("Query        :", address)
-    print("ClientID tail:", CLIENT_ID[-4:] if CLIENT_ID else "None")
+    print("ClientID tail:", client_id[-4:] if client_id else "None")
     print("-------------------------")
 
     try:
