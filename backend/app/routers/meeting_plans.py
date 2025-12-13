@@ -348,12 +348,16 @@ def create_auto_plan_for_meeting(
         # 입력 좌표가 그래프 범위 밖이면 단순 지리적 중심점 사용
         try:
             # 3-1. 도로 그래프 위 multi-mode minimax center + top_k 후보 계산 (1차 후보 생성)
+            # 대중교통 사용자가 있으면 더 많은 후보 생성 (지하철역 근처 우선)
+            has_transit = any(m in ["public", "transit", "대중교통", "bus", "subway"] for m in modes)
+            top_k_value = 5  # 후보를 5개로 제한
+            
             center_result = find_road_center_node_multi_mode(
                 G,
                 coords_lonlat=coords,
                 modes=modes,
                 return_paths=True,
-                top_k=7,  # 후보를 늘려 minimax(최대값 최소) 탐색 품질 개선
+                top_k=top_k_value,
             )
             print(f"[DEBUG] center_result: {center_result}")
         except (RuntimeError, ValueError, Exception) as e:
@@ -473,7 +477,7 @@ def create_auto_plan_for_meeting(
 
             # 3-4. MeetingPlace candidates 생성
             #     - Google minimax 기준으로 고른 best_index가 "주요 만남 장소"
-            #     - 나머지는 후보 #2, #3 ...
+            
             for idx, c in enumerate(center_candidates):
                 lat = float(c["lat"])
                 lng = float(c["lng"])

@@ -1,12 +1,18 @@
 # app/main.py
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 from typing import List
 from sqlalchemy.orm import Session
+import traceback
+import logging
 
 from . import models
 from .database import engine, SessionLocal
 from . import schemas
+
+log = logging.getLogger(__name__)
 from .routers import calc_func as meeting_point
 from .routers import participants
 from .routers import meetings
@@ -71,7 +77,98 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
+    max_age=3600,  # CORS preflight 캐시 시간 증가
 )
+
+# 전역 예외 핸들러 추가 (CORS 헤더 보장)
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """
+    모든 예외를 처리하여 CORS 헤더를 보장합니다.
+    """
+    log.error(f"Unhandled exception: {exc}", exc_info=True)
+    
+    # 요청 origin 확인
+    origin = request.headers.get("origin")
+    if origin:
+        # origins 리스트에 있는지 확인
+        if origin not in origins:
+            # 정규식으로 확인
+            if allow_origin_regex:
+                import re
+                if not re.match(allow_origin_regex, origin):
+                    origin = None
+        # origins에 있으면 그대로 사용
+    else:
+        origin = None
+    
+    # 에러 상세 정보 (개발 환경에서만)
+    error_detail = {
+        "error": str(exc),
+        "type": type(exc).__name__,
+    }
+    
+    if is_dev:
+        error_detail["traceback"] = traceback.format_exc()
+    
+    # CORS 헤더 설정
+    headers = {
+        "Access-Control-Allow-Methods": "*",
+        "Access-Control-Allow-Headers": "*",
+    }
+    
+    if origin:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+    elif is_dev:
+        # 개발 환경에서는 origin이 없어도 localhost 허용
+        headers["Access-Control-Allow-Origin"] = "http://localhost:5173"
+    
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content=error_detail,
+        headers=headers
+    )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """
+    요청 검증 에러 처리 (CORS 헤더 보장)
+    """
+    log.warning(f"Validation error: {exc.errors()}")
+    
+    # 요청 origin 확인
+    origin = request.headers.get("origin")
+    if origin:
+        # origins 리스트에 있는지 확인
+        if origin not in origins:
+            # 정규식으로 확인
+            if allow_origin_regex:
+                import re
+                if not re.match(allow_origin_regex, origin):
+                    origin = None
+        # origins에 있으면 그대로 사용
+    else:
+        origin = None
+    
+    # CORS 헤더 설정
+    headers = {
+        "Access-Control-Allow-Methods": "*",
+        "Access-Control-Allow-Headers": "*",
+    }
+    
+    if origin:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+    elif is_dev:
+        # 개발 환경에서는 origin이 없어도 localhost 허용
+        headers["Access-Control-Allow-Origin"] = "http://localhost:5173"
+    
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": exc.errors()},
+        headers=headers
+    )
 
 # ✅ 라우터 등록
 app.include_router(meeting_point.router, prefix="")
