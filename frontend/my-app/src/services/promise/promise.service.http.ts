@@ -325,7 +325,19 @@ async function buildCourseFromPlaces(
       }
     }
 
-    const stay = pl.duration ?? 60;
+    // 카테고리별 기본 소비 시간 정의
+    const categoryBaseDurations: Record<string, number> = {
+      cafe: 60,           // 카페: 1시간
+      restaurant: 90,     // 맛집: 1.5시간
+      activity: 120,      // 액티비티: 2시간
+      shopping: 60,       // 쇼핑: 1시간
+      culture: 120,       // 문화시설: 2시간
+      nature: 180,        // 자연관광: 3시간
+    };
+    
+    const category = (pl.category as string) || "activity";
+    const baseStay = pl.duration ?? categoryBaseDurations[category] ?? 60;
+    
     items.push({
       type: "visit",
       id: String(pl.id),
@@ -334,12 +346,43 @@ async function buildCourseFromPlaces(
         address: pl.address,
         lat: pl.latitude,
         lng: pl.longitude,
-        category: (pl as any).category ?? "activity",
+        category: category,
       },
-      stayMinutes: stay,
+      stayMinutes: baseStay,
       note: pl.address,
     });
-    activityMinutes += stay;
+    activityMinutes += baseStay;
+  }
+
+  // meeting_duration에 맞춰 총 시간 조정
+  const meetingDurationMinutes = meeting.meeting_duration 
+    ? parseInt(meeting.meeting_duration, 10) 
+    : null;
+  
+  if (meetingDurationMinutes && meetingDurationMinutes > 0) {
+    const currentTotalMinutes = activityMinutes + travelMinutes;
+    
+    // 현재 총 시간이 meeting_duration보다 적으면 비율로 조정
+    if (currentTotalMinutes < meetingDurationMinutes) {
+      // 활동 시간과 이동 시간을 유지하면서, 활동 시간을 늘려서 목표 시간에 맞춤
+      const targetActivityMinutes = meetingDurationMinutes - travelMinutes;
+      
+      if (targetActivityMinutes > activityMinutes) {
+        // 각 장소의 체류 시간을 비율로 늘림
+        const ratio = targetActivityMinutes / activityMinutes;
+        
+        // visit 타입 아이템의 stayMinutes를 조정
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          if (item.type === "visit") {
+            item.stayMinutes = Math.round(item.stayMinutes * ratio);
+          }
+        }
+        
+        // activityMinutes 재계산
+        activityMinutes = targetActivityMinutes;
+      }
+    }
   }
 
   return {

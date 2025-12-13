@@ -163,14 +163,42 @@ def score_course(
     
     # 참가자 선호도 보너스 계산
     preference_bonus = 0.0
-    category_list = []  # 카테고리 추적용
+    category_list = []  # 카테고리 추적용 (실제 Google Places API types 기반)
+    
+    # Google Places API types를 내부 category로 매핑하는 함수 import
+    from core.place_category import map_google_types_to_category
     
     for place in places:
-        step_idx = place.step_index
-        if 0 <= step_idx < len(steps):
-            place_type = steps[step_idx].type
-            place_category = _map_place_type_to_category(place_type)
-            category_list.append(place_category)
+        # 실제 Google Places API의 types를 사용하여 정확한 category 결정
+        place_types = getattr(place, "types", [])
+        place_category = None
+        
+        if place_types:
+            # Google Places API types를 내부 category로 매핑
+            mapped_category = map_google_types_to_category(place_types)
+            if mapped_category:
+                # 내부 category를 한글 카테고리로 변환
+                if mapped_category == "restaurant":
+                    place_category = "맛집"
+                elif mapped_category == "cafe":
+                    place_category = "카페"
+                elif mapped_category in ["activity", "culture", "nature"]:
+                    place_category = "액티비티"
+                elif mapped_category == "shopping":
+                    place_category = "쇼핑"
+                else:
+                    place_category = "기타"
+        
+        # types가 없거나 매핑 실패 시 step 기반으로 fallback
+        if not place_category:
+            step_idx = place.step_index
+            if 0 <= step_idx < len(steps):
+                place_type = steps[step_idx].type
+                place_category = _map_place_type_to_category(place_type)
+            else:
+                place_category = "기타"
+        
+        category_list.append(place_category)
             
             # 참가자들의 fav_activity와 매칭 확인
             for fav_activity in participant_fav_activities:
