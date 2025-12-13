@@ -18,5 +18,14 @@ if load_dotenv:
 
 GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
 
+# 네이버 Maps API (Geocoding, Directions, Reverse Geocoding)
+NAVER_MAP_CLIENT_ID = os.getenv("NAVER_MAP_CLIENT_ID")
+NAVER_MAP_CLIENT_SECRET = os.getenv("NAVER_MAP_CLIENT_SECRET")
+
+# 네이버 Search API (Local Search)
+NAVER_SEARCH_CLIENT_ID = os.getenv("NAVER_SEARCH_CLIENT_ID")
+NAVER_SEARCH_CLIENT_SECRET = os.getenv("NAVER_SEARCH_CLIENT_SECRET")
+
+# 하위 호환성을 위한 변수 (deprecated - 사용하지 않는 것을 권장)
 client_id = os.getenv("client_id")
 client_secret = os.getenv("client_secret")

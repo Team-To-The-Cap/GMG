@@ -14,7 +14,7 @@ from typing import Optional
 import requests
 
 from ..services.google_distance_matrix import compute_minimax_travel_times
-from core.config import GOOGLE_MAPS_API_KEY, client_id, client_secret
+from core.config import GOOGLE_MAPS_API_KEY, NAVER_MAP_CLIENT_ID, NAVER_MAP_CLIENT_SECRET
 
 router = APIRouter(prefix="/meetings", tags=["Meeting-Plans"])
 
@@ -26,7 +26,7 @@ def reverse_geocode_naver(lon: float, lat: float) -> Optional[str]:
 
     실패하면 None 반환.
     """
-    if not client_id or not client_secret:
+    if not NAVER_MAP_CLIENT_ID or not NAVER_MAP_CLIENT_SECRET:
         # 키 설정 안 된 경우
         return None
 
@@ -39,8 +39,8 @@ def reverse_geocode_naver(lon: float, lat: float) -> Optional[str]:
         "output": "json",
     }
     headers = {
-        "X-NCP-APIGW-API-KEY-ID": client_id,
-        "X-NCP-APIGW-API-KEY": client_secret,
+        "X-NCP-APIGW-API-KEY-ID": NAVER_MAP_CLIENT_ID,
+        "X-NCP-APIGW-API-KEY": NAVER_MAP_CLIENT_SECRET,
     }
 
     try:

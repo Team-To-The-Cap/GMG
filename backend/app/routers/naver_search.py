@@ -21,17 +21,32 @@ GEOCODE_URL = "https://maps.apigw.ntruss.com/map-geocode/v2/geocode"
 log = logging.getLogger(__name__)
 
 
-def _get_creds() -> tuple[str | None, str | None]:
+def _get_search_creds() -> tuple[str | None, str | None]:
     """
-    Naver API 자격 증명 가져오기
-    .env 파일의 client_id/client_secret만 사용합니다.
+    Naver Search API 자격 증명 가져오기
+    .env 파일의 NAVER_SEARCH_CLIENT_ID/NAVER_SEARCH_CLIENT_SECRET을 사용합니다.
     """
     try:
-        from core.config import client_id, client_secret
-        if client_id and client_secret:
-            return client_id, client_secret
+        from core.config import NAVER_SEARCH_CLIENT_ID, NAVER_SEARCH_CLIENT_SECRET
+        if NAVER_SEARCH_CLIENT_ID and NAVER_SEARCH_CLIENT_SECRET:
+            return NAVER_SEARCH_CLIENT_ID, NAVER_SEARCH_CLIENT_SECRET
     except Exception as e:
         log.warning("[NAVER Search] Failed to import from core.config: %s", e)
+    
+    return None, None
+
+
+def _get_map_creds() -> tuple[str | None, str | None]:
+    """
+    Naver Maps API 자격 증명 가져오기
+    .env 파일의 NAVER_MAP_CLIENT_ID/NAVER_MAP_CLIENT_SECRET을 사용합니다.
+    """
+    try:
+        from core.config import NAVER_MAP_CLIENT_ID, NAVER_MAP_CLIENT_SECRET
+        if NAVER_MAP_CLIENT_ID and NAVER_MAP_CLIENT_SECRET:
+            return NAVER_MAP_CLIENT_ID, NAVER_MAP_CLIENT_SECRET
+    except Exception as e:
+        log.warning("[NAVER Maps] Failed to import from core.config: %s", e)
     
     return None, None
 
@@ -101,13 +116,14 @@ async def _geocode_address(
 
 @router.get("/places")
 async def search_places(q: str = Query(..., min_length=1), display: int = 10):
-    client_id, client_secret = _get_creds()
-    if not client_id or not client_secret:
-        raise HTTPException(status_code=503, detail="Naver API credentials not configured")
+    # 검색 API 키 사용
+    search_client_id, search_client_secret = _get_search_creds()
+    if not search_client_id or not search_client_secret:
+        raise HTTPException(status_code=503, detail="Naver Search API credentials not configured")
 
     headers = {
-        "X-Naver-Client-Id": client_id,
-        "X-Naver-Client-Secret": client_secret,
+        "X-Naver-Client-Id": search_client_id,
+        "X-Naver-Client-Secret": search_client_secret,
     }
     params = {"query": q, "display": min(max(display, 1), 30)}  # 1~30로 클램프
 
@@ -129,23 +145,25 @@ async def search_places(q: str = Query(..., min_length=1), display: int = 10):
                 telephone = it.get("telephone")
 
                 # 🔹 지오코딩용 주소: 도로명/지번 둘 다 시도
+                # Maps API 키 사용
+                map_client_id, map_client_secret = _get_map_creds()
                 lat = lng = None
                 # 1순위: 도로명주소
                 coords = None
-                if road_addr:
+                if road_addr and map_client_id and map_client_secret:
                     coords = await _geocode_address(
                         client,
                         road_addr,
-                        client_id,
-                        client_secret,
+                        map_client_id,
+                        map_client_secret,
                     )
                 # 2순위: 도로명 실패 시 지번주소로 재시도
-                if not coords and address:
+                if not coords and address and map_client_id and map_client_secret:
                     coords = await _geocode_address(
                         client,
                         address,
-                        client_id,
-                        client_secret,
+                        map_client_id,
+                        map_client_secret,
                     )
 
                 if coords:

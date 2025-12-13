@@ -48,19 +48,18 @@ ORS_BASE_URL = "https://api.openrouteservice.org/v2"
 def _get_naver_apigw_credentials() -> tuple[str | None, str | None]:
     """
     Naver Maps/Directions(APIGW) 인증키.
-    .env 파일의 client_id/client_secret만 사용합니다.
+    .env 파일의 NAVER_MAP_CLIENT_ID/NAVER_MAP_CLIENT_SECRET을 사용합니다.
     """
-    # core.config의 client_id/client_secret (.env의 client_id/client_secret)
     try:
-        from core.config import client_id, client_secret
+        from core.config import NAVER_MAP_CLIENT_ID, NAVER_MAP_CLIENT_SECRET
 
-        if client_id and client_secret:
+        if NAVER_MAP_CLIENT_ID and NAVER_MAP_CLIENT_SECRET:
             # 따옴표 제거
-            client_id_clean = str(client_id).strip().strip('"').strip("'")
-            client_secret_clean = str(client_secret).strip().strip('"').strip("'")
+            client_id_clean = str(NAVER_MAP_CLIENT_ID).strip().strip('"').strip("'")
+            client_secret_clean = str(NAVER_MAP_CLIENT_SECRET).strip().strip('"').strip("'")
 
             log.info(
-                "[NAVER Credentials] Using client_id/client_secret from core.config (.env)"
+                "[NAVER Credentials] Using NAVER_MAP_CLIENT_ID/NAVER_MAP_CLIENT_SECRET from core.config (.env)"
             )
             return client_id_clean, client_secret_clean
     except Exception as e:
@@ -68,7 +67,7 @@ def _get_naver_apigw_credentials() -> tuple[str | None, str | None]:
 
     log.error(
         "[NAVER Credentials] ✗ No credentials found | "
-        "Please set client_id and client_secret in .env file"
+        "Please set NAVER_MAP_CLIENT_ID and NAVER_MAP_CLIENT_SECRET in .env file"
     )
     return None, None
 
