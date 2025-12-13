@@ -719,13 +719,17 @@ async def build_and_save_courses_for_meeting(
         total_base_activity_minutes += base_duration
         
         # 원본 타입 정보 저장 (bar 타입 식별용)
-        # 요리주점 판단: Google Places API의 types만 사용 (실제 장소 타입이므로 가장 정확함)
-        # types에 "bar"가 포함되어 있으면 요리주점으로 판단
-        # step_def.type은 검색 의도일 뿐, 실제 장소 타입을 보장하지 않으므로 사용하지 않음
+        # 요리주점 판단: Google Places API의 types 우선, 검색 의도(step_def.type)를 fallback으로 사용
+        # 1. types에 "bar"가 포함되어 있으면 요리주점 (가장 정확)
+        # 2. types에 없지만 검색 의도가 "bar"이고 category가 "restaurant"면 요리주점으로 판단
         original_type = None
         
         if place_types and "bar" in place_types:
             # Google Places API의 types에 "bar"가 포함되어 있으면 요리주점
+            original_type = "bar"
+        elif step_def and step_def.type == "bar" and category == "restaurant":
+            # 검색 의도가 "bar"이고 결과가 restaurant인 경우 요리주점으로 판단
+            # (Google Places API가 bar 타입을 반환하지 않았지만, 검색 의도를 신뢰)
             original_type = "bar"
         
         auto_candidates.append(
@@ -844,11 +848,14 @@ async def build_and_save_courses_for_meeting(
                         add_duration = category_base_durations.get(category, 60)
                         
                         # 원본 타입 정보 저장 (bar 타입 식별용)
-                        # 추가 장소도 Google Places API types만 사용 (실제 장소 타입)
+                        # 추가 장소도 Google Places API types 우선, 검색 의도(step.type)를 fallback으로 사용
                         add_original_type = None
                         
                         if place_types and "bar" in place_types:
                             # Google Places API의 types에 "bar"가 포함되어 있으면 요리주점
+                            add_original_type = "bar"
+                        elif add_step.type == "bar" and category == "restaurant":
+                            # 검색 의도가 "bar"이고 결과가 restaurant인 경우 요리주점으로 판단
                             add_original_type = "bar"
                         
                         auto_candidates.append({
