@@ -212,6 +212,7 @@ export default function AddParticipantStartPage() {
         selectedTimes: availableTimes,
         selectedTransportation: transportation,
         selectedPreferences: preferredCats,
+        selectedSubPreferences: preferredSubcats,
         editParticipantId,
         participantDraftId,
       },
