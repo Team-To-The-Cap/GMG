@@ -62,7 +62,7 @@ type Props = {
   onToggleMeetingProfileChip?: (
     field: keyof MeetingProfile,
     value: string
-  ) => void;
+  ) => Promise<void>;
 };
 
 type State = {

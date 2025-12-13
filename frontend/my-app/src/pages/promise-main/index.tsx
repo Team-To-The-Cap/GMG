@@ -27,11 +27,11 @@ export type PromiseMainHandlers = {
   // 약속 분위기/목적 등 프로필 변경 (직접 patch)
   onChangeMeetingProfile: (patch: Partial<MeetingProfile>) => void;
 
-  // 🔹 프로필 칩 토글 (뷰에서 호출)
+  // 🔹 프로필 칩 토글 (뷰에서 호출, 자동 저장 포함)
   onToggleMeetingProfileChip: (
     field: keyof MeetingProfile,
     value: string
-  ) => void;
+  ) => Promise<void>;
 };
 
 export type PromiseMainController = {
@@ -264,9 +264,11 @@ export function usePromiseMainController({
     [setData]
   );
 
-  // ✅ 프로필 칩 토글 로직 (단일/복수 선택 처리 + vibe까지 포함)
+  // ✅ 프로필 칩 토글 로직 (단일/복수 선택 처리 + 자동 저장)
   const onToggleMeetingProfileChip = useCallback(
-    (field: keyof MeetingProfile, value: string) => {
+    async (field: keyof MeetingProfile, value: string) => {
+      if (!promiseId) return;
+
       setData((prev) => {
         if (!prev) return prev;
 
@@ -274,18 +276,17 @@ export function usePromiseMainController({
         const isMultiField =
           field === "purpose" || field === "budget" || field === "vibe";
 
+        let nextProfile: MeetingProfile;
+
         if (!isMultiField) {
-          // 단일 선택 필드 (예: withWhom)
+          // 단일 선택 필드 (예: withWhom, meetingDuration)
           const currentVal = prevProfile[field] as string | undefined;
           const nextVal = currentVal === value ? undefined : value;
 
-          return {
-            ...prev,
-            meetingProfile: {
-              ...prevProfile,
-              [field]: nextVal,
-            } as MeetingProfile,
-          };
+          nextProfile = {
+            ...prevProfile,
+            [field]: nextVal,
+          } as MeetingProfile;
         } else {
           // 복수 선택 필드 (purpose, budget, vibe)
           const currentArr = normalizeMultiValue(prevProfile[field]);
@@ -294,17 +295,30 @@ export function usePromiseMainController({
             ? currentArr.filter((v) => v !== value)
             : [...currentArr, value];
 
-          return {
-            ...prev,
-            meetingProfile: {
-              ...prevProfile,
-              [field]: nextArr,
-            } as MeetingProfile,
-          };
+          nextProfile = {
+            ...prevProfile,
+            [field]: nextArr,
+          } as MeetingProfile;
         }
+
+        const nextData = {
+          ...prev,
+          meetingProfile: nextProfile,
+        };
+
+        // 서버에 자동 저장 (비동기, 에러는 조용히 처리)
+        (async () => {
+          try {
+            await savePromiseDetail(nextData);
+          } catch (e) {
+            console.error("프로필 저장 실패:", e);
+          }
+        })();
+
+        return nextData;
       });
     },
-    [setData]
+    [setData, promiseId]
   );
 
   return {
