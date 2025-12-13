@@ -590,10 +590,19 @@ def extract_travel_time_from_driving_response(
 
         # 첫 번째 경로의 summary에서 duration 추출
         summary = paths[0].get("summary", {})
-        duration = summary.get("duration")
+        duration_ms = summary.get("duration")
 
-        if duration is not None:
-            return int(duration)
+        if duration_ms is not None:
+            # 네이버 Directions API는 duration을 밀리초(ms) 단위로 반환
+            # 초 단위로 변환 (1000으로 나누기)
+            duration_seconds = int(duration_ms / 1000)
+            log.info(
+                "[NAVER Directions] Driving duration extracted: %d ms -> %d seconds (%.1f minutes)",
+                duration_ms,
+                duration_seconds,
+                duration_seconds / 60.0,
+            )
+            return duration_seconds
 
         return None
 
@@ -624,10 +633,19 @@ def extract_travel_time_from_walking_response(data: Dict[str, Any]) -> Optional[
 
         # 첫 번째 경로의 summary에서 duration 추출
         summary = paths[0].get("summary", {})
-        duration = summary.get("duration")
+        duration_ms = summary.get("duration")
 
-        if duration is not None:
-            return int(duration)
+        if duration_ms is not None:
+            # 네이버 Directions API는 duration을 밀리초(ms) 단위로 반환
+            # 초 단위로 변환 (1000으로 나누기)
+            duration_seconds = int(duration_ms / 1000)
+            log.info(
+                "[NAVER Directions] Walking duration extracted: %d ms -> %d seconds (%.1f minutes)",
+                duration_ms,
+                duration_seconds,
+                duration_seconds / 60.0,
+            )
+            return duration_seconds
 
         return None
 
