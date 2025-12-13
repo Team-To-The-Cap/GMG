@@ -137,6 +137,12 @@ def plan_courses_internal(req: CourseRequest) -> CourseResponse:
 
     for idx, step in enumerate(req.steps):
         # ✅ 서비스 레벨 fetch_nearby_places 사용
+        print(
+            f"[COURSE] Step {idx}: Searching with keyword='{step.query}', type='{step.type}', "
+            f"location=({req.center_lat:.6f}, {req.center_lng:.6f}), radius={req.radius}",
+            flush=True
+        )
+        
         places_raw = fetch_nearby_places(
             lat=req.center_lat,
             lng=req.center_lng,
@@ -145,14 +151,37 @@ def plan_courses_internal(req: CourseRequest) -> CourseResponse:
             type=step.type,
         )
 
+        print(
+            f"[COURSE] Step {idx}: Raw results count = {len(places_raw)}",
+            flush=True
+        )
+
         # 평점/개수 필터 (필요하면 여기서 min_rating, sorting 등 추가)
         filtered = places_raw[: req.per_step_limit]
         step_candidates = to_candidates(filtered, step_index=idx)
 
+        print(
+            f"[COURSE] Step {idx}: Valid candidates (with lat/lng) count = {len(step_candidates)}",
+            flush=True
+        )
+
         if not step_candidates:
+            # API 응답에서 상태 확인 (실패 원인 파악)
+            # places_raw가 비어있으면 fetch_nearby_places에서 이미 로그를 남겼지만
+            # 여기서도 명확하게 표시
+            error_detail = (
+                f"No valid candidates (with lat/lng) for step {idx}. "
+                f"Search params: keyword='{step.query}', type='{step.type}', "
+                f"location=({req.center_lat:.6f}, {req.center_lng:.6f}), radius={req.radius}. "
+                f"Raw results from API: {len(places_raw)} places found. "
+                f"Possible causes: 1) Google Places API not enabled/configured correctly, "
+                f"2) No places match the search criteria in the area, "
+                f"3) API key issues. Check server logs for [GGL] messages for details."
+            )
+            print(f"[COURSE] ERROR: {error_detail}", flush=True)
             raise HTTPException(
                 status_code=404,
-                detail=f"No valid candidates (with lat/lng) for step {idx}",
+                detail=error_detail,
             )
 
         all_candidates.append(step_candidates)
