@@ -36,22 +36,22 @@ G = G.to_undirected()  # 또는 nx.MultiGraph(G_directed)
 
 MODE_SPEED_KMPH = {
     # 1) 도보: 시속 1km (테스트용으로 아주 느리게)
-    "도": 4.0,
-    "도보": 4.0,
-    "walk": 4.0,
-    "walking": 4.0,
+    "도": 3.0,
+    "도보": 3.0,
+    "walk": 3.0,
+    "walking": 3.0,
     # 2) 자동차: 시속 30km (도심 평균 서행 기준)
-    "차": 10.0,
-    "자동차": 10.0,
-    "drive": 10.0,
-    "driving": 10.0,
-    "car": 10.0,
+    "차": 15.0,
+    "자동차": 15.0,
+    "drive": 15.0,
+    "driving": 15.0,
+    "car": 15.0,
     # 3) 대중교통: 일단 자동차와 동일하게 취급
-    "대중교통": 10.0,
-    "public": 10.0,
-    "transit": 10.0,
-    "bus": 10.0,
-    "subway": 10.0,
+    "대중교통": 15.0,
+    "public": 15.0,
+    "transit": 15.0,
+    "bus": 15.0,
+    "subway": 15.0,
 }
 
 
@@ -289,9 +289,10 @@ def find_road_center_node_multi_mode(
         stats = node_stats[v_id]
         max_t = stats["max"]
         min_t = stats["min"]
-        diff = max_t - min_t
-        score = max_t + (diff * FAIRNESS_WEIGHT)
-        return score
+        diff  = max_t - min_t
+        # 1순위: 최대시간이 작은 후보
+        # 2순위: 사람 간 시간 차이가 작은 후보
+        return (max_t, diff)
 
     sorted_candidates = sorted(candidates, key=calculate_score)
     top_nodes = sorted_candidates[:top_k]

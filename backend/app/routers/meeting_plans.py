@@ -14,6 +14,7 @@ from typing import Optional
 import requests
 
 from ..services.google_distance_matrix import compute_minimax_travel_times
+from core.config import GOOGLE_MAPS_API_KEY
 
 NAVER_MAP_CLIENT_ID = "o3qhd1pz6i"
 NAVER_MAP_CLIENT_SECRET = "CgU14l9YJBqqNetcd8KiZ0chNLJmYBwmy9HkAjg5"
@@ -302,7 +303,6 @@ def create_auto_plan_for_meeting(
     coords: List[Tuple[float, float]] = []
     modes: List[str] = []  # 각 참가자의 이동 수단
     participant_for_matrix: List[dict] = []
-    modes: List[str] = []
 
     for p in meeting.participants:
         if p.start_latitude is None or p.start_longitude is None:
@@ -324,7 +324,7 @@ def create_auto_plan_for_meeting(
             {
                 "lat": p.start_latitude,
                 "lng": p.start_longitude,
-                "transportation": transport_mode,
+                "transportation": transport,  # transport_mode -> transport로 수정
             }
         )
 
@@ -440,6 +440,14 @@ def create_auto_plan_for_meeting(
             best_index = 0
 
             if participant_for_matrix and center_candidates:
+                if not GOOGLE_MAPS_API_KEY:
+                    raise HTTPException(
+                        status_code=503,
+                        detail=(
+                            "공평한 만남장소(minimax)를 계산하려면 Google Distance Matrix가 필요합니다. "
+                            "서버에 GOOGLE_MAPS_API_KEY를 설정해주세요."
+                        ),
+                    )
                 dm_result = compute_minimax_travel_times(
                     participants=participant_for_matrix,
                     candidates=center_candidates,
