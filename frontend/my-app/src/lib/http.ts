@@ -11,9 +11,14 @@
 const isCapacitor =
   typeof window !== "undefined" && window.location.protocol === "capacitor:";
 
+// 환경 변수에서 API 설정 가져오기
+const API_HOST = import.meta.env.VITE_API_HOST || "211.188.55.98";
+const API_PORT = import.meta.env.VITE_API_PORT || "8001";
+const API_BASE_URL_FULL = `http://${API_HOST}:${API_PORT}`;
+
 // 환경별 기본 BASE_URL
 const DEFAULT_BASE_URL = isCapacitor
-  ? "http://211.188.55.98:8001" // 🔥 iOS/Android에서 사용할 백엔드 주소
+  ? API_BASE_URL_FULL // 🔥 iOS/Android에서 사용할 백엔드 주소 (환경 변수 기반)
   : "/api"; // 브라우저(dev/prod)에서는 기존처럼 프록시/리버스프록시 사용
 
 // 최종 BASE_URL: .env 값이 있으면 우선, 없으면 위 기본값 사용

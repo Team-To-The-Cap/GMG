@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from typing import List, Optional, Dict
+import json
+import math
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
@@ -17,6 +19,7 @@ from ..routers.course import (
     CourseResponse,
     plan_courses_internal,
 )
+from ..services.naver_directions import get_travel_time
 
 
 @dataclass
@@ -88,24 +91,113 @@ def _normalize_list_field(value: Optional[str]) -> List[str]:
     return [v.strip().lower() for v in value.split(",") if v.strip()]
 
 
-def _pick_activity_query(fav_activities: List[str]) -> str:
+def _parse_subcategories(participants: List[models.Participant]) -> Dict[str, List[str]]:
     """
-    참가자 fav_activity 들을 보고 1코스 '놀거리' 검색어를 선택.
+    참가자들의 fav_subcategories JSON을 파싱하여 
+    메인 카테고리별 서브 카테고리 리스트를 반환.
     """
+    all_subcats: Dict[str, List[str]] = {}
+    
+    for p in participants:
+        if not p.fav_subcategories:
+            continue
+        
+        try:
+            subcats_dict = json.loads(p.fav_subcategories)
+            if isinstance(subcats_dict, dict):
+                for main_cat, subcats in subcats_dict.items():
+                    if isinstance(subcats, list):
+                        if main_cat not in all_subcats:
+                            all_subcats[main_cat] = []
+                        all_subcats[main_cat].extend(subcats)
+        except (json.JSONDecodeError, TypeError):
+            continue
+    
+    # 중복 제거
+    for main_cat in all_subcats:
+        all_subcats[main_cat] = list(set(all_subcats[main_cat]))
+    
+    return all_subcats
+
+
+def _pick_activity_query(fav_activities: List[str], subcategories: Dict[str, List[str]]) -> tuple[str, str]:
+    """
+    참가자 fav_activity와 서브 카테고리를 보고 1코스 '놀거리' 검색어와 type을 선택.
+    Returns: (query, type) 튜플
+    
+    Google Places API에서 잘 지원되는 type 사용:
+    - cafe, restaurant, bar
+    - movie_theater, museum, library, art_gallery
+    - park, amusement_park, tourist_attraction
+    - campground
+    """
+    # 서브 카테고리 우선 확인 (더 구체적)
+    activity_subcats = subcategories.get("액티비티", [])
+    rest_subcats = subcategories.get("휴식", [])
+    culture_subcats = subcategories.get("문화시설", [])
+    nature_subcats = subcategories.get("자연관광", [])
+    
+    all_subcat_text = " ".join(activity_subcats + rest_subcats + culture_subcats + nature_subcats).lower()
+    
+    # 액티비티 서브 카테고리
+    if any(k in all_subcat_text for k in ["보드게임"]):
+        return ("보드게임", "cafe")  # "보드게임 카페"보다 "보드게임"이 더 일반적
+    if any(k in all_subcat_text for k in ["방탈출"]):
+        return ("방탈출", "cafe")  # "방탈출 카페"보다 "방탈출"이 더 일반적
+    if any(k in all_subcat_text for k in ["실내스포츠", "스포츠"]):
+        return ("실내 스포츠", "tourist_attraction")  # gym은 지원 안 할 수 있으므로 tourist_attraction 사용
+    if any(k in all_subcat_text for k in ["공방"]):
+        return ("체험 공방", "tourist_attraction")
+    if any(k in all_subcat_text for k in ["놀이공원"]):
+        return ("놀이공원", "amusement_park")
+    
+    # 휴식 서브 카테고리 - spa는 지원 안 할 수 있으므로 keyword만 사용
+    if any(k in all_subcat_text for k in ["찜질방"]):
+        return ("찜질방", "tourist_attraction")  # spa 대신 tourist_attraction 사용
+    if any(k in all_subcat_text for k in ["마사지"]):
+        return ("마사지", "tourist_attraction")
+    if any(k in all_subcat_text for k in ["만화카페"]):
+        return ("만화", "cafe")  # 더 일반적인 검색어
+    if any(k in all_subcat_text for k in ["수면카페"]):
+        return ("카페", "cafe")  # 수면카페는 너무 구체적이므로 일반 카페로
+    
+    # 문화시설 서브 카테고리
+    if any(k in all_subcat_text for k in ["영화관"]):
+        return ("영화관", "movie_theater")
+    if any(k in all_subcat_text for k in ["박물관", "미술관"]):
+        return ("박물관", "museum")
+    if any(k in all_subcat_text for k in ["갤러리"]):
+        return ("갤러리", "tourist_attraction")  # art_gallery보다는 tourist_attraction이 더 안전
+    if any(k in all_subcat_text for k in ["도서관"]):
+        return ("도서관", "library")
+    
+    # 자연관광 서브 카테고리
+    if any(k in all_subcat_text for k in ["공원"]):
+        return ("공원", "park")
+    if any(k in all_subcat_text for k in ["산"]):
+        return ("등산로", "park")
+    if any(k in all_subcat_text for k in ["바다"]):
+        return ("해변", "tourist_attraction")
+    if any(k in all_subcat_text for k in ["캠핑"]):
+        return ("캠핑장", "campground")
+    if any(k in all_subcat_text for k in ["전망대"]):
+        return ("전망대", "tourist_attraction")
+    
+    # 메인 카테고리로 fallback
     fav_text = " ".join(fav_activities).lower()
-
+    
     if any(k in fav_text for k in ["보드게임", "board", "보드"]):
-        return "보드게임 카페"
+        return ("보드게임", "cafe")
     if any(k in fav_text for k in ["방탈출", "escape"]):
-        return "방탈출 카페"
+        return ("방탈출", "cafe")
     if any(k in fav_text for k in ["노래방", "karaoke"]):
-        return "코인 노래방"
+        return ("코인 노래방", "tourist_attraction")  # night_club보다는 tourist_attraction
     if any(k in fav_text for k in ["pc방", "pc bang", "pc방"]):
-        return "피시방"
+        return ("피시방", "tourist_attraction")
     if any(k in fav_text for k in ["전시", "museum", "미술관"]):
-        return "전시회"
+        return ("전시회", "museum")
 
-    return "놀거리"
+    return ("놀거리", "tourist_attraction")
 
 
 def build_steps_from_meeting(
@@ -113,110 +205,375 @@ def build_steps_from_meeting(
     participants: List[models.Participant],
 ) -> List[StepInput]:
     """
-    Meeting.with_whom / purpose / vibe / budget + 참가자 fav_activity 를 보고
-    길이 3 코스를 설계하는 함수.
+    Meeting.with_whom / purpose / vibe / budget + 참가자 fav_activity 및 서브 카테고리를 보고
+    코스를 설계하는 함수 (최소 1개 이상의 steps 생성).
 
     대략적인 규칙:
       - purpose=activity / fav_activity 있으면 1코스는 놀거리/체험
       - purpose=meal/drinks 이면 2코스는 식사 위주
       - vibe, budget 에 따라 '가성비 맛집', '고급 한정식', '분위기 좋은 바' 등 검색어 변경
+      - 서브 카테고리를 활용하여 더 구체적인 검색어 생성
     """
     purposes = _normalize_list_field(meeting.purpose)
     vibes = _normalize_list_field(meeting.vibe)
     with_whom = (meeting.with_whom or "").lower()
     budget = (meeting.budget or "").strip()  # "1","2","3","4" 중 하나라고 가정
+    
+    # meeting_duration 파싱 (분 단위 문자열, 예: "60", "120", "180", "240", "360", "480")
+    meeting_duration_minutes = 0
+    if meeting.meeting_duration:
+        try:
+            meeting_duration_minutes = int(meeting.meeting_duration)
+        except (ValueError, TypeError):
+            meeting_duration_minutes = 0
 
     fav_activities = [
         p.fav_activity for p in participants
         if p.fav_activity
     ]
+    
+    # 서브 카테고리 파싱
+    subcategories = _parse_subcategories(participants)
 
     steps: List[StepInput] = []
+    
+    # purpose 기반으로 코스 구성 전략 결정
+    purpose_str = ",".join(purposes).lower()
+    is_meal_focused = any(p in purposes for p in ["meal", "밥"])
+    is_drink_focused = any(p in purposes for p in ["drinks", "술", "술 한잔"])
+    is_cafe_focused = any(p in purposes for p in ["cafe", "카페", "수다", "카페/수다"])
+    is_activity_focused = any(p in purposes for p in ["activity", "play", "game", "활동", "체험", "활동/체험"])
+    is_meeting_focused = any(p in purposes for p in ["meeting", "미팅", "회의", "회의/미팅"])
+    
+    # budget에 따른 코스 길이 조정 (1=간단, 4=풀코스)
+    budget_num = int(budget) if budget and budget.isdigit() else 2
+    is_high_budget = budget_num >= 3  # 3만원 이상이면 더 다양한 코스
+    is_low_budget = budget_num <= 1   # 1만원대면 간단한 코스
+    
+    # meeting_duration에 따른 최소 코스 개수 결정
+    # - 1시간(60분): 최소 1-2개
+    # - 2시간(120분): 최소 2개
+    # - 3시간(180분): 최소 2-3개
+    # - 4시간(240분): 최소 3개
+    # - 6시간(360분): 최소 3-4개
+    # - 8시간(480분): 최소 4-5개
+    min_steps_from_duration = 1
+    if meeting_duration_minutes >= 480:  # 8시간
+        min_steps_from_duration = 4
+    elif meeting_duration_minutes >= 360:  # 6시간
+        min_steps_from_duration = 3
+    elif meeting_duration_minutes >= 240:  # 4시간
+        min_steps_from_duration = 3
+    elif meeting_duration_minutes >= 180:  # 3시간
+        min_steps_from_duration = 2
+    elif meeting_duration_minutes >= 120:  # 2시간
+        min_steps_from_duration = 2
+    
+    # vibe 확인
+    is_cost_effective = any(v in vibes for v in ["cheap", "가성비", "가성비 위주"])
+    is_calm = any(v in vibes for v in ["calm", "조용", "조용하고 편안한"])
+    is_noisy = any(v in vibes for v in ["noisy-fun", "party", "떠들기", "깔깔 떠들기 좋은"])
+    is_mood = any(v in vibes for v in ["mood", "분위기", "분위기 좋은"])
 
     # ---------- 1코스: 가볍게 / 활동 ----------
-    wants_activity = any(p in purposes for p in ["activity", "play", "game"])
-    has_fav_activity = len(fav_activities) > 0
+    wants_activity = is_activity_focused or len(fav_activities) > 0
 
-    if wants_activity or has_fav_activity:
-        query = _pick_activity_query(fav_activities)
-        steps.append(StepInput(query=query, type="tourist_attraction"))
-    else:
+    if wants_activity:
+        query, place_type = _pick_activity_query(fav_activities, subcategories)
+        steps.append(StepInput(query=query, type=place_type))
+    elif is_meeting_focused:
         # 회의/미팅이면 조용한 카페부터
-        if "meeting" in purposes:
-            steps.append(
-                StepInput(query="회의하기 좋은 카페", type="cafe")
-            )
-        # 술자리가 메인인 약속
-        elif "drinks" in purposes:
-            steps.append(
-                StepInput(query="가볍게 한잔하기 좋은 술집", type="bar")
-            )
-        else:
-            # 기본: 가벼운 식사
-            steps.append(
-                StepInput(query="가볍게 먹기 좋은 식당", type="restaurant")
-            )
-
-    # ---------- 2코스: 메인 식사 ----------
-    # budget, vibe, with_whom 에 따라 검색어 변경
-    if "meal" in purposes or "drinks" in purposes:
-        # 가성비 위주
-        if "cheap" in vibes or budget == "1":
-            query = "가성비 좋은 맛집"
-        # 커플 + 분위기 좋은
-        elif with_whom == "couple" and ("mood" in vibes or "calm" in vibes):
-            query = "분위기 좋은 레스토랑"
-        # 직장동료 + 조용/미팅
-        elif with_whom == "coworkers" and ("calm" in vibes or "meeting" in purposes):
-            query = "조용한 식당"
-        # 가족
-        elif with_whom == "family":
-            query = "가족 모임 하기 좋은 한식당"
-        else:
-            query = "맛집"
-    else:
-        # 식사가 주목적이 아니면, 그래도 하나는 식사 넣어둔다.
-        query = "근처 맛집"
-
-    steps.append(StepInput(query=query, type="restaurant"))
-
-    # ---------- 3코스: 카페 or 술 ----------
-    noisy = any(v in vibes for v in ["noisy-fun", "party"])
-    calm = any(v in vibes for v in ["calm"])
-    mood = any(v in vibes for v in ["mood"])
-
-    if "drinks" in purposes and noisy:
-        # 시끄럽게 놀기 좋은 술집
         steps.append(
-            StepInput(query="시끄럽게 놀기 좋은 술집", type="bar")
+            StepInput(query="회의하기 좋은 카페", type="cafe")
         )
-    elif "drinks" in purposes:
-        # 비교적 조용/분위기
-        if mood:
-            steps.append(
-                StepInput(query="분위기 좋은 와인바", type="bar")
-            )
-        else:
-            steps.append(
-                StepInput(query="깔끔한 주점", type="bar")
-            )
-    else:
-        # 카페 방향
-        if calm or "meeting" in purposes:
+    elif is_drink_focused and not is_meal_focused:
+        # 술자리가 메인이고 식사가 아니면
+        steps.append(
+            StepInput(query="가볍게 한잔하기 좋은 술집", type="bar")
+        )
+    elif is_cafe_focused and not is_meal_focused:
+        # 카페/수다가 메인이고 식사가 아니면
+        if is_calm:
             steps.append(
                 StepInput(query="조용한 카페", type="cafe")
-            )
-        elif mood:
-            steps.append(
-                StepInput(query="분위기 좋은 디저트 카페", type="cafe")
             )
         else:
             steps.append(
                 StepInput(query="수다 떨기 좋은 카페", type="cafe")
             )
+    elif not is_meal_focused:
+        # 기본: 가벼운 식사 또는 활동
+        # 식당은 meeting_duration이 5시간 이상일 때만 추가
+        if meeting_duration_minutes >= 300:
+            steps.append(
+                StepInput(query="가볍게 먹기 좋은 식당", type="restaurant")
+            )
+        else:
+            # 5시간 미만이면 카페로 대체
+            steps.append(
+                StepInput(query="카페", type="cafe")
+            )
+    # meal_focused인 경우는 2코스에서 처리
 
-    # 정확히 3개만 사용
-    return steps[:3]
+    # ---------- 2코스: 메인 식사 (조건부 추가) ----------
+    # 식당은 meeting_duration이 5시간(300분) 이상일 때만 추가
+    should_add_meal = True
+    
+    # meeting_duration이 5시간 미만이면 식사 스킵
+    if meeting_duration_minutes < 300:
+        should_add_meal = False
+    
+    # 간단한 목적(카페만, 회의만) + 저예산이면 식사 스킵 가능
+    if (is_cafe_focused or is_meeting_focused) and is_low_budget and len(steps) >= 1:
+        # 이미 카페/회의 장소가 있고 예산이 낮으면 식사 생략 가능
+        should_add_meal = False
+    
+    if should_add_meal:
+        # 서브 카테고리에서 맛집 관련 추출
+        restaurant_subcats = subcategories.get("맛집", [])
+        restaurant_subcat_text = " ".join(restaurant_subcats).lower() if restaurant_subcats else ""
+        
+        # budget, vibe, with_whom, 서브 카테고리에 따라 검색어 변경
+        base_query = None
+        
+        # 서브 카테고리 우선 확인 (더 구체적)
+        if restaurant_subcats:
+            if any(k in restaurant_subcat_text for k in ["한식"]):
+                base_query = "한식당"
+            elif any(k in restaurant_subcat_text for k in ["일식"]):
+                base_query = "일식당"
+            elif any(k in restaurant_subcat_text for k in ["중식"]):
+                base_query = "중식당"
+            elif any(k in restaurant_subcat_text for k in ["양식"]):
+                base_query = "양식 레스토랑"
+            elif any(k in restaurant_subcat_text for k in ["고기"]):
+                base_query = "고기집"
+            elif any(k in restaurant_subcat_text for k in ["해산물"]):
+                base_query = "해산물 요리"
+            elif any(k in restaurant_subcat_text for k in ["돈까스"]):
+                base_query = "돈까스집"
+            elif any(k in restaurant_subcat_text for k in ["비건"]):
+                base_query = "비건 식당"
+            elif any(k in restaurant_subcat_text for k in ["분식"]):
+                base_query = "분식집"
+            elif any(k in restaurant_subcat_text for k in ["패스트푸드"]):
+                base_query = "패스트푸드"
+        
+        # 서브 카테고리가 없거나 기본값을 사용할 때
+        if not base_query:
+            if is_meal_focused or is_drink_focused:
+                # 가성비 위주
+                if is_cost_effective or budget_num == 1:
+                    base_query = "가성비 좋은 맛집"
+                # 커플 + 분위기 좋은
+                elif with_whom == "couple" and (is_mood or is_calm):
+                    base_query = "분위기 좋은 레스토랑"
+                # 직장동료 + 조용/미팅
+                elif with_whom == "coworkers" and (is_calm or is_meeting_focused):
+                    base_query = "조용한 식당"
+                # 가족
+                elif with_whom == "family":
+                    base_query = "가족 모임 하기 좋은 한식당"
+                # 고예산
+                elif is_high_budget:
+                    base_query = "고급 식당"
+                else:
+                    base_query = "맛집"
+            else:
+                # 식사가 주목적이 아니면, 그래도 하나는 식사 넣어둔다.
+                if is_low_budget:
+                    base_query = "가성비 좋은 맛집"
+                else:
+                    base_query = "근처 맛집"
+        
+        query = base_query
+        steps.append(StepInput(query=query, type="restaurant"))
+
+    # ---------- 3코스: 카페 or 술 or 휴식 (조건부 추가) ----------
+    # meeting_duration과 min_steps_from_duration을 고려하여 결정
+    should_add_third = True
+    
+    # 만남 시간이 짧고(2시간 미만) 간단한 목적 + 저예산이면 3코스 생략 가능
+    if meeting_duration_minutes < 120:
+        if (is_cafe_focused or is_meeting_focused) and is_low_budget:
+            # 카페/회의만 목적이고 저예산이면 생략 가능
+            should_add_third = False
+        elif is_meal_focused and is_low_budget and not is_activity_focused:
+            # 식사 중심 + 저예산 + 활동 없으면 생략 가능
+            should_add_third = False
+    
+    # meeting_duration이 3시간 이상이면 최소 3코스는 필요
+    if meeting_duration_minutes >= 180:
+        should_add_third = True
+    
+    # 현재 steps가 min_steps_from_duration보다 적으면 추가
+    if len(steps) < min_steps_from_duration:
+        should_add_third = True
+    
+    if should_add_third:
+        # 이미 사용된 type 확인 (카테고리 중복 방지)
+        used_types = {step.type for step in steps}
+        
+        # 서브 카테고리에서 카페/술자리/휴식 관련 추출
+        cafe_subcats = subcategories.get("카페", [])
+        drink_subcats = subcategories.get("술자리", [])
+        rest_subcats = subcategories.get("휴식", [])
+        cafe_subcat_text = " ".join(cafe_subcats).lower() if cafe_subcats else ""
+        drink_subcat_text = " ".join(drink_subcats).lower() if drink_subcats else ""
+        rest_subcat_text = " ".join(rest_subcats).lower() if rest_subcats else ""
+        
+        noisy = any(v in vibes for v in ["noisy-fun", "party"])
+        calm = any(v in vibes for v in ["calm"])
+        mood = any(v in vibes for v in ["mood"])
+        
+        # 참가자 선호도 확인
+        has_cafe_pref = any("카페" in fav for fav in fav_activities) or cafe_subcats
+        has_drink_pref = any("술" in fav or "bar" in fav.lower() for fav in fav_activities) or drink_subcats
+        has_rest_pref = any("휴식" in fav for fav in fav_activities) or rest_subcats
+
+        # 휴식 선호가 있고 아직 사용되지 않았으면 휴식 우선
+        if has_rest_pref and "spa" not in used_types and "beauty_salon" not in used_types:
+            if rest_subcats:
+                if any(k in rest_subcat_text for k in ["마사지", "스파"]):
+                    query = "마사지"
+                    steps.append(StepInput(query=query, type="spa"))
+                elif any(k in rest_subcat_text for k in ["찜질방"]):
+                    query = "찜질방"
+                    steps.append(StepInput(query=query, type="tourist_attraction"))
+                else:
+                    query = "스파"
+                    steps.append(StepInput(query=query, type="spa"))
+            else:
+                query = "마사지 스파"
+                steps.append(StepInput(query=query, type="spa"))
+        # 술자리 선호가 있고 cafe가 이미 사용되지 않았으면
+        elif (is_drink_focused or has_drink_pref) and "bar" not in used_types:
+            # 서브 카테고리 우선 확인
+            if drink_subcats:
+                if any(k in drink_subcat_text for k in ["포차"]):
+                    query = "포차"
+                elif any(k in drink_subcat_text for k in ["펍", "펍바"]):
+                    query = "펍"
+                elif any(k in drink_subcat_text for k in ["와인바"]):
+                    query = "와인바"
+                elif any(k in drink_subcat_text for k in ["칵테일바"]):
+                    query = "칵테일바"
+                elif any(k in drink_subcat_text for k in ["이자카야"]):
+                    query = "이자카야"
+                else:
+                    query = "술집"
+            else:
+                # 시끄러운 분위기면 더 일반적인 검색어 사용
+                if noisy:
+                    query = "술집"  # "시끄럽게 놀기 좋은 술집"은 너무 구체적
+                # 비교적 조용/분위기
+                elif mood:
+                    query = "와인바"  # "분위기 좋은 와인바"는 너무 구체적
+                else:
+                    query = "주점"
+            
+            steps.append(StepInput(query=query, type="bar"))
+        # 카페 선호가 있고 cafe가 이미 사용되지 않았으면
+        elif has_cafe_pref and "cafe" not in used_types:
+            # 서브 카테고리 우선 확인
+            if cafe_subcats:
+                if any(k in cafe_subcat_text for k in ["브런치"]):
+                    query = "브런치"
+                elif any(k in cafe_subcat_text for k in ["디저트"]):
+                    query = "디저트"
+                elif any(k in cafe_subcat_text for k in ["빵집"]):
+                    query = "베이커리"
+                elif any(k in cafe_subcat_text for k in ["스터디"]):
+                    query = "스터디 카페"
+                elif any(k in cafe_subcat_text for k in ["애견"]):
+                    query = "애견카페"
+                else:
+                    query = "카페"
+            else:
+                # 카페 방향 (기존 로직)
+                if is_calm or is_meeting_focused:
+                    query = "조용한 카페"
+                elif is_mood:
+                    query = "분위기 좋은 디저트 카페"
+                else:
+                    query = "수다 떨기 좋은 카페"
+            
+            steps.append(StepInput(query=query, type="cafe"))
+        # 모두 사용되었거나 선호가 없으면, 휴식이나 기본값
+        else:
+            if has_rest_pref and rest_subcats:
+                if any(k in rest_subcat_text for k in ["마사지"]):
+                    query = "마사지"
+                    steps.append(StepInput(query=query, type="spa"))
+                else:
+                    query = "스파"
+                    steps.append(StepInput(query=query, type="spa"))
+            else:
+                # 기본: 조용한 카페 (이미 cafe가 사용되었어도 fallback)
+                query = "조용한 카페"
+                steps.append(StepInput(query=query, type="cafe"))
+
+    # ---------- 4코스 이상: 만남 시간이 길면 추가 코스 생성 ----------
+    # meeting_duration이 6시간 이상이면 4코스 이상 고려
+    while len(steps) < min_steps_from_duration:
+        used_types = {step.type for step in steps}
+        
+        # 아직 사용하지 않은 카테고리 우선 선택
+        if "bar" not in used_types and (is_drink_focused or has_drink_pref):
+            # 술자리 추가
+            if noisy:
+                query = "시끄럽게 놀기 좋은 술집"
+            elif mood:
+                query = "분위기 좋은 와인바"
+            else:
+                query = "술집"
+            steps.append(StepInput(query=query, type="bar"))
+        elif "cafe" not in used_types:
+            # 카페 추가
+            if is_calm:
+                query = "조용한 카페"
+            elif is_mood:
+                query = "분위기 좋은 디저트 카페"
+            else:
+                query = "카페"
+            steps.append(StepInput(query=query, type="cafe"))
+        elif "restaurant" not in used_types:
+            # 식당 추가 (간단한 음식) - 하지만 이미 restaurant가 2개 이상이면 추가하지 않음
+            # 현재 steps에서 restaurant 개수 확인
+            restaurant_count_in_steps = sum(1 for s in steps if s.type == "restaurant")
+            if restaurant_count_in_steps < 2:  # 최대 2개까지만
+                if is_cost_effective or is_low_budget:
+                    query = "가성비 좋은 맛집"
+                else:
+                    query = "간단한 식사"
+                steps.append(StepInput(query=query, type="restaurant"))
+            else:
+                # restaurant가 이미 충분하면 카페로 대체
+                query = "카페"
+                steps.append(StepInput(query=query, type="cafe"))
+        elif "tourist_attraction" not in used_types or "spa" not in used_types:
+            # 활동/휴식 추가
+            if has_rest_pref:
+                query = "마사지 스파"
+                steps.append(StepInput(query=query, type="spa"))
+            elif is_activity_focused or len(fav_activities) > 0:
+                query, place_type = _pick_activity_query(fav_activities, subcategories)
+                steps.append(StepInput(query=query, type=place_type))
+            else:
+                # 기본: 카페
+                query = "카페"
+                steps.append(StepInput(query=query, type="cafe"))
+        else:
+            # 모든 카테고리를 사용했으면 기본값으로 추가
+            query = "카페"
+            steps.append(StepInput(query=query, type="cafe"))
+
+    # 최소 1개는 보장 (steps가 비어있으면 기본 코스 추가)
+    if len(steps) == 0:
+        steps.append(StepInput(query="카페", type="cafe"))
+    
+    # 모든 steps 반환 (동적 개수)
+    return steps
 
 
 # ----------------------------------------
@@ -255,7 +612,7 @@ def _category_for_step(step: StepInput, idx: int) -> str:
 # 3) Meeting 기준 코스 생성 + 저장
 # ----------------------------------------
 
-def build_and_save_courses_for_meeting(
+async def build_and_save_courses_for_meeting(
     db: Session,
     meeting_id: int,
 ) -> CourseResponse:
@@ -280,6 +637,13 @@ def build_and_save_courses_for_meeting(
     # 1) 프로필 + 참가자 선호 기반 step 설계
     steps = build_steps_from_meeting(context.meeting, context.participants)
 
+    # 참가자들의 fav_activity 수집
+    participant_fav_activities = [
+        p.fav_activity
+        for p in context.participants
+        if p.fav_activity
+    ]
+
     # 2) 중심 좌표 기준 코스 요청
     req = CourseRequest(
         center_lat=context.center_lat,
@@ -289,23 +653,81 @@ def build_and_save_courses_for_meeting(
         per_step_limit=5,
     )
 
-    course_response = plan_courses_internal(req)
+    course_response = plan_courses_internal(
+        req,
+        participant_fav_activities=participant_fav_activities,
+    )
 
     # 3) 베스트 코스 하나를 MeetingPlace 후보 리스트로 변환
     best_course = course_response.courses[0]
 
+    # Google Places API types를 내부 category로 매핑하는 함수 import
+    from core.place_category import map_google_types_to_category
+
+    # 카테고리별 기본 소비 시간 정의 (프론트엔드와 동일하게)
+    category_base_durations = {
+        "cafe": 60,           # 카페: 1시간
+        "restaurant": 60,     # 맛집: 1시간
+        "activity": 120,      # 액티비티: 2시간
+        "shopping": 60,       # 쇼핑: 1시간
+        "culture": 90,        # 문화시설: 1.5시간
+        "nature": 180,        # 자연관광: 3시간
+    }
+    
+    # meeting_duration 파싱
+    meeting_duration_minutes = 0
+    if context.meeting.meeting_duration:
+        try:
+            meeting_duration_minutes = int(context.meeting.meeting_duration)
+        except (ValueError, TypeError):
+            meeting_duration_minutes = 0
+    
+    # 기본 duration 계산
     auto_candidates: list[dict] = []
+    total_base_activity_minutes = 0
+    
     for idx, p in enumerate(best_course.places):
         step_idx = getattr(p, "step_index", idx)
         step_def: Optional[StepInput] = (
             steps[step_idx] if 0 <= step_idx < len(steps) else None
         )
-        category = (
-            _category_for_step(step_def, step_idx)
-            if step_def
-            else _category_for_step_index(step_idx)
-        )
-
+        
+        # 실제 Google Places API의 types를 사용하여 정확한 category 결정
+        place_types = getattr(p, "types", [])
+        if place_types:
+            # Google Places API types를 내부 category로 매핑
+            mapped_category = map_google_types_to_category(place_types)
+            if mapped_category:
+                category = mapped_category
+            else:
+                # 매핑되지 않으면 step 기반으로 fallback
+                category = (
+                    _category_for_step(step_def, step_idx)
+                    if step_def
+                    else _category_for_step_index(step_idx)
+                )
+        else:
+            # types가 없으면 step 기반으로 fallback
+            category = (
+                _category_for_step(step_def, step_idx)
+                if step_def
+                else _category_for_step_index(step_idx)
+            )
+        
+        # 카테고리별 기본 소비 시간 계산
+        base_duration = category_base_durations.get(category, 60)
+        total_base_activity_minutes += base_duration
+        
+        # 원본 타입 정보 저장 (bar 타입 식별용)
+        # 요리주점 판단: Google Places API의 types만 사용 (실제 장소 타입이므로 가장 정확함)
+        # types에 "bar"가 포함되어 있으면 요리주점으로 판단
+        # step_def.type은 검색 의도일 뿐, 실제 장소 타입을 보장하지 않으므로 사용하지 않음
+        original_type = None
+        
+        if place_types and "bar" in place_types:
+            # Google Places API의 types에 "bar"가 포함되어 있으면 요리주점
+            original_type = "bar"
+        
         auto_candidates.append(
             {
                 "name": p.name,
@@ -314,9 +736,263 @@ def build_and_save_courses_for_meeting(
                 "lat": p.lat,
                 "lng": p.lng,
                 "category": category,
-                "duration": None,
+                "duration": base_duration,  # 기본 시간 (나중에 조정)
+                "original_type": original_type,  # bar 타입 식별용
             }
         )
+    
+    # meeting_duration에 맞춰 코스 시간 조정 (장소 추가/삭제)
+    if meeting_duration_minutes > 0 and len(auto_candidates) > 0:
+        # 현재 총 예상 시간 계산 (활동 시간 + 이동 시간 추정)
+        estimated_travel_minutes = (len(auto_candidates) - 1) * 15  # 장소 간 평균 15분 이동 시간
+        current_total_minutes = total_base_activity_minutes + estimated_travel_minutes
+        
+        # 목표 시간과의 차이
+        time_difference = meeting_duration_minutes - current_total_minutes
+        
+        # 목표 시간보다 1시간(60분) 이상 부족하면 장소 추가
+        # 또는 목표 시간의 15% 이상 부족하면 장소 추가 (더 유연한 기준)
+        threshold = max(60, int(meeting_duration_minutes * 0.15))
+        if time_difference > threshold:
+            # 필요한 추가 활동 시간 (추정 이동 시간 제외)
+            additional_places_needed = max(1, (time_difference - 60) // 90)  # 평균 90분(활동+이동)당 1개 장소 추가
+            max_additional_places = min(additional_places_needed, 3)  # 최대 3개까지만 추가
+            
+            # 추가 steps 생성
+            used_categories = {c["category"] for c in auto_candidates}
+            purposes = _normalize_list_field(context.meeting.purpose)
+            vibes = _normalize_list_field(context.meeting.vibe)
+            fav_activities = [p.fav_activity for p in context.participants if p.fav_activity]
+            subcategories = _parse_subcategories(context.participants)  # subcategories 파싱 추가
+            
+            is_drink_focused = any(p in purposes for p in ["drinks", "술", "술 한잔"])
+            is_cafe_focused = any(p in purposes for p in ["cafe", "카페", "수다"])
+            is_activity_focused = any(p in purposes for p in ["activity", "play", "game", "활동", "체험"])
+            is_calm = any(v in vibes for v in ["calm", "조용", "조용하고 편안한"])
+            is_noisy = any(v in vibes for v in ["noisy-fun", "party", "떠들기"])
+            is_mood = any(v in vibes for v in ["mood", "분위기"])
+            has_cafe_pref = any("카페" in fav for fav in fav_activities)
+            has_drink_pref = any("술" in fav or "bar" in fav.lower() for fav in fav_activities)
+            has_rest_pref = any("휴식" in fav for fav in fav_activities)
+            
+            # 추가 장소 생성 및 검색
+            # 현재 restaurant 개수 확인 (최대 2개까지만 허용)
+            restaurant_count = sum(1 for c in auto_candidates if c["category"] == "restaurant")
+            max_restaurants = 2  # 코스당 최대 restaurant 2개
+            
+            additional_steps = []
+            for _ in range(max_additional_places):
+                # 아직 사용하지 않은 카테고리 우선 선택
+                # restaurant는 이미 2개 이상이면 추가하지 않음
+                if "activity" not in used_categories and (is_activity_focused or len(fav_activities) > 0):
+                    query, place_type = _pick_activity_query(fav_activities, subcategories)
+                    additional_steps.append(StepInput(query=query, type=place_type))
+                    used_categories.add("activity")
+                elif "cafe" not in used_categories:
+                    if is_calm:
+                        query = "조용한 카페"
+                    else:
+                        query = "카페"
+                    additional_steps.append(StepInput(query=query, type="cafe"))
+                    used_categories.add("cafe")
+                elif "bar" not in used_categories and (is_drink_focused or has_drink_pref) and restaurant_count < max_restaurants:
+                    query = "술집"  # 요리주점 포함
+                    additional_steps.append(StepInput(query=query, type="bar"))
+                    used_categories.add("restaurant")  # bar는 restaurant로 매핑됨
+                    restaurant_count += 1
+                elif "restaurant" not in used_categories and restaurant_count < max_restaurants:
+                    # restaurant가 아직 없고 최대 개수 미만일 때만 추가
+                    query = "가성비 좋은 맛집"
+                    additional_steps.append(StepInput(query=query, type="restaurant"))
+                    used_categories.add("restaurant")
+                    restaurant_count += 1
+                else:
+                    # 기본: 카페
+                    additional_steps.append(StepInput(query="카페", type="cafe"))
+                    used_categories.add("cafe")
+            
+            # 추가 장소 검색
+            if additional_steps:
+                additional_req = CourseRequest(
+                    center_lat=context.center_lat,
+                    center_lng=context.center_lng,
+                    radius=1000,
+                    steps=additional_steps,
+                    per_step_limit=3,  # 추가 장소는 적게
+                )
+                additional_response = plan_courses_internal(
+                    additional_req,
+                    participant_fav_activities=participant_fav_activities,
+                )
+                
+                # 추가 장소들을 기존 코스에 추가
+                for step_idx, add_step in enumerate(additional_steps):
+                    if step_idx < len(additional_response.courses[0].places):
+                        add_place = additional_response.courses[0].places[step_idx]
+                        place_types = getattr(add_place, "types", [])
+                        
+                        # 카테고리 결정
+                        if place_types:
+                            mapped_category = map_google_types_to_category(place_types)
+                            if mapped_category:
+                                category = mapped_category
+                            else:
+                                category = _category_for_step(add_step, len(auto_candidates))
+                        else:
+                            category = _category_for_step(add_step, len(auto_candidates))
+                        
+                        add_duration = category_base_durations.get(category, 60)
+                        
+                        # 원본 타입 정보 저장 (bar 타입 식별용)
+                        # 추가 장소도 Google Places API types만 사용 (실제 장소 타입)
+                        add_original_type = None
+                        
+                        if place_types and "bar" in place_types:
+                            # Google Places API의 types에 "bar"가 포함되어 있으면 요리주점
+                            add_original_type = "bar"
+                        
+                        auto_candidates.append({
+                            "name": add_place.name,
+                            "poi_name": add_place.name,
+                            "address": add_place.address or "",
+                            "lat": add_place.lat,
+                            "lng": add_place.lng,
+                            "category": category,
+                            "duration": add_duration,
+                            "original_type": add_original_type,  # bar 타입 식별용
+                        })
+                        total_base_activity_minutes += add_duration
+        
+        # restaurant들이 연속되지 않도록 순서 재배치
+        # restaurant들 사이에 최소 2시간(활동 시간 기준) 간격을 두도록 조정
+        # 단, 요리주점(bar 타입)은 제외 (2차로 가는 곳이라 연속되어도 괜찮음)
+        if len(auto_candidates) > 1:
+            # bar 타입이 아닌 restaurant만 필터링
+            restaurants = [
+                c for c in auto_candidates 
+                if c["category"] == "restaurant" and c.get("original_type") != "bar"
+            ]
+            # bar 타입인 restaurant와 non-restaurant를 함께 non_restaurants로 취급
+            non_restaurants = [
+                c for c in auto_candidates 
+                if c["category"] != "restaurant" or c.get("original_type") == "bar"
+            ]
+            
+            # restaurant가 2개 이상이고, non-restaurant가 충분하면 재배치
+            if len(restaurants) >= 2 and len(non_restaurants) >= len(restaurants) - 1:
+                # 현재 restaurant들의 위치 확인 (bar 타입 제외)
+                restaurant_positions = [
+                    i for i, c in enumerate(auto_candidates) 
+                    if c["category"] == "restaurant" and c.get("original_type") != "bar"
+                ]
+                
+                # 연속된 restaurant가 있는지 확인
+                has_consecutive = False
+                for i in range(len(restaurant_positions) - 1):
+                    if restaurant_positions[i + 1] - restaurant_positions[i] == 1:
+                        has_consecutive = True
+                        break
+                
+                # 연속된 restaurant가 있거나, 사이 간격이 2시간 미만이면 재배치
+                needs_reordering = has_consecutive
+                if not needs_reordering and len(restaurant_positions) >= 2:
+                    min_gap_minutes = 120  # 2시간
+                    for i in range(len(restaurant_positions) - 1):
+                        pos1, pos2 = restaurant_positions[i], restaurant_positions[i + 1]
+                        gap_minutes = sum(
+                            auto_candidates[j]["duration"]
+                            for j in range(pos1 + 1, pos2)
+                        )
+                        if gap_minutes < min_gap_minutes:
+                            needs_reordering = True
+                            break
+                
+                if needs_reordering:
+                    # restaurant들을 균등하게 분산 배치
+                    # 예: 5개 장소 중 2개가 restaurant면, 위치 0, 3 또는 1, 4에 배치
+                    total_places = len(auto_candidates)
+                    num_restaurants = len(restaurants)
+                    num_non_restaurants = len(non_restaurants)
+                    
+                    # restaurant 배치 위치 계산 (균등 분산)
+                    restaurant_positions_new = []
+                    if num_restaurants > 0:
+                        # 첫 restaurant는 앞쪽에
+                        restaurant_positions_new.append(0)
+                        # 나머지 restaurant들은 균등하게 분산
+                        if num_restaurants > 1:
+                            gap = max(1, num_non_restaurants // (num_restaurants - 1)) if num_restaurants > 1 else 1
+                            for r_idx in range(1, num_restaurants):
+                                pos = r_idx * gap + 1
+                                restaurant_positions_new.append(min(pos, total_places - 1))
+                    
+                    # 중복 제거 및 정렬
+                    restaurant_positions_new = sorted(list(set(restaurant_positions_new)))
+                    
+                    # 새 순서 구성: restaurant(bar 제외)와 non-restaurant(bar 포함)를 배치
+                    new_order = []
+                    restaurant_idx = 0
+                    non_restaurant_idx = 0
+                    
+                    for i in range(total_places):
+                        if i in restaurant_positions_new and restaurant_idx < len(restaurants):
+                            new_order.append(restaurants[restaurant_idx])
+                            restaurant_idx += 1
+                        elif non_restaurant_idx < len(non_restaurants):
+                            new_order.append(non_restaurants[non_restaurant_idx])
+                            non_restaurant_idx += 1
+                    
+                    # 남은 장소들 추가 (혹시 모를 경우)
+                    while restaurant_idx < len(restaurants):
+                        new_order.append(restaurants[restaurant_idx])
+                        restaurant_idx += 1
+                    while non_restaurant_idx < len(non_restaurants):
+                        new_order.append(non_restaurants[non_restaurant_idx])
+                        non_restaurant_idx += 1
+                    
+                    # 재배치된 순서로 업데이트 (전체 장소 수 유지)
+                    auto_candidates = new_order[:total_places]
+        
+        # 목표 시간보다 1시간(60분) 이상 초과하면 장소 제거 (뒤에서부터)
+        elif time_difference < -60:
+            # 제거할 장소 수 계산
+            places_to_remove = min(
+                max(1, (-time_difference - 60) // 90),  # 평균 90분당 1개 장소 제거
+                len(auto_candidates) - 1  # 최소 1개는 남김
+            )
+            
+            # 뒤에서부터 제거 (마지막 장소들 제거)
+            for _ in range(places_to_remove):
+                if len(auto_candidates) > 1:
+                    removed = auto_candidates.pop()
+                    total_base_activity_minutes -= removed["duration"]
+        
+        # duration 미세 조정 (1시간 이내 차이는 duration으로 조정)
+        else:
+            # 목표 활동 시간 = meeting_duration - 추정 이동 시간
+            estimated_travel_minutes = (len(auto_candidates) - 1) * 15
+            target_activity_minutes = max(0, meeting_duration_minutes - estimated_travel_minutes)
+            time_diff = target_activity_minutes - total_base_activity_minutes
+            
+            # 각 장소당 최대 20분까지만 추가
+            if time_diff > 0:
+                max_additional_per_place = 20
+                total_possible_additional = len(auto_candidates) * max_additional_per_place
+                actual_additional = min(time_diff, total_possible_additional)
+                
+                additional_per_place = min(
+                    actual_additional // len(auto_candidates),
+                    max_additional_per_place
+                )
+                
+                for candidate in auto_candidates:
+                    candidate["duration"] += additional_per_place
+                
+                remaining = actual_additional - (additional_per_place * len(auto_candidates))
+                if remaining > 0 and len(auto_candidates) > 0:
+                    max_add_to_last = max_additional_per_place - additional_per_place
+                    add_to_last = min(remaining, max_add_to_last)
+                    auto_candidates[-1]["duration"] += add_to_last
 
     # 4) must-visit 장소를 코스에 포함
     #    - 좌표(lat,lng)가 있는 것만 MeetingPlace에 넣을 수 있음
@@ -347,7 +1023,176 @@ def build_and_save_courses_for_meeting(
     #    - (원하면 나중에 [필수]를 2코스로 끼워 넣는 로직으로 바꿀 수 있음)
     final_candidates = must_visit_candidates + auto_candidates
 
-    # 6) calc_func.save_calculated_places 재사용
+    # 6) 각 장소 간 이동시간 계산 및 저장
+    # 참가자들의 이동 수단 선호도 확인
+    has_transit_pref = any(
+        p.transportation and ("대중교통" in p.transportation or "transit" in p.transportation.lower())
+        for p in context.participants
+    )
+    has_driving_pref = any(
+        p.transportation and ("자동차" in p.transportation or "driving" in p.transportation.lower() or "차" in p.transportation)
+        for p in context.participants
+    )
+    
+    # Haversine 공식으로 두 위경도 지점 간의 거리(미터) 계산
+    def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+        R = 6371e3  # 지구 반지름 (미터)
+        φ1 = math.radians(lat1)
+        φ2 = math.radians(lat2)
+        Δφ = math.radians(lat2 - lat1)
+        Δλ = math.radians(lon2 - lon1)
+        
+        a = (
+            math.sin(Δφ / 2) * math.sin(Δφ / 2) +
+            math.cos(φ1) * math.cos(φ2) * math.sin(Δλ / 2) * math.sin(Δλ / 2)
+        )
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+        
+        return R * c
+    
+    # 보행 속도 (5 km/h = 5000m / 60min = 83.33 m/min)
+    WALKING_SPEED_M_PER_MIN = 83.33
+    
+    # 거리(미터)를 보행 시간(분)으로 변환
+    def calculate_walking_time_minutes(distance_meters: float) -> float:
+        return distance_meters / WALKING_SPEED_M_PER_MIN
+    
+    # 각 장소 간 이동시간 계산
+    for idx in range(1, len(final_candidates)):
+        prev_candidate = final_candidates[idx - 1]
+        current_candidate = final_candidates[idx]
+        
+        # 같은 좌표인 경우 이동 시간 0분
+        if prev_candidate["lat"] == current_candidate["lat"] and prev_candidate["lng"] == current_candidate["lng"]:
+            final_candidates[idx]["travel_time_from_prev"] = 0
+            final_candidates[idx]["travel_mode_from_prev"] = "walking"
+            continue
+        
+        # 도보 시간 계산 (항상 계산)
+        distance_m = haversine_distance(
+            prev_candidate["lat"], prev_candidate["lng"],
+            current_candidate["lat"], current_candidate["lng"]
+        )
+        walking_minutes = calculate_walking_time_minutes(distance_m)
+        
+        # 대중교통, 자동차 시간 계산 (선호도가 있으면 계산)
+        transit_minutes = None
+        driving_minutes = None
+        
+        try:
+            if has_transit_pref or not has_driving_pref:  # 대중교통 선호 또는 자동차 선호 없으면
+                transit_result = await get_travel_time(
+                    start_lat=prev_candidate["lat"],
+                    start_lng=prev_candidate["lng"],
+                    goal_lat=current_candidate["lat"],
+                    goal_lng=current_candidate["lng"],
+                    mode="transit",
+                )
+                if transit_result and transit_result.get("success"):
+                    transit_minutes = transit_result["duration_seconds"] / 60.0
+            
+            if has_driving_pref or not has_transit_pref:  # 자동차 선호 또는 대중교통 선호 없으면
+                driving_result = await get_travel_time(
+                    start_lat=prev_candidate["lat"],
+                    start_lng=prev_candidate["lng"],
+                    goal_lat=current_candidate["lat"],
+                    goal_lng=current_candidate["lng"],
+                    mode="driving",
+                )
+                if driving_result and driving_result.get("success"):
+                    driving_minutes = driving_result["duration_seconds"] / 60.0
+        except Exception as e:
+            # API 호출 실패 시 도보 시간만 사용
+            pass
+        
+        # 최적 이동 수단 결정 (프론트엔드 로직과 동일)
+        available_times = []
+        if walking_minutes is not None:
+            available_times.append(("walking", walking_minutes))
+        if transit_minutes is not None:
+            available_times.append(("transit", transit_minutes))
+        if driving_minutes is not None:
+            available_times.append(("driving", driving_minutes))
+        
+        if not available_times:
+            # 모든 계산 실패 시 도보 시간 사용
+            final_candidates[idx]["travel_time_from_prev"] = int(round(walking_minutes))
+            final_candidates[idx]["travel_mode_from_prev"] = "walking"
+            continue
+        
+        # 최소 시간 찾기
+        min_time_mode, min_time = min(available_times, key=lambda x: x[1])
+        
+        # 도보가 다른 모드와 15분 이내 차이면 도보 선택
+        other_times = [t for mode, t in available_times if mode != "walking"]
+        if other_times and walking_minutes is not None:
+            min_other_time = min(other_times)
+            if abs(walking_minutes - min_other_time) <= 15:
+                min_time_mode = "walking"
+                min_time = walking_minutes
+        
+        final_candidates[idx]["travel_time_from_prev"] = int(round(min_time))
+        final_candidates[idx]["travel_mode_from_prev"] = min_time_mode
+    
+    # 첫 번째 장소는 이전 장소가 없으므로 None
+    if final_candidates:
+        final_candidates[0]["travel_time_from_prev"] = None
+        final_candidates[0]["travel_mode_from_prev"] = None
+    
+    # 6-2) 실제 이동시간 계산 후 재조정 (목표 시간과의 차이가 크면 추가 조정)
+    if meeting_duration_minutes > 0 and len(final_candidates) > 0:
+        # 실제 총 시간 계산 (활동 시간 + 실제 이동 시간)
+        actual_travel_minutes = sum(
+            c.get("travel_time_from_prev", 0) or 0 
+            for c in final_candidates
+        )
+        actual_activity_minutes = sum(c.get("duration", 0) for c in final_candidates)
+        actual_total_minutes = actual_activity_minutes + actual_travel_minutes
+        
+        # 목표 시간과의 차이
+        time_difference = meeting_duration_minutes - actual_total_minutes
+        
+        # 목표 시간과 30분 이상 차이나면 추가 조정
+        if abs(time_difference) > 30:
+            if time_difference > 30:  # 목표 시간보다 부족
+                # 장소당 최대 20분씩 추가할 수 있는 시간
+                max_additional_per_place = 20
+                total_possible_additional = len(final_candidates) * max_additional_per_place
+                actual_additional = min(time_difference, total_possible_additional)
+                
+                if actual_additional > 0:
+                    additional_per_place = actual_additional // len(final_candidates)
+                    remaining = actual_additional % len(final_candidates)
+                    
+                    for candidate in final_candidates:
+                        candidate["duration"] += additional_per_place
+                    
+                    # 남은 시간은 마지막 장소에 추가
+                    if remaining > 0 and len(final_candidates) > 0:
+                        final_candidates[-1]["duration"] += remaining
+                    
+                    print(f"[COURSE] 실제 이동시간 반영 후 duration 조정: +{actual_additional}분 분배")
+            
+            elif time_difference < -30:  # 목표 시간보다 초과
+                # 장소당 최대 20분씩 감소
+                max_reduction_per_place = 20
+                total_possible_reduction = len(final_candidates) * max_reduction_per_place
+                actual_reduction = min(abs(time_difference), total_possible_reduction)
+                
+                if actual_reduction > 0:
+                    reduction_per_place = actual_reduction // len(final_candidates)
+                    remaining = actual_reduction % len(final_candidates)
+                    
+                    for candidate in final_candidates:
+                        candidate["duration"] = max(10, candidate.get("duration", 60) - reduction_per_place)
+                    
+                    # 남은 시간은 마지막 장소에서 감소
+                    if remaining > 0 and len(final_candidates) > 0:
+                        final_candidates[-1]["duration"] = max(10, final_candidates[-1].get("duration", 60) - remaining)
+                    
+                    print(f"[COURSE] 실제 이동시간 반영 후 duration 조정: -{actual_reduction}분 감소")
+
+    # 7) calc_func.save_calculated_places 재사용
     save_calculated_places(db, meeting_id, final_candidates)
 
     return course_response

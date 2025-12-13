@@ -1,0 +1,414 @@
+# app/routers/naver_directions.py
+
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
+from typing import List, Literal, Optional
+import logging
+
+from ..services.naver_directions import (
+    get_travel_time,
+    get_driving_direction,
+    get_route,
+)
+
+# NOTE: 프론트에서 /directions/* 로 호출하고 있으므로 prefix를 /directions 로 맞춥니다.
+# (기존 /api/directions 는 404를 유발하여 직선 fallback만 보이던 원인)
+router = APIRouter(prefix="/directions", tags=["directions"])
+
+log = logging.getLogger(__name__)
+
+
+class TravelTimeRequest(BaseModel):
+    """이동 시간 계산 요청 모델"""
+    start_lat: float
+    start_lng: float
+    goal_lat: float
+    goal_lng: float
+    mode: Literal["driving", "transit", "walking"] = "driving"
+    driving_option: Optional[str] = "trafast"  # trafast, tracomfort, traoptimal
+
+
+class TravelTimeResponse(BaseModel):
+    """이동 시간 계산 응답 모델"""
+    duration_seconds: int
+    duration_minutes: float
+    distance_meters: Optional[int] = None
+    mode: str
+    success: bool
+    is_estimated: Optional[bool] = False
+
+
+class RoutePoint(BaseModel):
+    lat: float
+    lng: float
+
+
+class RouteResponse(BaseModel):
+    duration_seconds: int
+    duration_minutes: float
+    distance_meters: Optional[int] = None
+    mode: str
+    path: List[RoutePoint]
+    success: bool
+
+
+class MultiPointTravelTimeRequest(BaseModel):
+    """여러 지점 간 이동 시간 계산 요청 모델"""
+    points: List[dict]  # [{"lat": float, "lng": float}, ...]
+    mode: Literal["driving", "transit"] = "driving"
+    driving_option: Optional[str] = "trafast"
+
+
+class MultiPointTravelTimeResponse(BaseModel):
+    """여러 지점 간 이동 시간 계산 응답 모델"""
+    routes: List[dict]  # 각 경로별 정보
+    total_duration_seconds: int
+    total_duration_minutes: float
+
+
+@router.post("/travel-time", response_model=TravelTimeResponse)
+async def calculate_travel_time(request: TravelTimeRequest):
+    """
+    두 지점 간의 이동 시간 계산
+    
+    - driving: 자동차 경로
+    - transit: 대중교통
+    """
+    # 같은 좌표인 경우 이동 시간 0분으로 반환 (API 호출 스킵)
+    if request.start_lat == request.goal_lat and request.start_lng == request.goal_lng:
+        return TravelTimeResponse(
+            duration_seconds=0,
+            duration_minutes=0.0,
+            distance_meters=0,
+            mode=request.mode,
+            success=True,
+            is_estimated=False,
+        )
+    
+    try:
+        result = await get_travel_time(
+            start_lat=request.start_lat,
+            start_lng=request.start_lng,
+            goal_lat=request.goal_lat,
+            goal_lng=request.goal_lng,
+            mode=request.mode,
+            driving_option=request.driving_option or "trafast",
+        )
+        
+        if not result or not result.get("success"):
+            mode_name = {
+                "driving": "자동차",
+                "transit": "대중교통",
+            }.get(request.mode, request.mode)
+            
+            error_msg = result.get("error", "unknown_error") if result else "no_result"
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    f"{mode_name} 이동시간 계산에 실패했습니다. "
+                    f"API 상태를 확인해주세요. (오류: {error_msg})"
+                ),
+            )
+        
+        duration_sec = result["duration_seconds"]
+        
+        return TravelTimeResponse(
+            duration_seconds=duration_sec,
+            duration_minutes=round(duration_sec / 60.0, 2),
+            distance_meters=result.get("distance_meters"),
+            mode=result["mode"],
+            success=True,
+            is_estimated=bool(result.get("is_estimated", False)),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.exception("Error calculating travel time: %s", e)
+        raise HTTPException(status_code=500, detail=f"이동 시간 계산 중 오류가 발생했습니다: {str(e)}")
+
+
+@router.get("/travel-time")
+async def calculate_travel_time_get(
+    start_lat: float = Query(..., description="출발지 위도"),
+    start_lng: float = Query(..., description="출발지 경도"),
+    goal_lat: float = Query(..., description="도착지 위도"),
+    goal_lng: float = Query(..., description="도착지 경도"),
+    mode: Literal["driving", "transit", "walking"] = Query("driving", description="이동 수단"),
+    driving_option: str = Query("trafast", description="자동차 경로 옵션 (trafast, tracomfort, traoptimal)"),
+):
+    """
+    두 지점 간의 이동 시간 계산 (GET 방식)
+    """
+    # 같은 좌표인 경우 이동 시간 0분으로 반환 (API 호출 스킵)
+    if start_lat == goal_lat and start_lng == goal_lng:
+        return TravelTimeResponse(
+            duration_seconds=0,
+            duration_minutes=0.0,
+            distance_meters=0,
+            mode=mode,
+            success=True,
+            is_estimated=False,
+        )
+    
+    request = TravelTimeRequest(
+        start_lat=start_lat,
+        start_lng=start_lng,
+        goal_lat=goal_lat,
+        goal_lng=goal_lng,
+        mode=mode,
+        driving_option=driving_option,
+    )
+    return await calculate_travel_time(request)
+
+
+@router.get("/route", response_model=RouteResponse)
+async def get_route_get(
+    start_lat: float = Query(..., description="출발지 위도"),
+    start_lng: float = Query(..., description="출발지 경도"),
+    goal_lat: float = Query(..., description="도착지 위도"),
+    goal_lng: float = Query(..., description="도착지 경도"),
+    mode: Literal["driving", "transit"] = Query("driving", description="이동 수단"),
+    driving_option: str = Query("trafast", description="자동차 경로 옵션 (trafast, tracomfort, traoptimal)"),
+):
+    """
+    두 지점 간의 경로(geometry) + 이동 시간 반환 (GET 방식)
+    - driving: 네이버 Directions의 path를 반환
+    - transit: 미구현 (404)
+    """
+    try:
+        result = await get_route(
+            start_lat=start_lat,
+            start_lng=start_lng,
+            goal_lat=goal_lat,
+            goal_lng=goal_lng,
+            mode=mode,
+            driving_option=driving_option,
+        )
+
+        if not result or not result.get("success"):
+            raise HTTPException(
+                status_code=404,
+                detail="경로를 찾을 수 없습니다. 좌표나 이동 수단을 확인해주세요.",
+            )
+
+        duration_sec = int(result["duration_seconds"])
+        path = result.get("path") or []
+        if not path:
+            raise HTTPException(status_code=404, detail="경로 좌표를 찾을 수 없습니다.")
+
+        return RouteResponse(
+            duration_seconds=duration_sec,
+            duration_minutes=round(duration_sec / 60.0, 2),
+            distance_meters=result.get("distance_meters"),
+            mode=result.get("mode", mode),
+            path=[RoutePoint(**p) for p in path],
+            success=True,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.exception("Error getting route: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"경로 조회 중 오류가 발생했습니다: {str(e)}",
+        )
+
+
+@router.post("/travel-time/multi-point")
+async def calculate_multi_point_travel_time(request: MultiPointTravelTimeRequest):
+    """
+    여러 지점을 순차적으로 이동하는 총 이동 시간 계산
+    
+    예: 지점 A -> 지점 B -> 지점 C 순으로 이동하는 총 시간 계산
+    """
+    if len(request.points) < 2:
+        raise HTTPException(status_code=400, detail="최소 2개 이상의 지점이 필요합니다.")
+    
+    routes = []
+    total_duration_sec = 0
+    
+    try:
+        for i in range(len(request.points) - 1):
+            start = request.points[i]
+            goal = request.points[i + 1]
+            
+            if "lat" not in start or "lng" not in start:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{i}번째 지점에 lat, lng 정보가 없습니다."
+                )
+            if "lat" not in goal or "lng" not in goal:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{i+1}번째 지점에 lat, lng 정보가 없습니다."
+                )
+            
+            # 같은 좌표인 경우 이동 시간 0분으로 처리 (API 호출 스킵)
+            if start["lat"] == goal["lat"] and start["lng"] == goal["lng"]:
+                routes.append({
+                    "from": i,
+                    "to": i + 1,
+                    "success": True,
+                    "duration_seconds": 0,
+                    "duration_minutes": 0.0,
+                    "distance_meters": 0,
+                    "mode": request.mode,
+                })
+                continue
+            
+            result = await get_travel_time(
+                start_lat=start["lat"],
+                start_lng=start["lng"],
+                goal_lat=goal["lat"],
+                goal_lng=goal["lng"],
+                mode=request.mode,
+                driving_option=request.driving_option or "trafast",
+            )
+            
+            if not result or not result.get("success"):
+                routes.append({
+                    "from": i,
+                    "to": i + 1,
+                    "success": False,
+                    "error": "경로를 찾을 수 없습니다.",
+                })
+                continue
+            
+            duration_sec = result["duration_seconds"]
+            total_duration_sec += duration_sec
+            
+            routes.append({
+                "from": i,
+                "to": i + 1,
+                "duration_seconds": duration_sec,
+                "duration_minutes": round(duration_sec / 60.0, 2),
+                "distance_meters": result.get("distance_meters"),
+                "success": True,
+            })
+        
+        return MultiPointTravelTimeResponse(
+            routes=routes,
+            total_duration_seconds=total_duration_sec,
+            total_duration_minutes=round(total_duration_sec / 60.0, 2),
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.exception("Error calculating multi-point travel time: %s", e)
+        raise HTTPException(status_code=500, detail=f"이동 시간 계산 중 오류가 발생했습니다: {str(e)}")
+
+
+@router.get("/travel-time/multi-point")
+async def calculate_multi_point_travel_time_get(
+    points: str = Query(..., description='지점 좌표들: "lat1,lng1|lat2,lng2|lat3,lng3" 형식'),
+    mode: Literal["driving", "transit"] = Query("driving", description="이동 수단"),
+    driving_option: str = Query("trafast", description="자동차 경로 옵션"),
+):
+    """
+    여러 지점 간 이동 시간 계산 (GET 방식)
+    
+    points 형식: "lat1,lng1|lat2,lng2|lat3,lng3"
+    """
+    try:
+        point_list = []
+        for point_str in points.split("|"):
+            parts = point_str.split(",")
+            if len(parts) != 2:
+                raise HTTPException(status_code=400, detail=f"잘못된 좌표 형식: {point_str}")
+            
+            point_list.append({
+                "lat": float(parts[0].strip()),
+                "lng": float(parts[1].strip()),
+            })
+        
+        request = MultiPointTravelTimeRequest(
+            points=point_list,
+            mode=mode,
+            driving_option=driving_option,
+        )
+        return await calculate_multi_point_travel_time(request)
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"좌표 파싱 오류: {str(e)}")
+    except Exception as e:
+        log.exception("Error parsing points: %s", e)
+        raise HTTPException(status_code=400, detail=f"요청 파라미터 오류: {str(e)}")
+
+
+@router.get("/travel-time/test")
+async def test_all_modes(
+    start_lat: float = Query(37.5507353, description="출발지 위도"),
+    start_lng: float = Query(126.9256698, description="출발지 경도"),
+    goal_lat: float = Query(37.56148, description="도착지 위도"),
+    goal_lng: float = Query(126.9813785, description="도착지 경도"),
+):
+    """
+    모든 mode(자동차, 대중교통)를 테스트하는 엔드포인트
+    각 mode별로 어떤 API/함수가 사용되는지, 성공/실패 여부를 확인할 수 있습니다.
+    """
+    results = {}
+    
+    # 테스트할 좌표
+    test_coords = {
+        "start": (start_lat, start_lng),
+        "goal": (goal_lat, goal_lng),
+    }
+    
+    # 각 mode별 테스트
+    for mode in ["driving", "transit"]:
+        try:
+            log.info(f"[TEST] Testing mode: {mode}")
+            result = await get_travel_time(
+                start_lat=start_lat,
+                start_lng=start_lng,
+                goal_lat=goal_lat,
+                goal_lng=goal_lng,
+                mode=mode,
+                driving_option="trafast",
+            )
+            
+            if result and result.get("success"):
+                results[mode] = {
+                    "status": "success",
+                    "duration_seconds": result.get("duration_seconds"),
+                    "duration_minutes": round(result.get("duration_seconds", 0) / 60.0, 2),
+                    "distance_meters": result.get("distance_meters"),
+                    "source": result.get("source", "unknown"),
+                    "is_estimated": result.get("is_estimated", False),
+                }
+            else:
+                results[mode] = {
+                    "status": "failed",
+                    "error": "API returned no result or success=False",
+                    "result": result,
+                }
+        except Exception as e:
+            log.exception(f"[TEST] Error testing mode {mode}: {e}")
+            results[mode] = {
+                "status": "error",
+                "error": str(e),
+                "error_type": type(e).__name__,
+            }
+    
+    return {
+        "test_coordinates": {
+            "start": {"lat": start_lat, "lng": start_lng},
+            "goal": {"lat": goal_lat, "lng": goal_lng},
+        },
+        "results": results,
+        "summary": {
+            "driving": {
+                "expected": "Naver Directions API",
+                "status": results.get("driving", {}).get("status"),
+                "source": results.get("driving", {}).get("source"),
+            },
+            "transit": {
+                "expected": "Google Distance Matrix API",
+                "status": results.get("transit", {}).get("status"),
+                "source": results.get("transit", {}).get("source"),
+            },
+        },
+    }
+

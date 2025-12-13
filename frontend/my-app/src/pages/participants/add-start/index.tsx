@@ -4,7 +4,7 @@ import { useNavigate, useLocation, useParams } from "react-router-dom";
 import Button from "@/components/ui/button";
 import styles from "./style.module.css";
 import { CalendarIcon, PinIcon, HeartIcon } from "@/assets/icons/icons";
-import type { PlaceCategory } from "@/lib/user-storage";
+import type { PlaceCategory, SelectedSubcats } from "@/lib/user-storage";
 import {
   type StoredParticipantPlace as SavedPlace,
   PARTICIPANT_PLACES_PREFIX,
@@ -27,7 +27,7 @@ export default function AddParticipantStartPage() {
   const [name, setName] = useState("");
   /**
    * origin: 실제 서버로 보내는 주소 문자열
-   * originPlace: SavedPlace 전체 객체 (이름/주소 모두 포함, UI + 로컬 저장용)
+   * originPlace: SavedPlace 전체 객체 (이름/주소/좌표 포함, UI + 로컬 저장용)
    */
   const [origin, setOrigin] = useState<string | null>(null);
   const [originPlace, setOriginPlace] = useState<SavedPlace | null>(null);
@@ -37,6 +37,7 @@ export default function AddParticipantStartPage() {
   >([]);
   const [transportation, setTransportation] = useState<string | null>(null);
   const [preferredCats, setPreferredCats] = useState<PlaceCategory[]>([]);
+  const [preferredSubcats, setPreferredSubcats] = useState<SelectedSubcats>({});
   const [submitting, setSubmitting] = useState(false);
 
   // 🔹 최소 한 가지(일정/출발장소/선호) 입력 여부
@@ -78,7 +79,7 @@ export default function AddParticipantStartPage() {
         setOriginPlace(null);
 
         // 👉 이 약속(promiseId)에 대해 저장된 모든 장소 캐시에서
-        //    동일한 주소/이름을 가진 SavedPlace를 찾아서 이름을 복구한다.
+        //    동일한 주소/이름을 가진 SavedPlace를 찾아서 이름/좌표를 복구
         if (promiseId && typeof window !== "undefined") {
           const norm = addr.trim();
           const prefix = `${PARTICIPANT_PLACES_PREFIX}${promiseId}:`;
@@ -136,6 +137,9 @@ export default function AddParticipantStartPage() {
     if (state?.selectedPreferences) {
       setPreferredCats(state.selectedPreferences as PlaceCategory[]);
     }
+    if (state?.selectedSubPreferences) {
+      setPreferredSubcats(state.selectedSubPreferences as SelectedSubcats);
+    }
 
     // ───────────────── edit / draft id 설정 ─────────────────
     if (rawEditId !== null && rawEditId !== undefined) {
@@ -166,6 +170,7 @@ export default function AddParticipantStartPage() {
         selectedOrigin: origin, // 일정 화면은 문자열만 필요
         selectedTransportation: transportation,
         selectedPreferences: preferredCats,
+        selectedSubPreferences: preferredSubcats,
         selectedTimes: availableTimes,
         editParticipantId,
         participantDraftId,
@@ -207,6 +212,7 @@ export default function AddParticipantStartPage() {
         selectedTimes: availableTimes,
         selectedTransportation: transportation,
         selectedPreferences: preferredCats,
+        selectedSubPreferences: preferredSubcats,
         editParticipantId,
         participantDraftId,
       },
@@ -221,13 +227,25 @@ export default function AddParticipantStartPage() {
     }
     if (submitting) return;
 
+    // 🔹 SavedPlace에 좌표가 있으면 같이 전송 (없으면 null)
+    const originLat = (originPlace as any)?.latitude ?? null;
+    const originLng = (originPlace as any)?.longitude ?? null;
+
+    // 서브 카테고리를 JSON 문자열로 변환
+    const subcatsJson = Object.keys(preferredSubcats).length > 0 
+      ? JSON.stringify(preferredSubcats) 
+      : null;
+
     const payload: any = {
       name,
       member_id: 0,
       // ✅ SavedPlace.address 우선 사용, 없으면 origin 문자열
       start_address: originPlace?.address ?? origin ?? null,
+      start_latitude: originLat,
+      start_longitude: originLng,
       transportation: transportation ?? null,
       fav_activity: preferredCats.length > 0 ? preferredCats.join(",") : null,
+      fav_subcategories: subcatsJson,
       available_times: availableTimes,
     };
 

@@ -27,6 +27,8 @@ type Item = {
   roadAddress?: string | null;
   category?: string | null;
   telephone?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 export default function SearchOriginPage() {
@@ -104,13 +106,24 @@ export default function SearchOriginPage() {
   // ───────────────── 검색 결과 선택 ─────────────────
   const selectItem = async (it: Item) => {
     const label = it.name || it.title;
-    const addr = it.roadAddress || it.address || "";
 
+    // 🔹 화면에 보여줄 주소(도로명 우선)
+    const displayAddr = it.roadAddress || it.address || "";
+
+    // 🔹 서버/지오코딩용 주소: 지번(address) 우선, 없으면 도로명
+    //    → participants API 의 start_address 로 넘어가서
+    //       get_coords_from_address() 에서 이 값을 사용하게 됨
+    const serverAddr = it.address || it.roadAddress || "";
+
+    // 🔹 좌표 + 주소 모두 저장
     const place: SavedPlace = {
-      id: `${label}-${addr}`,
+      id: `${label}-${displayAddr}`,
       name: label,
-      address: addr,
-    };
+      address: serverAddr, // 👉 지번 우선 (백엔드 지오코딩용)
+      displayAddress: displayAddr, // (optional) UI용 도로명
+      latitude: it.latitude ?? null,
+      longitude: it.longitude ?? null,
+    } as any;
 
     const segments = location.pathname.split("/");
     const mode = segments[1]; // 'details' 또는 'create'
@@ -124,7 +137,10 @@ export default function SearchOriginPage() {
       try {
         await addMustVisitPlace(promiseId, {
           name: label,
-          address: addr || undefined,
+          address: serverAddr || undefined,
+          // 🔹 must-visit도 좌표 있으면 같이 서버로 보냄
+          latitude: it.latitude ?? undefined,
+          longitude: it.longitude ?? undefined,
         });
       } catch (e: any) {
         console.error(e);
@@ -157,16 +173,15 @@ export default function SearchOriginPage() {
       nextSaved = nextSaved.slice(0, MAX_SAVED_PLACES);
     }
 
-    // 🔹 참가자별 localStorage 에도 반영
+    // 🔹 참가자별 localStorage 에도 반영 (좌표/주소 포함해서 같이 저장됨)
     saveParticipantPlaces(effectivePromiseId, participantStorageId, nextSaved);
 
     navigate(originPath, {
       replace: true,
       state: {
         ...baseState,
-        selectedOrigin: place,
-        savedPlaces: nextSaved, // ✅ 참가자 전용 리스트
-        // 돌아가서도 같은 참가자로 인식하도록
+        selectedOrigin: place, // ✅ 여기에도 지번/도로명/lat/lng 모두 있음
+        savedPlaces: nextSaved,
         participantDraftId:
           baseState.participantDraftId ?? participantStorageId,
       },

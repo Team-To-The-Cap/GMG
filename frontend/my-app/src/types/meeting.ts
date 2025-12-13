@@ -11,13 +11,15 @@ export type Meeting = {
 export type MeetingParticipant = {
   id: number;
   name: string;
-  // 백엔드에 프로필 이미지 필드가 있으면 여기에 추가
   avatar_url?: string | null;
 
-  // 아래는 ParticipantResponse에 맞게 필요한 경우 확장 가능
   start_address?: string | null;
+  start_latitude?: number | null;
+  start_longitude?: number | null;
+
   transportation?: string | null;
   fav_activity?: string | null;
+  fav_subcategories?: string | null;  // JSON 문자열로 서브 카테고리 저장
   available_times?: {
     id: number;
     start_time: string;
@@ -47,6 +49,10 @@ export type MeetingPlace = {
   address: string;
   category?: string | null;
   duration?: number | null;
+  // 이전 장소로부터의 이동시간 (분 단위), 첫 번째 장소는 null
+  travel_time_from_prev?: number | null;
+  // 이동 수단: walking, transit, driving
+  travel_mode_from_prev?: string | null;
 };
 
 /** 서버 Must-Visit Place 타입 */
@@ -55,6 +61,8 @@ export type MeetingMustVisitPlace = {
   meeting_id: number;
   name: string;
   address: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 /** 백엔드 Meeting 응답 전체 */
@@ -67,6 +75,7 @@ export type MeetingResponse = {
   purpose?: string | null;
   vibe?: string | null;
   budget?: string | null;
+  meeting_duration?: string | null;  // 60, 120, 180, 240, 360, 480 (분 단위)
   profile_memo?: string | null;
 
   participants: MeetingParticipant[];

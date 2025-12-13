@@ -76,6 +76,10 @@ def get_places_for_meeting(
         models.MeetingPlace.meeting_id == meeting_id
     ).all()
     
+    print(f"[DEBUG] get_places_for_meeting: meeting_id={meeting_id}, found {len(places)} places")
+    for p in places:
+        print(f"  - {p.name} (category={p.category}, lat={p.latitude}, lng={p.longitude})")
+    
     return places
 
 

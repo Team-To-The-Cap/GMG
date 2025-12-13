@@ -18,6 +18,9 @@ export type MeetingProfile = {
 
   // 1인당 예산 → 복수 선택
   budget?: string[];
+
+  // 얼마나 길게 만날 건가요? → 단일 선택 (분 단위)
+  meetingDuration?: string; // "60", "120", "180", "240", "360", "480" 등
 };
 
 /**
@@ -45,6 +48,8 @@ export type MustVisitPlace = {
   id: string;
   name: string;
   address?: string | null;
+  lat?: number;
+  lng?: number;
 };
 
 /**
@@ -123,11 +128,7 @@ export type PromiseDetail = {
   course: Course;
 
   // Meeting 단위의 Must-Visit Places
-  mustVisitPlaces?: {
-    id: string;
-    name: string;
-    address?: string | null;
-  }[];
+  mustVisitPlaces?: MustVisitPlace[];
 
   // 약속의 분위기/목적/예산/메모
   meetingProfile?: MeetingProfile;

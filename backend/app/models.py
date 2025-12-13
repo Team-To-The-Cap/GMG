@@ -18,6 +18,7 @@ class Meeting(Base):
     purpose = Column(String(50), nullable=True)         # meal / drinks / cafe / activity / meeting ...
     vibe = Column(String(50), nullable=True)            # comma-separated : noisy-fun,calm,mood,cheap ...
     budget = Column(String(50), nullable=True)          # 1,2,3,4
+    meeting_duration = Column(String(20), nullable=True)  # 60, 120, 180, 240, 360, 480 (분 단위)
     profile_memo = Column(String(1000), nullable=True)  # 자유 텍스트 메모
 
     participants = relationship(
@@ -123,6 +124,11 @@ class MeetingPlace(Base):
     # restaurant / cafe / activity / shopping / culture / nature ...
     category = Column(String, nullable=True)
     duration = Column(Integer, nullable=True)
+    
+    # 이전 장소로부터의 이동시간 (분 단위), 첫 번째 장소는 None
+    travel_time_from_prev = Column(Integer, nullable=True)
+    # 이동 수단: walking, transit, driving
+    travel_mode_from_prev = Column(String(20), nullable=True)
 
     meeting = relationship("Meeting", back_populates="places")
 
@@ -144,6 +150,7 @@ class Participant(Base):
     start_address = Column(String(255), nullable=True)
     transportation = Column(String(255), nullable=True)
     fav_activity = Column(String(255), nullable=True)
+    fav_subcategories = Column(String(1000), nullable=True)  # JSON 문자열로 서브 카테고리 저장
 
     meeting = relationship("Meeting", back_populates="participants")
     available_times = relationship(

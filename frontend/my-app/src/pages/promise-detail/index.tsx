@@ -141,6 +141,7 @@ export default function PromiseDetailPage() {
           selectedTransportation: participant.transportation ?? null,
           selectedTimes: participant.availableTimes ?? [],
           selectedPreferences: participant.preferredCategories ?? [],
+          selectedSubPreferences: participant.preferredSubcategories ?? {},
           editParticipantId: participant.id,
         },
       });

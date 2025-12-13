@@ -13,7 +13,7 @@ router = APIRouter(
 
 
 @router.post("/{meeting_id}/courses/auto", response_model=CourseResponse)
-def build_auto_course_for_meeting(
+async def build_auto_course_for_meeting(
     meeting_id: int,
     db: Session = Depends(get_db),
 ):
@@ -25,4 +25,4 @@ def build_auto_course_for_meeting(
       4) 베스트 코스를 meeting_places 테이블에 저장
       5) Top K 코스 후보들을 그대로 응답
     """
-    return build_and_save_courses_for_meeting(db, meeting_id)
+    return await build_and_save_courses_for_meeting(db, meeting_id)

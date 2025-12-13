@@ -108,9 +108,14 @@ export default function AddParticipantOriginPage() {
     [saved, selectedId]
   );
 
-  const [transportation, setTransportation] = useState<string>(
-    state.selectedTransportation ?? "대중교통"
-  );
+  const [transportation, setTransportation] = useState<string>(() => {
+    const selected = state.selectedTransportation;
+    // 도보는 더 이상 지원하지 않으므로 대중교통으로 변경
+    if (selected === "도보" || selected === "walking") {
+      return "대중교통";
+    }
+    return selected ?? "대중교통";
+  });
 
   const onBack = () => navigate(-1);
 
@@ -267,7 +272,7 @@ export default function AddParticipantOriginPage() {
           </div>
 
           <div className="flex items-center bg-white rounded-xl p-1 shadow-sm border border-gray-200 w-full">
-            {["대중교통", "자동차", "도보"].map((t) => {
+            {["대중교통", "자동차"].map((t) => {
               const active = transportation === t;
               return (
                 <button

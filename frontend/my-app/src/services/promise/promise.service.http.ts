@@ -1,4 +1,4 @@
-// src/services/promise/promise.service.http.ts
+// src/services/promise.service.http.ts
 import { DRAFT_PROMISE_ID_KEY } from "@/assets/constants/storage";
 import { http } from "@/lib/http";
 import type {
@@ -16,13 +16,105 @@ import type {
 } from "@/types/meeting";
 
 /**
- * 🔹 백엔드에서 내려주는 MeetingResponse.places 배열을
- *     PromiseDetail.course 구조로 변환해 주는 헬퍼
+ * 🔹 Haversine 공식으로 두 지점 간의 직선 거리 계산 (미터 단위)
  */
-function buildCourseFromPlaces(meeting: MeetingResponse): Course {
-  const places = meeting.places ?? [];
+function calculateDistance(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number
+): number {
+  const R = 6371000; // 지구 반지름 (미터)
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
 
-  // 장소가 하나도 없으면 기본(빈) 코스 반환
+/**
+ * 🔹 보행 시간 계산 (거리 기반, naive)
+ * - 보행 속도: 5 km/h = 약 83.3 m/min
+ */
+function calculateWalkingTime(
+  startLat: number,
+  startLng: number,
+  goalLat: number,
+  goalLng: number
+): number {
+  const distanceMeters = calculateDistance(startLat, startLng, goalLat, goalLng);
+  const walkingSpeedMetersPerMinute = 83.3; // 5 km/h
+  const minutes = distanceMeters / walkingSpeedMetersPerMinute;
+  return Math.round(minutes);
+}
+
+/**
+ * 🔹 참가자들의 이동 수단 정보를 기반으로 코스 이동 모드 결정
+ * - 대중교통 사용자가 있으면 대중교통 우선
+ * - 모두 자동차면 자동차
+ * - 기본값: 대중교통
+ */
+function determineCourseTravelMode(participants: any[]): "driving" | "transit" {
+  if (!participants || participants.length === 0) {
+    return "transit"; // 기본값: 대중교통
+  }
+
+  // 참가자들의 이동 수단 카운트
+  let transitCount = 0;
+  let drivingCount = 0;
+
+  for (const p of participants) {
+    const transportation = (p.transportation || "").toLowerCase().trim();
+    
+    // 대중교통
+    if (
+      transportation === "대중교통" ||
+      transportation === "transit" ||
+      transportation === "public" ||
+      transportation === "지하철" ||
+      transportation === "버스"
+    ) {
+      transitCount++;
+    }
+    // 자동차
+    else if (
+      transportation === "자동차" ||
+      transportation === "driving" ||
+      transportation === "drive" ||
+      transportation === "car" ||
+      transportation === "차"
+    ) {
+      drivingCount++;
+    }
+    // 도보는 지원하지 않지만, 기본값으로 대중교통 카운트
+    else {
+      transitCount++;
+    }
+  }
+
+  // 대중교통 사용자가 하나라도 있으면 대중교통 우선
+  // (코스 이동은 모두가 함께 이동하므로 대중교통 사용자를 고려)
+  return transitCount > 0 ? "transit" : "driving";
+}
+
+/**
+ * 🔹 백엔드 MeetingResponse.places → 프론트 Course 구조로 변환
+ * ✅ meeting_point 카테고리는 코스에서 제외 (일정/장소 계산 결과는 코스가 아님)
+ * ✅ 실제 이동시간 계산 (참가자들의 이동 수단 정보 기반)
+ */
+async function buildCourseFromPlaces(
+  meeting: MeetingResponse
+): Promise<Course> {
+  const allPlaces = meeting.places ?? [];
+
+  // meeting_point 카테고리는 코스에서 제외 (일정/장소 계산 결과)
+  const places = allPlaces.filter((pl: any) => pl.category !== "meeting_point");
+
   if (!places.length) {
     return {
       title: "코스 미정",
@@ -36,28 +128,96 @@ function buildCourseFromPlaces(meeting: MeetingResponse): Course {
     };
   }
 
+  // 참가자들의 이동 수단 정보를 기반으로 코스 이동 모드 결정
+  const baseTravelMode = determineCourseTravelMode(meeting.participants || []);
+
   const items: Array<CourseVisit | CourseTransfer> = [];
   let activityMinutes = 0;
   let travelMinutes = 0;
 
-  places.forEach((pl, idx) => {
-    // (1) 이전 장소 → 현재 장소로의 이동 단계
+  // 카테고리별 기본 소비 시간 정의
+  const categoryBaseDurations: Record<string, number> = {
+    cafe: 60,
+    restaurant: 60,
+    activity: 120,
+    shopping: 60,
+    culture: 90,
+    nature: 180,
+  };
+
+  for (let idx = 0; idx < places.length; idx++) {
+    const pl = places[idx];
+
+    // 이전 장소와의 이동시간 계산 (첫 번째 장소는 제외)
     if (idx > 0) {
-      const transferMinutes = 10; // TODO: 나중에 실제 이동시간 계산으로 교체 가능
-
-      items.push({
-        type: "transfer",
-        mode: "subway", // 기본값
-        minutes: transferMinutes,
-        note: "이동",
-      });
-
-      travelMinutes += transferMinutes;
+      const prevPlace = places[idx - 1];
+      
+      // 저장된 이동시간이 있으면 사용 (백엔드에서 계산된 값)
+      if (pl.travel_time_from_prev !== null && pl.travel_time_from_prev !== undefined && pl.travel_mode_from_prev) {
+        const transferMinutes = pl.travel_time_from_prev;
+        const mode = pl.travel_mode_from_prev;
+        
+        // mode를 프론트엔드 형식으로 변환
+        let modeLabel: "walk" | "subway" | "car" = "subway";
+        let modeNote = "대중교통";
+        
+        if (mode === "walking") {
+          modeLabel = "walk";
+          modeNote = "도보";
+        } else if (mode === "transit") {
+          modeLabel = "subway";
+          modeNote = "지하철/버스";
+        } else if (mode === "driving") {
+          modeLabel = "car";
+          modeNote = "자동차";
+        }
+        
+        items.push({
+          type: "transfer",
+          mode: modeLabel,
+          minutes: transferMinutes,
+          note: modeNote,
+        });
+        travelMinutes += transferMinutes;
+      } else {
+        // 저장된 값이 없으면 API 호출 없이 도보 시간만 계산 (홈화면 등에서 빠른 로딩을 위해)
+        // 같은 좌표인 경우 이동 시간 0분으로 처리
+        const isSameLocation =
+          prevPlace.latitude === pl.latitude &&
+          prevPlace.longitude === pl.longitude;
+        
+        if (isSameLocation) {
+          items.push({
+            type: "transfer",
+            mode: "walk",
+            minutes: 0,
+            note: "도보",
+          });
+        } else {
+          // 도보 시간만 계산 (API 호출 없이)
+          const walkingMinutes = calculateWalkingTime(
+            prevPlace.latitude,
+            prevPlace.longitude,
+            pl.latitude,
+            pl.longitude
+          );
+          
+          const transferMinutes = Math.round(walkingMinutes);
+          items.push({
+            type: "transfer",
+            mode: "walk",
+            minutes: transferMinutes,
+            note: "도보 (추정)",
+          });
+          travelMinutes += transferMinutes;
+        }
+      }
     }
-
-    // (2) 현재 장소 방문 단계
-    const stay = pl.duration ?? 60; // duration을 체류시간으로 사용
-
+    
+    // 장소 추가 (모든 경우)
+    const category = (pl.category as string) || "activity";
+    const baseStay = pl.duration ?? categoryBaseDurations[category] ?? 60;
+    
     items.push({
       type: "visit",
       id: String(pl.id),
@@ -66,14 +226,75 @@ function buildCourseFromPlaces(meeting: MeetingResponse): Course {
         address: pl.address,
         lat: pl.latitude,
         lng: pl.longitude,
-        category: (pl as any).category ?? "activity",
+        category: category,
       },
-      stayMinutes: stay,
+      stayMinutes: baseStay,
       note: pl.address,
     });
+    activityMinutes += baseStay;
+  }
 
-    activityMinutes += stay;
-  });
+  // meeting_duration에 맞춰 총 시간 조정 (1시간 내외 오차 허용)
+  const meetingDurationMinutes = meeting.meeting_duration 
+    ? parseInt(meeting.meeting_duration, 10) 
+    : null;
+  
+  if (meetingDurationMinutes && meetingDurationMinutes > 0) {
+    const currentTotalMinutes = activityMinutes + travelMinutes;
+    const timeDifference = meetingDurationMinutes - currentTotalMinutes;
+    
+    // 목표 시간과 현재 시간의 차이가 1시간(60분) 이상이면 시간을 조정
+    // 하지만 각 장소당 최대 20분까지만 추가
+    if (timeDifference > 60) {
+      const targetActivityMinutes = meetingDurationMinutes - travelMinutes;
+      const additionalMinutes = targetActivityMinutes - activityMinutes;
+      
+      if (additionalMinutes > 0) {
+        // 각 장소당 최대 20분까지만 추가
+        const maxAdditionalPerPlace = 20;
+        const visitItems = items.filter((item) => item.type === "visit");
+        const totalPossibleAdditional = visitItems.length * maxAdditionalPerPlace;
+        
+        // 실제 추가할 시간 = min(필요한 추가 시간, 가능한 최대 추가 시간)
+        const actualAdditional = Math.min(additionalMinutes, totalPossibleAdditional);
+        
+        // 각 장소에 균등하게 분배 (최대 20분씩)
+        const additionalPerPlace = Math.min(
+          Math.floor(actualAdditional / visitItems.length),
+          maxAdditionalPerPlace
+        );
+        
+        // visit 타입 아이템의 stayMinutes를 조정
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          if (item.type === "visit") {
+            item.stayMinutes += additionalPerPlace;
+            activityMinutes += additionalPerPlace;
+          }
+        }
+        
+        // 나머지 시간이 있으면 마지막 장소에 분배
+        const remaining = actualAdditional - (additionalPerPlace * visitItems.length);
+        if (remaining > 0 && visitItems.length > 0) {
+          // 마지막 visit 아이템 찾기
+          let lastItem: CourseVisit | null = null;
+          for (let i = items.length - 1; i >= 0; i--) {
+            if (items[i].type === "visit") {
+              lastItem = items[i] as CourseVisit;
+              break;
+            }
+          }
+          if (lastItem) {
+            const maxAddToLast = maxAdditionalPerPlace - additionalPerPlace;
+            const addToLast = Math.min(remaining, maxAddToLast);
+            lastItem.stayMinutes += addToLast;
+            activityMinutes += addToLast;
+          }
+        }
+      }
+    }
+    // 1시간 이내 오차는 허용하므로 조정하지 않음
+  }
 
   return {
     title: meeting.name || "추천 코스",
@@ -111,9 +332,9 @@ function serializeMultiField(val: unknown): string | null {
 }
 
 /**
- * 🔹 MeetingResponse -> PromiseDetail 매핑
+ * 🔹 MeetingResponse -> PromiseDetail 매핑 (비동기 버전, 실제 이동시간 계산 포함)
  */
-function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
+async function mapMeetingToPromiseDetailAsync(meeting: MeetingResponse): Promise<PromiseDetail> {
   const participants: Participant[] = meeting.participants.map((raw) => {
     const p: any = raw;
 
@@ -125,6 +346,17 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
             .map((s: string) => s.trim())
             .filter((s: string) => !!s)
         : [];
+
+    // 서브 카테고리 파싱
+    let preferredSubcategories: any = {};
+    if (p.fav_subcategories) {
+      try {
+        preferredSubcategories = JSON.parse(p.fav_subcategories);
+      } catch (e) {
+        console.warn("Failed to parse fav_subcategories:", e);
+        preferredSubcategories = {};
+      }
+    }
 
     const availableTimes: ParticipantTime[] = (p.available_times ?? []).map(
       (t: any) => ({
@@ -138,9 +370,12 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
       name: p.name,
       avatarUrl: p.avatar_url || `https://i.pravatar.cc/40?u=${p.id}`,
       startAddress: p.start_address as string | undefined,
+      startLat: (p.start_latitude as number | undefined) ?? undefined,
+      startLng: (p.start_longitude as number | undefined) ?? undefined,
       transportation: p.transportation as string | undefined,
       favActivityRaw: fav,
       preferredCategories,
+      preferredSubcategories,
       availableTimes,
     };
   });
@@ -174,23 +409,27 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
         }
       : undefined;
 
-  const course = buildCourseFromPlaces(meeting);
+  const course = await buildCourseFromPlaces(meeting);
 
-  // Must-Visit Place 매핑
   const mustVisitPlaces =
     (meeting.must_visit_places ?? []).map((p) => ({
       id: String(p.id),
       name: p.name,
       address: p.address ?? undefined,
+      // MeetingMustVisitPlace 타입에 lat/lng 있으면 여기서 같이 매핑 가능
+      //       lat: (p as any).latitude,
+      // lng: (p as any).longitude,
     })) ?? [];
 
-  // ✨ 서버 Meeting → 프론트 MeetingProfile 매핑
-  //    서버는 string, 프론트는 purpose/vibe/budget를 배열로 사용
+  // vibe는 단일 선택 필드이므로 배열로 파싱하지 않음
+  const vibe = meeting.vibe && meeting.vibe.trim() ? meeting.vibe.trim() : undefined;
+  
   const meetingProfile: MeetingProfile = {
     withWhom: meeting.with_whom ?? undefined,
     purpose: parseMultiField(meeting.purpose),
-    vibe: parseMultiField(meeting.vibe) as any, // vibe도 복수 선택
+    vibe: vibe,
     budget: parseMultiField(meeting.budget),
+    meetingDuration: meeting.meeting_duration ?? undefined,
   };
 
   return {
@@ -201,8 +440,124 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
     participants,
     place: primaryPlace,
     course,
-    plan: meeting.plan, // MeetingPlan(available_dates 포함)
+    plan: meeting.plan as any,
+    mustVisitPlaces,
+    meetingProfile,
+  } as PromiseDetail;
+}
 
+/**
+ * 🔹 MeetingResponse -> PromiseDetail 매핑 (동기 버전, 이동시간 계산 없음)
+ * @deprecated 실제 이동시간 계산이 필요하면 mapMeetingToPromiseDetailAsync 사용
+ */
+function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
+  // 동기 버전에서는 코스를 나중에 계산하도록 빈 코스 반환
+  const course: Course = {
+    title: "코스 계산 필요",
+    summary: {
+      totalMinutes: 0,
+      activityMinutes: 0,
+      travelMinutes: 0,
+    },
+    items: [],
+    source: "pending",
+  };
+
+  const mustVisitPlaces =
+    (meeting.must_visit_places ?? []).map((p) => ({
+      id: String(p.id),
+      name: p.name,
+      address: p.address ?? undefined,
+    })) ?? [];
+
+  // vibe는 단일 선택 필드이므로 배열로 파싱하지 않음
+  const vibe = meeting.vibe && meeting.vibe.trim() ? meeting.vibe.trim() : undefined;
+  
+  const meetingProfile: MeetingProfile = {
+    withWhom: meeting.with_whom ?? undefined,
+    purpose: parseMultiField(meeting.purpose),
+    vibe: vibe,
+    budget: parseMultiField(meeting.budget),
+    meetingDuration: meeting.meeting_duration ?? undefined,
+  };
+
+  const scheduleISO = meeting.plan?.meeting_time ?? null;
+  let dday: number | null = null;
+  if (scheduleISO) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const target = new Date(scheduleISO);
+    target.setHours(0, 0, 0, 0);
+    const diffMs = target.getTime() - today.getTime();
+    dday = Math.round(diffMs / (1000 * 60 * 60 * 24));
+  }
+
+  const primaryPlace =
+    meeting.plan?.address && meeting.plan.address.trim()
+      ? {
+          name: meeting.plan.address,
+          address: meeting.plan.address,
+          lat: meeting.plan.latitude ?? undefined,
+          lng: meeting.plan.longitude ?? undefined,
+        }
+      : meeting.places && meeting.places.length > 0
+      ? {
+          name: meeting.places[0].name,
+          address: meeting.places[0].address,
+          lat: meeting.places[0].latitude,
+          lng: meeting.places[0].longitude,
+        }
+      : undefined;
+
+  const participants: Participant[] = meeting.participants.map((raw) => {
+    const p: any = raw;
+    const fav: string = p.fav_activity ?? "";
+    const preferredCategories =
+      fav.length > 0
+        ? fav
+            .split(",")
+            .map((s: string) => s.trim())
+            .filter((s: string) => !!s)
+        : [];
+    let preferredSubcategories: any = {};
+    if (p.fav_subcategories) {
+      try {
+        preferredSubcategories = JSON.parse(p.fav_subcategories);
+      } catch (e) {
+        console.warn("Failed to parse fav_subcategories:", e);
+        preferredSubcategories = {};
+      }
+    }
+    const availableTimes: ParticipantTime[] = (p.available_times ?? []).map(
+      (t: any) => ({
+        start_time: t.start_time as string,
+        end_time: t.end_time as string,
+      })
+    );
+    return {
+      id: String(p.id),
+      name: p.name,
+      avatarUrl: p.avatar_url || `https://i.pravatar.cc/40?u=${p.id}`,
+      startAddress: p.start_address as string | undefined,
+      startLat: (p.start_latitude as number | undefined) ?? undefined,
+      startLng: (p.start_longitude as number | undefined) ?? undefined,
+      transportation: p.transportation as string | undefined,
+      favActivityRaw: fav,
+      preferredCategories,
+      preferredSubcategories,
+      availableTimes,
+    };
+  });
+
+  return {
+    id: String(meeting.id),
+    title: meeting.name,
+    dday,
+    schedule: scheduleISO ? { dateISO: scheduleISO } : undefined,
+    participants,
+    place: primaryPlace,
+    course,
+    plan: meeting.plan as any,
     mustVisitPlaces,
     meetingProfile,
   } as PromiseDetail;
@@ -211,6 +566,7 @@ function mapMeetingToPromiseDetail(meeting: MeetingResponse): PromiseDetail {
 /**
  * 🔹 약속 상세 조회
  * - FastAPI: GET /meetings/{meeting_id}
+ * - 실제 이동시간 계산 포함
  */
 export async function getPromiseDetail(
   promiseId: string
@@ -221,16 +577,17 @@ export async function getPromiseDetail(
   }
 
   const meeting = await http.request<MeetingResponse>(`/meetings/${meetingId}`);
-  return mapMeetingToPromiseDetail(meeting);
+  return mapMeetingToPromiseDetailAsync(meeting);
 }
 
 /**
  * 🔹 약속 리스트 조회
  * - FastAPI: GET /meetings/
+ * - 리스트는 빠른 표시를 위해 이동시간 계산 없이 반환
  */
 export async function getPromiseList(): Promise<PromiseDetail[]> {
   const meetings = await http.request<MeetingResponse[]>("/meetings/");
-  return meetings.map(mapMeetingToPromiseDetail);
+  return Promise.all(meetings.map(mapMeetingToPromiseDetailAsync));
 }
 
 /**
@@ -253,8 +610,13 @@ export async function savePromiseDetail(
       : null;
 
   const purpose = serializeMultiField(profile.purpose);
-  const vibe = serializeMultiField(profile.vibe); // 🔥 배열이 와도 string으로 직렬화
+  const vibe = serializeMultiField(profile.vibe);
   const budget = serializeMultiField(profile.budget);
+  
+  const meetingDuration =
+    typeof profile.meetingDuration === "string" && profile.meetingDuration.trim()
+      ? profile.meetingDuration.trim()
+      : null;
 
   await http.request(`/meetings/${meetingId}`, {
     method: "PATCH",
@@ -267,10 +629,13 @@ export async function savePromiseDetail(
       purpose,
       vibe,
       budget,
+      meeting_duration: meetingDuration,
     }),
   });
 
-  return detail;
+  // 서버 상태가 변경됐다고 가정하고 다시 한 번 상세 조회
+  const meeting = await http.request<MeetingResponse>(`/meetings/${meetingId}`);
+  return mapMeetingToPromiseDetailAsync(meeting);
 }
 
 /**
@@ -285,7 +650,7 @@ export async function createEmptyPromise(): Promise<PromiseDetail> {
     body: JSON.stringify({ name: "" }),
   });
 
-  return mapMeetingToPromiseDetail(meeting);
+  return mapMeetingToPromiseDetailAsync(meeting);
 }
 
 /**
@@ -310,7 +675,9 @@ export async function deletePromise(promiseId: string): Promise<void> {
   }
 }
 
-// 🔹 참여자 삭제 (HTTP 버전)
+/**
+ * 🔹 참여자 삭제 (HTTP 버전)
+ */
 export async function deleteParticipant(
   meetingId: string | number,
   participantId: string | number
@@ -329,7 +696,9 @@ export async function deleteParticipant(
   });
 }
 
-// 🔹 자동 일정/장소/코스 계산 (HTTP 버전)
+/**
+ * 🔹 자동 일정/장소/코스 계산 (HTTP 버전)
+ */
 export async function calculateAutoPlan(
   promiseId: string
 ): Promise<PromiseDetail> {
@@ -343,7 +712,7 @@ export async function calculateAutoPlan(
   });
 
   const meeting = await http.request<MeetingResponse>(`/meetings/${meetingId}`);
-  return mapMeetingToPromiseDetail(meeting);
+  return mapMeetingToPromiseDetailAsync(meeting);
 }
 
 /**
@@ -359,18 +728,17 @@ export async function calculateAutoCourse(
     throw new Error(`잘못된 meeting id: ${promiseId}`);
   }
 
-  // 1) 백엔드에 코스 자동 생성 요청
   await http.request(`/meetings/${meetingId}/courses/auto`, {
     method: "POST",
   });
 
-  // 2) 코스가 MeetingPlace 테이블에 저장되었으므로,
-  //    최신 MeetingResponse를 다시 가져와서 프론트 구조로 매핑
   const meeting = await http.request<MeetingResponse>(`/meetings/${meetingId}`);
-  return mapMeetingToPromiseDetail(meeting);
+  return mapMeetingToPromiseDetailAsync(meeting);
 }
 
-// 🔹 약속 이름만 수정 (HTTP 버전)
+/**
+ * 🔹 약속 이름만 수정 (HTTP 버전)
+ */
 export async function updateMeetingName(
   meetingId: string | number,
   name: string
@@ -389,7 +757,9 @@ export async function updateMeetingName(
   });
 }
 
-// 🔹 약속 전체 초기화
+/**
+ * 🔹 약속 전체 초기화
+ */
 export async function resetPromiseOnServer(
   detail: PromiseDetail
 ): Promise<PromiseDetail> {
@@ -452,13 +822,20 @@ export async function resetPromiseOnServer(
   });
 
   const meeting = await http.request<MeetingResponse>(`/meetings/${meetingId}`);
-  return mapMeetingToPromiseDetail(meeting);
+  return mapMeetingToPromiseDetailAsync(meeting);
 }
 
-// 🔹 반드시 가고 싶은 장소 추가
+/**
+ * 🔹 반드시 가고 싶은 장소 추가 (좌표도 같이 보낼 수 있음)
+ */
 export async function addMustVisitPlace(
   promiseId: string | number,
-  payload: { name: string; address?: string }
+  payload: {
+    name: string;
+    address?: string;
+    latitude?: number;
+    longitude?: number;
+  }
 ): Promise<void> {
   const mid = Number(promiseId);
   if (Number.isNaN(mid)) {
@@ -473,11 +850,15 @@ export async function addMustVisitPlace(
     body: JSON.stringify({
       name: payload.name,
       address: payload.address ?? "",
+      latitude: payload.latitude ?? null,
+      longitude: payload.longitude ?? null,
     }),
   });
 }
 
-// 🔹 반드시 가고 싶은 장소 삭제
+/**
+ * 🔹 반드시 가고 싶은 장소 삭제
+ */
 export async function deleteMustVisitPlace(
   promiseId: string | number,
   placeId: string | number
@@ -496,7 +877,9 @@ export async function deleteMustVisitPlace(
   });
 }
 
-// 🔹 약속에 연결된 장소(코스 장소) 목록 조회
+/**
+ * 🔹 약속에 연결된 장소(코스 장소) 목록 조회
+ */
 export async function getMeetingPlaces(
   promiseId: string | number
 ): Promise<MeetingPlace[]> {
@@ -509,7 +892,9 @@ export async function getMeetingPlaces(
   return places;
 }
 
-// 🔹 선택한 장소를 MeetingPlan의 확정 장소로 반영
+/**
+ * 🔹 선택한 장소를 MeetingPlan의 확정 장소로 반영
+ */
 export async function setMeetingFinalPlace(
   promiseId: string | number,
   payload: { address: string; lat: number; lng: number }
@@ -528,7 +913,6 @@ export async function setMeetingFinalPlace(
       address: payload.address,
       latitude: payload.lat,
       longitude: payload.lng,
-      // meeting_time, total_time 등은 건드리지 않으면 기존 값 유지
     }),
   });
 }

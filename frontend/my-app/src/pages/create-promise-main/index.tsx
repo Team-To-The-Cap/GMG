@@ -338,6 +338,7 @@ const onCalculateCourseFixed = useCallback(async () => {
           selectedTransportation: participant.transportation ?? null,
           selectedTimes: participant.availableTimes ?? [],
           selectedPreferences: participant.preferredCategories ?? [],
+          selectedSubPreferences: participant.preferredSubcategories ?? {},
           editParticipantId: participant.id, // 수정 모드 표시
         },
       });
