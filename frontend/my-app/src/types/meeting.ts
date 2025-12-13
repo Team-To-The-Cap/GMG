@@ -49,6 +49,10 @@ export type MeetingPlace = {
   address: string;
   category?: string | null;
   duration?: number | null;
+  // 이전 장소로부터의 이동시간 (분 단위), 첫 번째 장소는 null
+  travel_time_from_prev?: number | null;
+  // 이동 수단: walking, transit, driving
+  travel_mode_from_prev?: string | null;
 };
 
 /** 서버 Must-Visit Place 타입 */

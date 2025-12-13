@@ -612,7 +612,7 @@ def _category_for_step(step: StepInput, idx: int) -> str:
 # 3) Meeting 기준 코스 생성 + 저장
 # ----------------------------------------
 
-def build_and_save_courses_for_meeting(
+async def build_and_save_courses_for_meeting(
     db: Session,
     meeting_id: int,
 ) -> CourseResponse:
@@ -1021,7 +1021,123 @@ def build_and_save_courses_for_meeting(
     #    - (원하면 나중에 [필수]를 2코스로 끼워 넣는 로직으로 바꿀 수 있음)
     final_candidates = must_visit_candidates + auto_candidates
 
-    # 6) calc_func.save_calculated_places 재사용
+    # 6) 각 장소 간 이동시간 계산 및 저장
+    # 참가자들의 이동 수단 선호도 확인
+    has_transit_pref = any(
+        p.transportation and ("대중교통" in p.transportation or "transit" in p.transportation.lower())
+        for p in context.participants
+    )
+    has_driving_pref = any(
+        p.transportation and ("자동차" in p.transportation or "driving" in p.transportation.lower() or "차" in p.transportation)
+        for p in context.participants
+    )
+    
+    # Haversine 공식으로 두 위경도 지점 간의 거리(미터) 계산
+    def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+        R = 6371e3  # 지구 반지름 (미터)
+        φ1 = math.radians(lat1)
+        φ2 = math.radians(lat2)
+        Δφ = math.radians(lat2 - lat1)
+        Δλ = math.radians(lon2 - lon1)
+        
+        a = (
+            math.sin(Δφ / 2) * math.sin(Δφ / 2) +
+            math.cos(φ1) * math.cos(φ2) * math.sin(Δλ / 2) * math.sin(Δλ / 2)
+        )
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+        
+        return R * c
+    
+    # 보행 속도 (5 km/h = 5000m / 60min = 83.33 m/min)
+    WALKING_SPEED_M_PER_MIN = 83.33
+    
+    # 거리(미터)를 보행 시간(분)으로 변환
+    def calculate_walking_time_minutes(distance_meters: float) -> float:
+        return distance_meters / WALKING_SPEED_M_PER_MIN
+    
+    # 각 장소 간 이동시간 계산
+    for idx in range(1, len(final_candidates)):
+        prev_candidate = final_candidates[idx - 1]
+        current_candidate = final_candidates[idx]
+        
+        # 같은 좌표인 경우 이동 시간 0분
+        if prev_candidate["lat"] == current_candidate["lat"] and prev_candidate["lng"] == current_candidate["lng"]:
+            final_candidates[idx]["travel_time_from_prev"] = 0
+            final_candidates[idx]["travel_mode_from_prev"] = "walking"
+            continue
+        
+        # 도보 시간 계산 (항상 계산)
+        distance_m = haversine_distance(
+            prev_candidate["lat"], prev_candidate["lng"],
+            current_candidate["lat"], current_candidate["lng"]
+        )
+        walking_minutes = calculate_walking_time_minutes(distance_m)
+        
+        # 대중교통, 자동차 시간 계산 (선호도가 있으면 계산)
+        transit_minutes = None
+        driving_minutes = None
+        
+        try:
+            if has_transit_pref or not has_driving_pref:  # 대중교통 선호 또는 자동차 선호 없으면
+                transit_result = await get_travel_time(
+                    start_lat=prev_candidate["lat"],
+                    start_lng=prev_candidate["lng"],
+                    goal_lat=current_candidate["lat"],
+                    goal_lng=current_candidate["lng"],
+                    mode="transit",
+                )
+                if transit_result and transit_result.get("success"):
+                    transit_minutes = transit_result["duration_seconds"] / 60.0
+            
+            if has_driving_pref or not has_transit_pref:  # 자동차 선호 또는 대중교통 선호 없으면
+                driving_result = await get_travel_time(
+                    start_lat=prev_candidate["lat"],
+                    start_lng=prev_candidate["lng"],
+                    goal_lat=current_candidate["lat"],
+                    goal_lng=current_candidate["lng"],
+                    mode="driving",
+                )
+                if driving_result and driving_result.get("success"):
+                    driving_minutes = driving_result["duration_seconds"] / 60.0
+        except Exception as e:
+            # API 호출 실패 시 도보 시간만 사용
+            pass
+        
+        # 최적 이동 수단 결정 (프론트엔드 로직과 동일)
+        available_times = []
+        if walking_minutes is not None:
+            available_times.append(("walking", walking_minutes))
+        if transit_minutes is not None:
+            available_times.append(("transit", transit_minutes))
+        if driving_minutes is not None:
+            available_times.append(("driving", driving_minutes))
+        
+        if not available_times:
+            # 모든 계산 실패 시 도보 시간 사용
+            final_candidates[idx]["travel_time_from_prev"] = int(round(walking_minutes))
+            final_candidates[idx]["travel_mode_from_prev"] = "walking"
+            continue
+        
+        # 최소 시간 찾기
+        min_time_mode, min_time = min(available_times, key=lambda x: x[1])
+        
+        # 도보가 다른 모드와 15분 이내 차이면 도보 선택
+        other_times = [t for mode, t in available_times if mode != "walking"]
+        if other_times and walking_minutes is not None:
+            min_other_time = min(other_times)
+            if abs(walking_minutes - min_other_time) <= 15:
+                min_time_mode = "walking"
+                min_time = walking_minutes
+        
+        final_candidates[idx]["travel_time_from_prev"] = int(round(min_time))
+        final_candidates[idx]["travel_mode_from_prev"] = min_time_mode
+    
+    # 첫 번째 장소는 이전 장소가 없으므로 None
+    if final_candidates:
+        final_candidates[0]["travel_time_from_prev"] = None
+        final_candidates[0]["travel_mode_from_prev"] = None
+
+    # 7) calc_func.save_calculated_places 재사용
     save_calculated_places(db, meeting_id, final_candidates)
 
     return course_response

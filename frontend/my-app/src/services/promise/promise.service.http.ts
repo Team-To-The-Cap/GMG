@@ -135,252 +135,86 @@ async function buildCourseFromPlaces(
   let activityMinutes = 0;
   let travelMinutes = 0;
 
+  // 카테고리별 기본 소비 시간 정의
+  const categoryBaseDurations: Record<string, number> = {
+    cafe: 60,
+    restaurant: 60,
+    activity: 120,
+    shopping: 60,
+    culture: 90,
+    nature: 180,
+  };
+
   for (let idx = 0; idx < places.length; idx++) {
     const pl = places[idx];
 
-      // 이전 장소와의 이동시간 계산 (첫 번째 장소는 제외)
-      if (idx > 0) {
-        const prevPlace = places[idx - 1];
+    // 이전 장소와의 이동시간 계산 (첫 번째 장소는 제외)
+    if (idx > 0) {
+      const prevPlace = places[idx - 1];
+      
+      // 저장된 이동시간이 있으면 사용 (백엔드에서 계산된 값)
+      if (pl.travel_time_from_prev !== null && pl.travel_time_from_prev !== undefined && pl.travel_mode_from_prev) {
+        const transferMinutes = pl.travel_time_from_prev;
+        const mode = pl.travel_mode_from_prev;
         
-        // 같은 좌표인 경우 이동 시간 0분으로 처리 (API 호출 스킵)
+        // mode를 프론트엔드 형식으로 변환
+        let modeLabel: "walk" | "subway" | "car" = "subway";
+        let modeNote = "대중교통";
+        
+        if (mode === "walking") {
+          modeLabel = "walk";
+          modeNote = "도보";
+        } else if (mode === "transit") {
+          modeLabel = "subway";
+          modeNote = "지하철/버스";
+        } else if (mode === "driving") {
+          modeLabel = "car";
+          modeNote = "자동차";
+        }
+        
+        items.push({
+          type: "transfer",
+          mode: modeLabel,
+          minutes: transferMinutes,
+          note: modeNote,
+        });
+        travelMinutes += transferMinutes;
+      } else {
+        // 저장된 값이 없으면 API 호출 없이 도보 시간만 계산 (홈화면 등에서 빠른 로딩을 위해)
+        // 같은 좌표인 경우 이동 시간 0분으로 처리
         const isSameLocation =
           prevPlace.latitude === pl.latitude &&
           prevPlace.longitude === pl.longitude;
         
         if (isSameLocation) {
-          // 같은 장소이면 이동 시간 0분으로 설정
           items.push({
             type: "transfer",
-            from: {
-              name: prevPlace.name,
-              address: prevPlace.address,
-              lat: prevPlace.latitude,
-              lng: prevPlace.longitude,
-              category: prevPlace.category || "activity",
-            },
-            to: {
-              name: pl.name,
-              address: pl.address,
-              lat: pl.latitude,
-              lng: pl.longitude,
-              category: pl.category || "activity",
-            },
+            mode: "walk",
             minutes: 0,
-            mode: "walking",
+            note: "도보",
           });
-          
-          // 다음 장소로 넘어감
-          items.push({
-            type: "visit",
-            id: String(pl.id),
-            place: {
-              name: pl.name,
-              address: pl.address,
-              lat: pl.latitude,
-              lng: pl.longitude,
-              category: pl.category || "activity",
-            },
-            stayMinutes: pl.duration ?? 60,
-            note: pl.address,
-          });
-          activityMinutes += pl.duration ?? 60;
-          continue; // 다음 반복으로 넘어감
-        }
-        
-        try {
-          // 도보 시간은 거리 기반으로 직접 계산
+        } else {
+          // 도보 시간만 계산 (API 호출 없이)
           const walkingMinutes = calculateWalkingTime(
             prevPlace.latitude,
             prevPlace.longitude,
             pl.latitude,
             pl.longitude
           );
-          const walkingResult = {
-            duration_seconds: walkingMinutes * 60,
-            duration_minutes: walkingMinutes,
-            mode: "walking",
-            success: true,
-            is_estimated: true,
-          };
-
-          // 대중교통, 자동차는 API로 계산
-          const travelTimeResults = await Promise.allSettled([
-            http.request<{
-              duration_seconds: number;
-              duration_minutes: number;
-              mode: string;
-              success: boolean;
-              is_estimated?: boolean;
-            }>(
-              `/directions/travel-time?start_lat=${prevPlace.latitude}&start_lng=${prevPlace.longitude}&goal_lat=${pl.latitude}&goal_lng=${pl.longitude}&mode=transit`
-            ).catch(() => null),
-            http.request<{
-              duration_seconds: number;
-              duration_minutes: number;
-              mode: string;
-              success: boolean;
-              is_estimated?: boolean;
-            }>(
-              `/directions/travel-time?start_lat=${prevPlace.latitude}&start_lng=${prevPlace.longitude}&goal_lat=${pl.latitude}&goal_lng=${pl.longitude}&mode=driving`
-            ).catch(() => null),
-          ]);
-
-        // 성공한 결과만 추출
-        const transitResult =
-          travelTimeResults[0].status === "fulfilled" &&
-          travelTimeResults[0].value?.success
-            ? travelTimeResults[0].value
-            : null;
-        const drivingResult =
-          travelTimeResults[1].status === "fulfilled" &&
-          travelTimeResults[1].value?.success
-            ? travelTimeResults[1].value
-            : null;
-
-        // 최적 이동 수단 결정
-        let selectedResult:
-          | {
-              duration_seconds: number;
-              duration_minutes: number;
-              mode: string;
-              success: boolean;
-            }
-          | null = null;
-        let selectedModeLabel = "subway";
-
-        // 도보, 대중교통, 자동차 중 최소 시간 찾기
-        const availableResults = [
-          walkingResult ? { ...walkingResult, mode: "walking" } : null,
-          transitResult ? { ...transitResult, mode: "transit" } : null,
-          drivingResult ? { ...drivingResult, mode: "driving" } : null,
-        ].filter((r): r is NonNullable<typeof r> => r !== null);
-
-        if (availableResults.length > 0) {
-          // 최소 시간 찾기
-          const minTimeResult = availableResults.reduce((min, current) =>
-            current.duration_minutes < min.duration_minutes ? current : min
-          );
-
-          // 도보 시간이 다른 모드와 크게 차이 안 나면 도보 선택
-          if (walkingResult) {
-            const walkingMinutes = walkingResult.duration_minutes;
-            const otherResults = availableResults.filter((r) => r.mode !== "walking");
-            
-            if (otherResults.length > 0) {
-              const minOtherMinutes = Math.min(
-                ...otherResults.map((r) => r.duration_minutes)
-              );
-              
-              // 절대 차이가 15분 이내이면 도보 선택
-              const isWalkingReasonable = walkingMinutes - minOtherMinutes <= 15;
-
-              if (isWalkingReasonable) {
-                selectedResult = {
-                  ...walkingResult,
-                  mode: "walking",
-                };
-                selectedModeLabel = "walk";
-              } else {
-                // 도보가 비합리적이면 원래 기준 모드 선택
-                const baseResult =
-                  baseTravelMode === "transit" ? transitResult : drivingResult;
-                if (baseResult) {
-                  selectedResult = {
-                    ...baseResult,
-                    mode: baseTravelMode,
-                  };
-                  selectedModeLabel = baseTravelMode === "transit" ? "subway" : "car";
-                } else {
-                  // 원래 모드 실패 시 최소 시간 모드 선택
-                  selectedResult = minTimeResult;
-                  selectedModeLabel =
-                    minTimeResult.mode === "walking"
-                      ? "walk"
-                      : minTimeResult.mode === "transit"
-                      ? "subway"
-                      : "car";
-                }
-              }
-            } else {
-              // 도보만 성공한 경우
-              selectedResult = {
-                ...walkingResult,
-                mode: "walking",
-              };
-              selectedModeLabel = "walk";
-            }
-          } else {
-            // 도보 실패 시 원래 기준 모드 또는 최소 시간 모드
-            const baseResult =
-              baseTravelMode === "transit" ? transitResult : drivingResult;
-            if (baseResult) {
-              selectedResult = {
-                ...baseResult,
-                mode: baseTravelMode,
-              };
-              selectedModeLabel = baseTravelMode === "transit" ? "subway" : "car";
-            } else {
-              selectedResult = minTimeResult;
-              selectedModeLabel =
-                minTimeResult.mode === "transit" ? "subway" : "car";
-            }
-          }
-        }
-
-        if (selectedResult) {
-          const transferMinutes = Math.round(selectedResult.duration_minutes);
-          const modeNote =
-            selectedModeLabel === "walk"
-              ? "도보"
-              : selectedModeLabel === "subway"
-              ? "지하철/버스"
-              : "자동차";
           
+          const transferMinutes = Math.round(walkingMinutes);
           items.push({
             type: "transfer",
-            mode: selectedModeLabel,
+            mode: "walk",
             minutes: transferMinutes,
-            note: modeNote,
-          });
-          travelMinutes += transferMinutes;
-        } else {
-          // 모든 모드 실패 시 기본값 사용 (10분)
-          const transferMinutes = 10;
-          items.push({
-            type: "transfer",
-            mode: baseTravelMode === "transit" ? "subway" : "car",
-            minutes: transferMinutes,
-            note: `${baseTravelMode === "transit" ? "대중교통" : "자동차"} (추정)`,
+            note: "도보 (추정)",
           });
           travelMinutes += transferMinutes;
         }
-      } catch (error) {
-        console.warn(
-          `Failed to calculate travel time between places ${idx - 1} and ${idx}:`,
-          error
-        );
-        // API 실패 시 기본값 사용 (10분)
-        const transferMinutes = 10;
-        items.push({
-          type: "transfer",
-          mode: baseTravelMode === "transit" ? "subway" : "car",
-          minutes: transferMinutes,
-          note: `${baseTravelMode === "transit" ? "대중교통" : "자동차"} (추정)`,
-        });
-        travelMinutes += transferMinutes;
       }
     }
-
-    // 카테고리별 기본 소비 시간 정의 (현실적인 시간으로 조정)
-    const categoryBaseDurations: Record<string, number> = {
-      cafe: 60,           // 카페: 1시간
-      restaurant: 60,     // 맛집: 1시간 (90분 -> 60분으로 단축)
-      activity: 120,      // 액티비티: 2시간
-      shopping: 60,       // 쇼핑: 1시간
-      culture: 90,        // 문화시설: 1.5시간 (120분 -> 90분으로 단축)
-      nature: 180,        // 자연관광: 3시간
-    };
     
+    // 장소 추가 (모든 경우)
     const category = (pl.category as string) || "activity";
     const baseStay = pl.duration ?? categoryBaseDurations[category] ?? 60;
     
