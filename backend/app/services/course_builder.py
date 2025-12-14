@@ -609,6 +609,28 @@ def _category_for_step(step: StepInput, idx: int) -> str:
 
 
 # ----------------------------------------
+# 2.5) Duration 조정 헬퍼 함수
+# ----------------------------------------
+
+def round_to_5_minutes(minutes: float) -> int:
+    """5분 단위로 반올림 (예: 17분 -> 20분, 23분 -> 25분)"""
+    return int(round(minutes / 5) * 5)
+
+
+def adjust_duration_with_range(
+    category: str, 
+    duration: float,
+    category_min_durations: dict,
+    category_max_durations: dict
+) -> int:
+    """duration을 카테고리별 최소/최대 범위 내에서 5분 단위로 조정"""
+    min_dur = category_min_durations.get(category, 30)
+    max_dur = category_max_durations.get(category, 120)
+    rounded = round_to_5_minutes(duration)
+    return max(min_dur, min(rounded, max_dur))
+
+
+# ----------------------------------------
 # 3) Meeting 기준 코스 생성 + 저장
 # ----------------------------------------
 
@@ -672,6 +694,28 @@ async def build_and_save_courses_for_meeting(
         "shopping": 60,       # 쇼핑: 1시간
         "culture": 90,        # 문화시설: 1.5시간
         "nature": 180,        # 자연관광: 3시간
+        "must_visit": 60,     # 필수 방문: 1시간 (기본값)
+    }
+    
+    # 카테고리별 최소/최대 소비 시간 정의 (5분 단위)
+    category_min_durations = {
+        "cafe": 30,           # 카페: 최소 30분
+        "restaurant": 45,     # 맛집: 최소 45분
+        "activity": 60,       # 액티비티: 최소 1시간
+        "shopping": 30,       # 쇼핑: 최소 30분
+        "culture": 60,        # 문화시설: 최소 1시간
+        "nature": 120,        # 자연관광: 최소 2시간
+        "must_visit": 15,     # 필수 방문: 최소 15분
+    }
+    
+    category_max_durations = {
+        "cafe": 120,          # 카페: 최대 2시간
+        "restaurant": 150,    # 맛집: 최대 2.5시간
+        "activity": 240,      # 액티비티: 최대 4시간
+        "shopping": 120,      # 쇼핑: 최대 2시간
+        "culture": 180,       # 문화시설: 최대 3시간
+        "nature": 360,        # 자연관광: 최대 6시간
+        "must_visit": 180,    # 필수 방문: 최대 3시간
     }
     
     # meeting_duration 파싱
@@ -714,8 +758,9 @@ async def build_and_save_courses_for_meeting(
                 else _category_for_step_index(step_idx)
             )
         
-        # 카테고리별 기본 소비 시간 계산
+        # 카테고리별 기본 소비 시간 계산 (5분 단위로 반올림, 범위 내에서)
         base_duration = category_base_durations.get(category, 60)
+        base_duration = adjust_duration_with_range(category, base_duration, category_min_durations, category_max_durations)
         total_base_activity_minutes += base_duration
         
         # 원본 타입 정보 저장 (bar 타입 식별용)
@@ -740,7 +785,7 @@ async def build_and_save_courses_for_meeting(
                 "lat": p.lat,
                 "lng": p.lng,
                 "category": category,
-                "duration": base_duration,  # 기본 시간 (나중에 조정)
+                "duration": adjust_duration_with_range(category, base_duration, category_min_durations, category_max_durations),  # 기본 시간 (범위 내 5분 단위)
                 "original_type": original_type,  # bar 타입 식별용
             }
         )
@@ -846,6 +891,7 @@ async def build_and_save_courses_for_meeting(
                             category = _category_for_step(add_step, len(auto_candidates))
                         
                         add_duration = category_base_durations.get(category, 60)
+                        add_duration = adjust_duration_with_range(category, add_duration, category_min_durations, category_max_durations)
                         
                         # 원본 타입 정보 저장 (bar 타입 식별용)
                         # 추가 장소도 Google Places API types 우선, 검색 의도(step.type)를 fallback으로 사용
@@ -972,7 +1018,8 @@ async def build_and_save_courses_for_meeting(
             for _ in range(places_to_remove):
                 if len(auto_candidates) > 1:
                     removed = auto_candidates.pop()
-                    total_base_activity_minutes -= removed["duration"]
+                    removed_duration = removed.get("duration", 0) or 0
+                    total_base_activity_minutes -= removed_duration
         
         # duration 미세 조정 (1시간 이내 차이는 duration으로 조정)
         else:
@@ -993,13 +1040,29 @@ async def build_and_save_courses_for_meeting(
                 )
                 
                 for candidate in auto_candidates:
-                    candidate["duration"] += additional_per_place
+                    current_duration = candidate.get("duration", 0)
+                    category = candidate.get("category", "activity")
+                    new_duration = adjust_duration_with_range(
+                        category, 
+                        current_duration + additional_per_place,
+                        category_min_durations,
+                        category_max_durations
+                    )
+                    candidate["duration"] = new_duration
                 
                 remaining = actual_additional - (additional_per_place * len(auto_candidates))
                 if remaining > 0 and len(auto_candidates) > 0:
                     max_add_to_last = max_additional_per_place - additional_per_place
                     add_to_last = min(remaining, max_add_to_last)
-                    auto_candidates[-1]["duration"] += add_to_last
+                    last_candidate = auto_candidates[-1]
+                    last_category = last_candidate.get("category", "activity")
+                    last_current_duration = last_candidate.get("duration", 0)
+                    last_candidate["duration"] = adjust_duration_with_range(
+                        last_category,
+                        last_current_duration + add_to_last,
+                        category_min_durations,
+                        category_max_durations
+                    )
 
     # 4) must-visit 장소를 코스에 포함
     #    - 좌표(lat,lng)가 있는 것만 MeetingPlace에 넣을 수 있음
@@ -1012,6 +1075,15 @@ async def build_and_save_courses_for_meeting(
         # UI에서 티 나도록 [필수] prefix
         label = f"[필수] {mv.name}"
 
+        # must_visit 장소의 기본 duration 설정 (범위 내에서 5분 단위)
+        must_visit_base_duration = category_base_durations.get("must_visit", 60)
+        must_visit_duration = adjust_duration_with_range(
+            "must_visit",
+            must_visit_base_duration,
+            category_min_durations,
+            category_max_durations
+        )
+        
         must_visit_candidates.append(
             {
                 "name": label,
@@ -1019,9 +1091,8 @@ async def build_and_save_courses_for_meeting(
                 "address": mv.address or "",
                 "lat": mv.latitude,
                 "lng": mv.longitude,
-                # 카테고리를 따로 모르면 activity 정도로 두거나 None 으로 두어도 OK
                 "category": "must_visit",
-                "duration": None,
+                "duration": must_visit_duration,
             }
         )
 
@@ -1153,7 +1224,11 @@ async def build_and_save_courses_for_meeting(
             c.get("travel_time_from_prev", 0) or 0 
             for c in final_candidates
         )
-        actual_activity_minutes = sum(c.get("duration", 0) for c in final_candidates)
+        actual_activity_minutes = sum(
+            (d if d is not None else 0)
+            for c in final_candidates
+            for d in [c.get("duration")]
+        )
         actual_total_minutes = actual_activity_minutes + actual_travel_minutes
         
         # 목표 시간과의 차이
@@ -1172,11 +1247,31 @@ async def build_and_save_courses_for_meeting(
                     remaining = actual_additional % len(final_candidates)
                     
                     for candidate in final_candidates:
-                        candidate["duration"] += additional_per_place
+                        current_duration = candidate.get("duration")
+                        if current_duration is None:
+                            current_duration = category_base_durations.get(candidate.get("category", "activity"), 60)
+                        category = candidate.get("category", "activity")
+                        new_duration = adjust_duration_with_range(
+                            category,
+                            current_duration + additional_per_place,
+                            category_min_durations,
+                            category_max_durations
+                        )
+                        candidate["duration"] = new_duration
                     
                     # 남은 시간은 마지막 장소에 추가
                     if remaining > 0 and len(final_candidates) > 0:
-                        final_candidates[-1]["duration"] += remaining
+                        last_candidate = final_candidates[-1]
+                        last_duration = last_candidate.get("duration")
+                        if last_duration is None:
+                            last_duration = category_base_durations.get(last_candidate.get("category", "activity"), 60)
+                        last_category = last_candidate.get("category", "activity")
+                        last_candidate["duration"] = adjust_duration_with_range(
+                            last_category,
+                            last_duration + remaining,
+                            category_min_durations,
+                            category_max_durations
+                        )
                     
                     print(f"[COURSE] 실제 이동시간 반영 후 duration 조정: +{actual_additional}분 분배")
             
@@ -1191,11 +1286,31 @@ async def build_and_save_courses_for_meeting(
                     remaining = actual_reduction % len(final_candidates)
                     
                     for candidate in final_candidates:
-                        candidate["duration"] = max(10, candidate.get("duration", 60) - reduction_per_place)
+                        current_duration = candidate.get("duration")
+                        if current_duration is None:
+                            current_duration = category_base_durations.get(candidate.get("category", "activity"), 60)
+                        category = candidate.get("category", "activity")
+                        new_duration = adjust_duration_with_range(
+                            category,
+                            current_duration - reduction_per_place,
+                            category_min_durations,
+                            category_max_durations
+                        )
+                        candidate["duration"] = new_duration
                     
                     # 남은 시간은 마지막 장소에서 감소
                     if remaining > 0 and len(final_candidates) > 0:
-                        final_candidates[-1]["duration"] = max(10, final_candidates[-1].get("duration", 60) - remaining)
+                        last_candidate = final_candidates[-1]
+                        last_duration = last_candidate.get("duration")
+                        if last_duration is None:
+                            last_duration = category_base_durations.get(last_candidate.get("category", "activity"), 60)
+                        last_category = last_candidate.get("category", "activity")
+                        last_candidate["duration"] = adjust_duration_with_range(
+                            last_category,
+                            last_duration - remaining,
+                            category_min_durations,
+                            category_max_durations
+                        )
                     
                     print(f"[COURSE] 실제 이동시간 반영 후 duration 조정: -{actual_reduction}분 감소")
 
