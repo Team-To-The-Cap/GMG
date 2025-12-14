@@ -1347,14 +1347,34 @@ async def build_and_save_courses_for_meeting(
 
     # 6) 각 장소 간 이동시간 계산 및 저장
     # 참가자들의 이동 수단 선호도 확인
-    has_transit_pref = any(
-        p.transportation and ("대중교통" in p.transportation or "transit" in p.transportation.lower())
+    transit_pref_count = sum(
+        1
         for p in context.participants
+        if p.transportation
+        and ("대중교통" in p.transportation or "transit" in p.transportation.lower())
     )
-    has_driving_pref = any(
-        p.transportation and ("자동차" in p.transportation or "driving" in p.transportation.lower() or "차" in p.transportation)
+    driving_pref_count = sum(
+        1
         for p in context.participants
+        if p.transportation
+        and (
+            "자동차" in p.transportation
+            or "driving" in p.transportation.lower()
+            or "차" in p.transportation
+        )
     )
+
+    has_transit_pref = transit_pref_count > 0
+    has_driving_pref = driving_pref_count > 0
+
+    # 그룹 이동수단 선호:
+    # - 혼합이면(대중교통+자동차) 기본은 대중교통 우선 (중간에 driving이 끼는 걸 방지)
+    # - 전원이 자동차거나 자동차가 명확히 다수면 driving 우선
+    prefer_transit_group = has_transit_pref and (transit_pref_count >= driving_pref_count)
+    prefer_driving_group = has_driving_pref and (driving_pref_count > transit_pref_count)
+
+    # 대중교통 우선 그룹에서도 driving이 압도적으로 빠르면(예: 20분 이상) 예외적으로 허용
+    DRIVING_OVERRIDE_IF_FASTER_BY_MIN = 20
     
     # Haversine 공식으로 두 위경도 지점 간의 거리(미터) 계산
     def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -1431,10 +1451,32 @@ async def build_and_save_courses_for_meeting(
         available_times = []
         if walking_minutes is not None:
             available_times.append(("walking", walking_minutes))
-        if transit_minutes is not None:
-            available_times.append(("transit", transit_minutes))
-        if driving_minutes is not None:
-            available_times.append(("driving", driving_minutes))
+
+        # 그룹 선호를 반영해서 모드 후보를 구성
+        if prefer_transit_group:
+            if transit_minutes is not None:
+                available_times.append(("transit", transit_minutes))
+            # 대중교통 우선 그룹에서는 transit이 없을 때 driving으로 떨어지지 않도록 함
+            # (이 경우 walking만으로 결정됨)
+            # 둘 다 있는 경우, driving이 압도적으로 빠를 때만 허용
+            if (
+                transit_minutes is not None
+                and driving_minutes is not None
+                and (transit_minutes - driving_minutes) >= DRIVING_OVERRIDE_IF_FASTER_BY_MIN
+            ):
+                available_times.append(("driving", driving_minutes))
+        elif prefer_driving_group:
+            if driving_minutes is not None:
+                available_times.append(("driving", driving_minutes))
+            # 자동차가 없으면 transit을 fallback으로 허용
+            if driving_minutes is None and transit_minutes is not None:
+                available_times.append(("transit", transit_minutes))
+        else:
+            # 선호를 알 수 없으면 가능한 모드 모두 고려
+            if transit_minutes is not None:
+                available_times.append(("transit", transit_minutes))
+            if driving_minutes is not None:
+                available_times.append(("driving", driving_minutes))
         
         if not available_times:
             # 모든 계산 실패 시 도보 시간 사용
