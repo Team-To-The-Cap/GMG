@@ -456,9 +456,28 @@ async def compute_minimax_travel_times(
         get_travel_time_naver = None
         log.warning("[GDM] Naver Directions API import failed, will use Google API for all modes")
 
-    # 후보별 최대 소요시간 초기화
+    # 이동수단별 가중치 (공평성 조정: 대중교통 유리, 자동차 불리)
+    MODE_WEIGHTS = {
+        "대중교통": 1.8,   # 대중교통은 유리하게
+        "지하철": 1.8,
+        "버스": 1.8,
+        "subway": 1.8,
+        "train": 1.8,
+        "transit": 1.8,
+        "public": 1.8,
+        "t": 1.8,
+        "자동차": 0.5,     # 자동차는 불리하게 (패널티)
+        "차": 0.5,
+        "car": 0.5,
+        "drive": 0.5,
+        "driving": 0.5,
+        "d": 0.5,
+    }
+    
+    # 후보별 가중치 적용된 최대 소요시간 초기화
     n_candidates = len(candidates)
     max_times: List[float] = [0.0 for _ in range(n_candidates)]
+    weighted_max_times: List[float] = [0.0 for _ in range(n_candidates)]  # 가중치 적용된 시간
 
     used_any = False
     # 각 (참가자, 후보) 쌍을 계산 (top_k가 작으므로 OK)
@@ -469,6 +488,7 @@ async def compute_minimax_travel_times(
             continue
 
         worst = 0.0
+        worst_weighted = 0.0  # 가중치 적용된 최대 시간
         ok_any = False
 
         for p in participants:
@@ -535,20 +555,38 @@ async def compute_minimax_travel_times(
 
             ok_any = True
             t = float(r["duration_seconds"])
+            
+            # 대중교통에 추가 보정: 실제 시간을 약간 줄여서 더 유리하게 평가
+            # (대중교통 시간이 상대적으로 더 짧게 느껴지도록)
+            if transportation in {"대중교통", "지하철", "버스", "subway", "train", "transit", "public", "t"}:
+                t_adjusted = t * 0.9  # 대중교통 시간을 10% 줄여서 보정
+            else:
+                t_adjusted = t
+            
+            # 가중치 적용
+            weight = MODE_WEIGHTS.get(transportation, 1.0)
+            t_weighted = t_adjusted * weight
+            
+            # 원본 최대 시간과 가중치 적용된 최대 시간 각각 추적
             if t > worst:
                 worst = t
+            if t_weighted > worst_weighted:
+                worst_weighted = t_weighted
 
         if ok_any:
             used_any = True
-            max_times[j] = worst
+            max_times[j] = worst  # 원본 시간 (디버깅용)
+            weighted_max_times[j] = worst_weighted  # 가중치 적용된 시간 (선택 기준)
 
     if not used_any:
         return None
 
-    # 5) minimax 기준: max_times[j] 가 최소인 j 선택
-    best_index = min(range(n_candidates), key=lambda idx: max_times[idx])
+    # 5) minimax 기준: 가중치 적용된 시간(weighted_max_times)이 최소인 j 선택
+    # 대중교통 사용자가 더 짧은 시간으로 평가받도록 가중치 반영
+    best_index = min(range(n_candidates), key=lambda idx: weighted_max_times[idx])
 
     return {
-        "max_times": max_times,
+        "max_times": max_times,  # 원본 시간 (참고용)
+        "weighted_max_times": weighted_max_times,  # 가중치 적용된 시간
         "best_index": best_index,
     }
