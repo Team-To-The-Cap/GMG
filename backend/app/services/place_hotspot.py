@@ -121,7 +121,77 @@ def adjust_to_busy_station_area(
         "category_counts": dict(orig_cats),
     }
 
-    # 2. 이미 충분히 번화가라면 그대로 반환
+    # 2. 주변 역 목록 확인 (역을 우선적으로 선택하기 위해 먼저 확인)
+    stations = fetch_nearby_stations(lat=lat, lng=lng, radius=station_search_radius)
+    
+    # 원래 위치가 역세권인지 확인
+    orig_is_station_area = orig_is_station
+    
+    # 3. 주변에 역이 있으면 역으로 우선 이동 (원래 위치가 역이 아닌 경우)
+    if stations and not orig_is_station_area:
+        # 최대 3개 역만 확인하여 가장 좋은 역 선택 (성능 최적화)
+        best_station = None
+        best_station_score = -1.0
+        best_station_info: Dict[str, Any] | None = None
+
+        # 역 이름에 "역"이 포함된 것들을 우선적으로 확인
+        station_with_name = [st for st in stations if any(keyword in st.get("name", "") for keyword in ["역", "station", "Station", "지하철", "전철"])]
+        stations_to_check = (station_with_name + stations)[:3]  # 최대 3개만 확인
+
+        for st in stations_to_check:
+            loc = st.get("geometry", {}).get("location", {})
+            s_lat = loc.get("lat")
+            s_lng = loc.get("lng")
+
+            if s_lat is None or s_lng is None:
+                continue
+
+            score, is_station, poi_count, cats = score_area_with_places(
+                s_lat, s_lng, radius=base_radius
+            )
+            
+            # 역 이름 확인 (지하철역/전철역 등 역 이름이 포함되어 있는지)
+            station_name = st.get("name", "")
+            is_subway_station = any(keyword in station_name for keyword in ["역", "station", "Station", "지하철", "전철"])
+            
+            # 역인 경우 추가 보너스 (역 우선 선택)
+            if is_subway_station:
+                score += 30.0  # 역 보너스 추가 (더 큰 보너스)
+            else:
+                score += 10.0  # 역 타입이지만 이름에 "역"이 없는 경우에도 보너스
+
+            if score > best_station_score:
+                best_station_score = score
+                best_station = st
+                best_station_info = {
+                    "lat": s_lat,
+                    "lng": s_lng,
+                    "name": st.get("name"),
+                    "place_id": st.get("place_id"),
+                    "score": score,
+                    "is_station_area": is_station,
+                    "poi_count": poi_count,
+                    "category_counts": dict(cats),
+                }
+
+        # 주변에 역이 있으면 무조건 역으로 이동 (점수 조건 완화)
+        # 역의 최소 조건: min_score의 70% 또는 POI 5개 이상
+        min_station_score = min_score * 0.7
+        min_station_poi = max(5, min_poi_count - 3)
+        
+        if best_station is not None and (best_station_score >= min_station_score or best_station_info.get("poi_count", 0) >= min_station_poi):
+            poi_name = best_station_info.get("name") if best_station_info else None
+            return {
+                "lat": best_station_info["lat"],
+                "lng": best_station_info["lng"],
+                "adjusted": True,
+                "reason": "prefer_station_over_non_station",
+                "original": original_info,
+                "chosen_station": best_station_info,
+                "poi_name": poi_name,
+            }
+
+    # 4. 원래 위치가 이미 충분히 번화가이고 역세권이면 그대로 반환
     if orig_score >= min_score and orig_poi_count >= min_poi_count:
         return {
             "lat": lat,
@@ -130,11 +200,10 @@ def adjust_to_busy_station_area(
             "reason": "original_point_is_already_busy",
             "original": original_info,
             "chosen_station": None,
-            "poi_name": None,  # 🔹 아직 별도 POI 안 골랐으니 None
+            "poi_name": None,
         }
 
-    # 3. 주변 역 목록
-    stations = fetch_nearby_stations(lat=lat, lng=lng, radius=station_search_radius)
+    # 5. 역이 없거나 역이 충분히 좋지 않은 경우, 다시 역 탐색 (점수 기반)
     if not stations:
         return {
             "lat": lat,
@@ -146,14 +215,16 @@ def adjust_to_busy_station_area(
             "poi_name": None,
         }
 
-    # 4. 가장 좋은 역 찾기
+    # 6. 최대 3개 역만 확인하여 가장 좋은 역 찾기 (성능 최적화)
     best_station = None
     best_station_score = -1.0
     best_station_info: Dict[str, Any] | None = None
 
-    # NOTE: 원래 [:1:] 때문에 "첫 역만" 보고 있었음
-    #       일단 기존 로직 유지
-    for st in stations[:1]:
+    # 역 이름에 "역"이 포함된 것들을 우선적으로 확인
+    station_with_name = [st for st in stations if any(keyword in st.get("name", "") for keyword in ["역", "station", "Station", "지하철", "전철"])]
+    stations_to_check = (station_with_name + stations)[:3]  # 최대 3개만 확인
+
+    for st in stations_to_check:
         loc = st.get("geometry", {}).get("location", {})
         s_lat = loc.get("lat")
         s_lng = loc.get("lng")
@@ -164,6 +235,16 @@ def adjust_to_busy_station_area(
         score, is_station, poi_count, cats = score_area_with_places(
             s_lat, s_lng, radius=base_radius
         )
+        
+        # 역 이름 확인
+        station_name = st.get("name", "")
+        is_subway_station = any(keyword in station_name for keyword in ["역", "station", "Station", "지하철", "전철"])
+        
+        # 역인 경우 추가 보너스
+        if is_subway_station:
+            score += 25.0  # 역 보너스 (더 큰 보너스)
+        else:
+            score += 10.0  # 역 타입이지만 이름에 "역"이 없는 경우에도 보너스
 
         if score > best_station_score:
             best_station_score = score
@@ -179,7 +260,7 @@ def adjust_to_busy_station_area(
                 "category_counts": dict(cats),
             }
 
-    # 5. 역 후보가 없거나, 원래보다 나은 곳이 없다면 이동 안 함
+    # 7. 역 후보가 없거나, 원래보다 나은 곳이 없다면 이동 안 함
     if best_station is None or best_station_score < orig_score:
         return {
             "lat": lat,
