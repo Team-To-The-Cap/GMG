@@ -284,8 +284,8 @@ export function usePromiseMainController({
           const nextVal = currentVal === value ? undefined : value;
 
           nextProfile = {
-            ...prevProfile,
-            [field]: nextVal,
+              ...prevProfile,
+              [field]: nextVal,
           } as MeetingProfile;
         } else {
           // 복수 선택 필드 (purpose, budget, vibe)
@@ -296,15 +296,15 @@ export function usePromiseMainController({
             : [...currentArr, value];
 
           nextProfile = {
-            ...prevProfile,
-            [field]: nextArr,
+              ...prevProfile,
+              [field]: nextArr,
           } as MeetingProfile;
         }
 
         const nextData = {
           ...prev,
           meetingProfile: nextProfile,
-        };
+          };
 
         // 서버에 자동 저장 (비동기, 에러는 조용히 처리)
         (async () => {

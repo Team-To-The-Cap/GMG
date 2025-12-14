@@ -353,10 +353,10 @@ def plan_courses_internal(
                     f"3) API key issues. Check server logs for [GGL] messages for details."
                 )
                 print(f"[COURSE] ERROR: {error_detail}", flush=True)
-                raise HTTPException(
-                    status_code=404,
+            raise HTTPException(
+                status_code=404,
                     detail=error_detail,
-                )
+            )
 
         all_candidates.append(step_candidates)
 

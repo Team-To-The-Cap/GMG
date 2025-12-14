@@ -203,14 +203,14 @@ async function buildCourseFromPlaces(
           );
           
           const transferMinutes = Math.round(walkingMinutes);
-          items.push({
-            type: "transfer",
+      items.push({
+        type: "transfer",
             mode: "walk",
-            minutes: transferMinutes,
+        minutes: transferMinutes,
             note: "도보 (추정)",
-          });
-          travelMinutes += transferMinutes;
-        }
+      });
+      travelMinutes += transferMinutes;
+    }
       }
     }
     
@@ -423,7 +423,7 @@ async function mapMeetingToPromiseDetailAsync(meeting: MeetingResponse): Promise
 
   // vibe는 단일 선택 필드이므로 배열로 파싱하지 않음
   const vibe = meeting.vibe && meeting.vibe.trim() ? meeting.vibe.trim() : undefined;
-  
+
   const meetingProfile: MeetingProfile = {
     withWhom: meeting.with_whom ?? undefined,
     purpose: parseMultiField(meeting.purpose),
