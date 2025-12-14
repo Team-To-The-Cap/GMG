@@ -67,7 +67,7 @@ def fetch_nearby_places(
             log.warning(
                 "[GGL] WARNING: Places API (Legacy) is not enabled. "
                 "Please enable 'Places API (Legacy)' in Google Cloud Console or migrate to Places API (New)."
-            )
+        )
 
     return results
 
