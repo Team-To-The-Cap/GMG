@@ -1829,7 +1829,56 @@ async def build_and_save_courses_for_meeting(
                     
                     print(f"[COURSE] 실제 이동시간 반영 후 duration 조정: -{actual_reduction}분 감소")
 
-    # 7) calc_func.save_calculated_places 재사용
-    save_calculated_places(db, meeting_id, final_candidates)
+    # 7) 코스 장소 저장 (meeting_point는 보존)
+    _save_course_places(db, meeting_id, final_candidates)
 
     return course_response
+
+
+def _save_course_places(db: Session, meeting_id: int, candidates: list[dict]):
+    """
+    코스 장소만 저장. meeting_point 카테고리는 보존 (중간 위치 후보 유지)
+    """
+    db_meeting = (
+        db.query(models.Meeting)
+        .options(joinedload(models.Meeting.places))
+        .filter(models.Meeting.id == meeting_id)
+        .first()
+    )
+
+    if db_meeting is None:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+
+    # meeting_point 카테고리는 삭제하지 않고 보존
+    meeting_points = [p for p in db_meeting.places if p.category == "meeting_point"]
+    
+    # meeting_point가 아닌 기존 장소만 삭제 (코스 장소)
+    non_meeting_points = [p for p in db_meeting.places if p.category != "meeting_point"]
+    for place in non_meeting_points:
+        db.delete(place)
+    
+    db.commit()
+
+    # 새 코스 장소 추가
+    new_places: list[models.MeetingPlace] = []
+    for c in candidates:
+        db_place = models.MeetingPlace(
+            meeting_id=meeting_id,
+            name=c["name"],
+            latitude=c["lat"],
+            longitude=c["lng"],
+            address=c["address"],
+            category=c.get("category"),
+            duration=c.get("duration"),
+            poi_name=c.get("poi_name"),
+            travel_time_from_prev=c.get("travel_time_from_prev"),
+            travel_mode_from_prev=c.get("travel_mode_from_prev"),
+        )
+        db.add(db_place)
+        new_places.append(db_place)
+
+    db.commit()
+    for p in new_places:
+        db.refresh(p)
+
+    return new_places
