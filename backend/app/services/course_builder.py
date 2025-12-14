@@ -856,23 +856,39 @@ def optimize_course_order_with_constraints(
             )
     
     # 최종 순서 구성: restaurant와 해당 그룹의 non-restaurant를 교차 배치
-    # 간단하게: restaurant 사이에 non-restaurant 그룹을 배치
+    # restaurant 다음에 cafe/bar가 오도록 배치
     result = []
+    
+    def _get_category(p: dict) -> str:
+        return (p.get("effective_category") or p.get("category") or "").strip()
     
     # 각 restaurant 사이에 non-restaurant 그룹 배치
     for rest_idx, restaurant in enumerate(restaurants):
         # 이 restaurant 앞에 배치할 non-restaurant 그룹
         group = restaurant_groups[rest_idx] if rest_idx < len(restaurant_groups) else []
         
-        # 그룹의 non-restaurant 배치 (이미 최적화됨)
-        result.extend(group)
+        # 그룹을 cafe/bar와 그 외로 분리
+        cafe_bar_items = [p for p in group if _get_category(p) in ["cafe", "bar"]]
+        other_items = [p for p in group if _get_category(p) not in ["cafe", "bar"]]
+        
+        # 그 외 항목들을 먼저 배치 (이미 최적화됨)
+        result.extend(other_items)
         
         # restaurant 배치
         result.append(restaurant)
+        
+        # restaurant 바로 다음에 cafe/bar 배치 (밥 먹고 카페/술집 가는 순서)
+        result.extend(cafe_bar_items)
     
     # 마지막 restaurant 이후의 non-restaurant 그룹 배치
     if len(restaurant_groups) > len(restaurants):
-        result.extend(restaurant_groups[len(restaurants):])
+        last_group = restaurant_groups[len(restaurants)]
+        cafe_bar_items = [p for p in last_group if _get_category(p) in ["cafe", "bar"]]
+        other_items = [p for p in last_group if _get_category(p) not in ["cafe", "bar"]]
+        result.extend(other_items)
+        # 마지막 그룹의 cafe/bar는 이미 restaurant 다음에 배치되었거나, 
+        # 마지막 restaurant 다음에 배치
+        result.extend(cafe_bar_items)
     
     # restaurant 간격 제약 확인 및 조정
     if len(restaurants) >= 2:
@@ -901,6 +917,70 @@ def optimize_course_order_with_constraints(
             # 제약을 완화하여 nearest neighbor로 최적화
             # (restaurant 간격은 가능한 한 유지하되, 완벽하지 않아도 됨)
             pass  # 현재 구조를 유지 (나중에 더 정교한 최적화 가능)
+    
+    # 최종 순서에서 restaurant 다음에 cafe/bar가 오도록 재배치
+    # cafe/bar를 찾아서 가장 가까운 restaurant 뒤로 이동
+    restaurants_in_result = [i for i, p in enumerate(result) if _is_restaurant(p)]
+    cafes_bars_to_move = []
+    cafes_bars_indices = []
+    
+    # 이동할 cafe/bar 찾기 (restaurant 앞에 있는 것들)
+    for i, place in enumerate(result):
+        place_cat = _get_category(place)
+        if place_cat in ["cafe", "bar"] and not _is_restaurant(place):
+            # 이 cafe/bar 바로 앞에 restaurant가 있는지 확인
+            has_restaurant_before = False
+            for j in range(i - 1, -1, -1):
+                if _is_restaurant(result[j]):
+                    has_restaurant_before = True
+                    break
+                if _get_category(result[j]) in ["cafe", "bar"]:
+                    break  # 다른 cafe/bar가 나오면 중단
+            
+            # restaurant 앞에 있으면 이동 대상
+            if not has_restaurant_before:
+                cafes_bars_to_move.append((i, place))
+                cafes_bars_indices.append(i)
+    
+    # 역순으로 제거 (인덱스가 안 바뀌도록)
+    for idx in reversed(cafes_bars_indices):
+        result.pop(idx)
+    
+    # 각 cafe/bar를 가장 가까운 restaurant 뒤에 배치
+    for orig_idx, cafe_bar in cafes_bars_to_move:
+        # 가장 가까운 restaurant 찾기
+        best_restaurant_idx = None
+        min_dist = float('inf')
+        
+        for i, place in enumerate(result):
+            if _is_restaurant(place):
+                dist = haversine_distance(
+                    cafe_bar["lat"], cafe_bar["lng"],
+                    place["lat"], place["lng"]
+                )
+                if dist < min_dist:
+                    min_dist = dist
+                    best_restaurant_idx = i
+        
+        if best_restaurant_idx is not None:
+            # restaurant 바로 다음 위치에 삽입
+            insert_idx = best_restaurant_idx + 1
+            
+            # 이미 다른 cafe/bar가 있으면 그 뒤에 삽입
+            while insert_idx < len(result):
+                next_cat = _get_category(result[insert_idx])
+                if next_cat in ["cafe", "bar"]:
+                    insert_idx += 1
+                elif _is_restaurant(result[insert_idx]):
+                    # 다음 restaurant가 나오면 그 앞에 삽입
+                    break
+                else:
+                    break
+            
+            result.insert(insert_idx, cafe_bar)
+        else:
+            # restaurant가 없으면 맨 뒤에 추가
+            result.append(cafe_bar)
     
     return result
 
