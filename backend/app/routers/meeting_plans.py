@@ -28,6 +28,74 @@ def _get_naver_map_creds() -> tuple[str | None, str | None]:
     return cid, sec
 
 
+def _extract_location_name_from_coords(lon: float, lat: float) -> Optional[str]:
+    """
+    좌표로부터 지명 추출 (poi_name용)
+    Naver Reverse Geocoding API를 사용해서 지역 이름 추출
+    """
+    client_id, client_secret = _get_naver_map_creds()
+    if not client_id or not client_secret:
+        return None
+    
+    url = "https://maps.apigw.ntruss.com/map-reversegeocode/v2/gc"
+    params = {
+        "coords": f"{lon},{lat}",
+        "sourcecrs": "epsg:4326",
+        "orders": "addr,roadaddr,admcode",
+        "output": "json",
+    }
+    headers = {
+        "X-NCP-APIGW-API-KEY-ID": client_id,
+        "X-NCP-APIGW-API-KEY": client_secret,
+    }
+    
+    try:
+        resp = requests.get(url, params=params, headers=headers, timeout=3)
+        resp.raise_for_status()
+    except Exception:
+        return None
+    
+    try:
+        data = resp.json()
+        results = data.get("results", [])
+        if not results:
+            return None
+        
+        r0 = results[0]
+        region = r0.get("region", {})
+        land = r0.get("land", {})
+        
+        # 지역 이름 추출
+        area2 = region.get("area2", {}).get("name")  # 시/군/구
+        area3 = region.get("area3", {}).get("name")  # 동/읍/면
+        land_name = land.get("name")  # 도로명/지번 이름
+        
+        # 지명 우선순위: 도로명/지번 > 동 이름 > 구 이름
+        if land_name:
+            # 도로명에서 번호 제거 (예: "테헤란로" -> "테헤란로", "당산로 123" -> "당산로")
+            land_name_clean = land_name.split()[0] if land_name else None
+            if land_name_clean:
+                # 구와 조합 (예: "영등포구 당산로")
+                if area2 and area3:
+                    return f"{area2} {land_name_clean}"
+                elif area2:
+                    return f"{area2} {land_name_clean}"
+                else:
+                    return land_name_clean
+        
+        # 동 이름 사용
+        if area2 and area3:
+            return f"{area2} {area3}"
+        elif area3:
+            return area3
+        elif area2:
+            return area2
+        
+        return None
+    except Exception:
+        return None
+
+
 def reverse_geocode_naver(lon: float, lat: float) -> Optional[str]:
     """
     네이버 Reverse Geocoding API를 사용해서
@@ -503,6 +571,10 @@ async def create_auto_plan_for_meeting(
                 lat = float(c["lat"])
                 lng = float(c["lng"])
                 poi_name = c.get("poi_name")
+                
+                # poi_name이 없으면 역지오코딩으로 지명 추출
+                if not poi_name:
+                    poi_name = _extract_location_name_from_coords(lng, lat)
 
                 if idx == best_index:
                     place_name = "자동 추천 만남 장소"
@@ -511,8 +583,8 @@ async def create_auto_plan_for_meeting(
 
                 candidates.append(
                     {
-                        "name": place_name,  # UI 라벨
-                        "poi_name": poi_name,  # 카드 큰 제목용
+                        "name": place_name,  # UI 라벨 (기존 로직 유지)
+                        "poi_name": poi_name,  # 카드 큰 제목용 (지명으로 설정)
                         "address": addr,  # 대표 center 기준 주소 공통 사용
                         "lat": lat,
                         "lng": lng,
