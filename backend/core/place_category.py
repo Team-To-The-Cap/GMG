@@ -4,6 +4,7 @@ from typing import Literal, Optional
 # 우리 서비스 내부 기준 카테고리
 PlaceCategory = Literal[
     "restaurant",   # 맛집
+    "bar",          # 술집/요리주점
     "cafe",         # 카페
     "activity",     # 액티비티
     "shopping",     # 소품샵
@@ -19,7 +20,7 @@ GOOGLE_TYPE_TO_CATEGORY: dict[str, Optional[PlaceCategory]] = {
     "meal_takeaway": "restaurant",
     "meal_delivery": "restaurant",
     "food": "restaurant",  # 일반 음식점
-    "bar": "restaurant",
+    "bar": "bar",
     "korean_restaurant": "restaurant",
     "japanese_restaurant": "restaurant",
     "chinese_restaurant": "restaurant",
@@ -63,6 +64,10 @@ def map_google_types_to_category(types: list[str]) -> Optional[PlaceCategory]:
     Google place result 의 types 배열을 받아서
     우리 내부 PlaceCategory 하나로 매핑.
     """
+    # bar는 restaurant보다 우선 (같은 결과에 restaurant, bar가 같이 들어오는 경우가 있음)
+    if "bar" in types:
+        return "bar"
+
     for t in types:
         cat = GOOGLE_TYPE_TO_CATEGORY.get(t)
         if cat is not None:

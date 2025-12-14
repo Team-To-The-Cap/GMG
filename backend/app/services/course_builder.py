@@ -120,6 +120,20 @@ def _parse_subcategories(participants: List[models.Participant]) -> Dict[str, Li
     return all_subcats
 
 
+def _max_nonbar_restaurant_visits_by_duration(meeting_duration_minutes: int) -> int:
+    """
+    총 코스 시간(meeting_duration) 기준으로 '식당(바 제외)' 방문 횟수 상한을 반환.
+    - 7시간(420분) 초과: 2회
+    - 3시간(180분) 초과: 1회
+    - 그 이하면: 0회
+    """
+    if meeting_duration_minutes > 420:
+        return 2
+    if meeting_duration_minutes > 180:
+        return 1
+    return 0
+
+
 def _pick_activity_query(fav_activities: List[str], subcategories: Dict[str, List[str]]) -> tuple[str, str]:
     """
     참가자 fav_activity와 서브 카테고리를 보고 1코스 '놀거리' 검색어와 type을 선택.
@@ -203,6 +217,7 @@ def _pick_activity_query(fav_activities: List[str], subcategories: Dict[str, Lis
 def build_steps_from_meeting(
     meeting: models.Meeting,
     participants: List[models.Participant],
+    max_nonbar_restaurant_steps: Optional[int] = None,
 ) -> List[StepInput]:
     """
     Meeting.with_whom / purpose / vibe / budget + 참가자 fav_activity 및 서브 카테고리를 보고
@@ -226,6 +241,14 @@ def build_steps_from_meeting(
             meeting_duration_minutes = int(meeting.meeting_duration)
         except (ValueError, TypeError):
             meeting_duration_minutes = 0
+
+    # 식당(바 제외) step 추가 상한 (must_visit 반영은 caller에서 차감해서 넘겨줌)
+    nonbar_restaurant_steps_allowed = (
+        max_nonbar_restaurant_steps
+        if max_nonbar_restaurant_steps is not None
+        else _max_nonbar_restaurant_visits_by_duration(meeting_duration_minutes)
+    )
+    nonbar_restaurant_steps_added = 0
 
     fav_activities = [
         p.fav_activity for p in participants
@@ -303,25 +326,22 @@ def build_steps_from_meeting(
             )
     elif not is_meal_focused:
         # 기본: 가벼운 식사 또는 활동
-        # 식당은 meeting_duration이 5시간 이상일 때만 추가
-        if meeting_duration_minutes >= 300:
+        # 식당(바 제외) step은 상한 내에서만 추가
+        if nonbar_restaurant_steps_added < nonbar_restaurant_steps_allowed:
             steps.append(
                 StepInput(query="가볍게 먹기 좋은 식당", type="restaurant")
             )
+            nonbar_restaurant_steps_added += 1
         else:
-            # 5시간 미만이면 카페로 대체
+            # 식당을 더 넣을 수 없으면 카페로 대체
             steps.append(
                 StepInput(query="카페", type="cafe")
             )
     # meal_focused인 경우는 2코스에서 처리
 
     # ---------- 2코스: 메인 식사 (조건부 추가) ----------
-    # 식당은 meeting_duration이 5시간(300분) 이상일 때만 추가
-    should_add_meal = True
-    
-    # meeting_duration이 5시간 미만이면 식사 스킵
-    if meeting_duration_minutes < 300:
-        should_add_meal = False
+    # 식당(바 제외) step은 상한 내에서만 추가
+    should_add_meal = nonbar_restaurant_steps_added < nonbar_restaurant_steps_allowed
     
     # 간단한 목적(카페만, 회의만) + 저예산이면 식사 스킵 가능
     if (is_cafe_focused or is_meeting_focused) and is_low_budget and len(steps) >= 1:
@@ -388,6 +408,7 @@ def build_steps_from_meeting(
         
         query = base_query
         steps.append(StepInput(query=query, type="restaurant"))
+        nonbar_restaurant_steps_added += 1
 
     # ---------- 3코스: 카페 or 술 or 휴식 (조건부 추가) ----------
     # meeting_duration과 min_steps_from_duration을 고려하여 결정
@@ -659,14 +680,19 @@ def optimize_course_order_with_constraints(
     if len(places) <= 1:
         return places
     
-    # restaurant와 non-restaurant 분리 (요리주점 제외)
+    def _cat(p: dict) -> str:
+        # must_visit은 effective_category가 있으면 그걸 우선 사용 (실제 카테고리)
+        return (p.get("effective_category") or p.get("category") or "").strip()
+
+    # restaurant와 non-restaurant 분리 (bar 제외)
+    # bar는 이제 category="bar"로 저장되므로, category=="restaurant"만 체크해도 됨
     restaurants = [
         p for p in places 
-        if p.get("category") == "restaurant" and p.get("original_type") != "bar"
+        if _cat(p) == "restaurant"
     ]
     non_restaurants = [
         p for p in places 
-        if p.get("category") != "restaurant" or p.get("original_type") == "bar"
+        if _cat(p) != "restaurant"
     ]
     
     # restaurant가 1개 이하면 단순히 nearest neighbor로 최적화
@@ -776,7 +802,7 @@ def optimize_course_order_with_constraints(
     if len(restaurants) >= 2:
         rest_indices = [
             i for i, p in enumerate(result) 
-            if p.get("category") == "restaurant" and p.get("original_type") != "bar"
+            if p.get("category") == "restaurant"  # bar는 이미 category="bar"로 저장되므로 자동 제외
         ]
         
         # 간격이 부족한 restaurant 쌍 찾기
@@ -894,8 +920,84 @@ async def build_and_save_courses_for_meeting(
             ),
         )
 
+    # meeting_duration 파싱 (분)
+    meeting_duration_minutes = 0
+    if context.meeting.meeting_duration:
+        try:
+            meeting_duration_minutes = int(context.meeting.meeting_duration)
+        except (ValueError, TypeError):
+            meeting_duration_minutes = 0
+
+    # Google Places API types를 내부 category로 매핑하는 함수 import
+    from core.place_category import map_google_types_to_category
+    from ..services.google_places_services import fetch_nearby_places
+
+    # must_visit의 카테고리(특히 restaurant 여부)를 추정해서,
+    # meeting_duration 기준 "식당(바 제외)" 방문 횟수 상한에서 차감한다.
+    max_nonbar_restaurants_total = _max_nonbar_restaurant_visits_by_duration(meeting_duration_minutes)
+
+    must_visit_meta: dict[int, dict] = {}
+    must_visit_nonbar_restaurant_count = 0
+
+    for mv in context.must_visit_places:
+        if mv.id is None or mv.latitude is None or mv.longitude is None:
+            continue
+
+        inferred_category = None
+        inferred_original_type = None
+
+        try:
+            # must_visit 좌표 주변에서 이름으로 검색해 types 추정
+            results = fetch_nearby_places(
+                lat=float(mv.latitude),
+                lng=float(mv.longitude),
+                radius=800,
+                keyword=mv.name,
+                type=None,
+            )
+            if results:
+                # 가장 가까운 결과(좌표 기준) 선택
+                def _dist_m(r: dict) -> float:
+                    loc = (r.get("geometry") or {}).get("location") or {}
+                    rlat = loc.get("lat")
+                    rlng = loc.get("lng")
+                    if rlat is None or rlng is None:
+                        return float("inf")
+                    return haversine_distance(float(mv.latitude), float(mv.longitude), float(rlat), float(rlng))
+
+                best = min(results, key=_dist_m)
+                place_types = best.get("types") or []
+                if place_types:
+                    inferred_category = map_google_types_to_category(place_types)
+                    if "bar" in place_types:
+                        inferred_original_type = "bar"
+            print(
+                f"[COURSE] must_visit meta | id={mv.id} name={mv.name!r} types={(place_types if 'place_types' in locals() else None)} -> {inferred_category!r}",
+                flush=True,
+            )
+        except Exception:
+            # 추정 실패해도 코스 생성은 계속
+            pass
+
+        must_visit_meta[int(mv.id)] = {
+            "effective_category": inferred_category,
+            "original_type": inferred_original_type,
+        }
+
+        if inferred_category == "restaurant" and inferred_original_type != "bar":
+            must_visit_nonbar_restaurant_count += 1
+
+    remaining_nonbar_restaurant_steps = max(
+        0,
+        max_nonbar_restaurants_total - must_visit_nonbar_restaurant_count,
+    )
+
     # 1) 프로필 + 참가자 선호 기반 step 설계
-    steps = build_steps_from_meeting(context.meeting, context.participants)
+    steps = build_steps_from_meeting(
+        context.meeting,
+        context.participants,
+        max_nonbar_restaurant_steps=remaining_nonbar_restaurant_steps,
+    )
 
     # 참가자들의 fav_activity 수집
     participant_fav_activities = [
@@ -921,13 +1023,11 @@ async def build_and_save_courses_for_meeting(
     # 3) 베스트 코스 하나를 MeetingPlace 후보 리스트로 변환
     best_course = course_response.courses[0]
 
-    # Google Places API types를 내부 category로 매핑하는 함수 import
-    from core.place_category import map_google_types_to_category
-
     # 카테고리별 기본 소비 시간 정의 (프론트엔드와 동일하게)
     category_base_durations = {
         "cafe": 60,           # 카페: 1시간
         "restaurant": 60,     # 맛집: 1시간
+        "bar": 90,            # 술집: 1.5시간
         "activity": 120,      # 액티비티: 2시간
         "shopping": 60,       # 쇼핑: 1시간
         "culture": 90,        # 문화시설: 1.5시간
@@ -939,6 +1039,7 @@ async def build_and_save_courses_for_meeting(
     category_min_durations = {
         "cafe": 30,           # 카페: 최소 30분
         "restaurant": 45,     # 맛집: 최소 45분
+        "bar": 60,            # 술집: 최소 1시간
         "activity": 60,       # 액티비티: 최소 1시간
         "shopping": 30,       # 쇼핑: 최소 30분
         "culture": 60,        # 문화시설: 최소 1시간
@@ -949,6 +1050,7 @@ async def build_and_save_courses_for_meeting(
     category_max_durations = {
         "cafe": 120,          # 카페: 최대 2시간
         "restaurant": 150,    # 맛집: 최대 2.5시간
+        "bar": 210,           # 술집: 최대 3.5시간
         "activity": 240,      # 액티비티: 최대 4시간
         "shopping": 120,      # 쇼핑: 최대 2시간
         "culture": 180,       # 문화시설: 최대 3시간
@@ -956,14 +1058,8 @@ async def build_and_save_courses_for_meeting(
         "must_visit": 180,    # 필수 방문: 최대 3시간
     }
     
-    # meeting_duration 파싱
-    meeting_duration_minutes = 0
-    if context.meeting.meeting_duration:
-        try:
-            meeting_duration_minutes = int(context.meeting.meeting_duration)
-        except (ValueError, TypeError):
-            meeting_duration_minutes = 0
-    
+    # meeting_duration_minutes 는 위에서 이미 파싱됨
+
     # 기본 duration 계산
     auto_candidates: list[dict] = []
     total_base_activity_minutes = 0
@@ -978,6 +1074,7 @@ async def build_and_save_courses_for_meeting(
         place_types = getattr(p, "types", [])
         if place_types:
             # Google Places API types를 내부 category로 매핑
+            # map_google_types_to_category는 bar를 우선 반환하므로, bar 타입은 자동으로 "bar"로 매핑됨
             mapped_category = map_google_types_to_category(place_types)
             if mapped_category:
                 category = mapped_category
@@ -996,24 +1093,21 @@ async def build_and_save_courses_for_meeting(
                 else _category_for_step_index(step_idx)
             )
         
+        # bar 타입은 category를 "bar"로 저장 (프론트에서 restaurant로 보이지 않도록)
+        # map_google_types_to_category가 이미 bar를 우선 반환하지만, 검색 의도도 확인
+        original_type = None
+        if category == "bar" or (place_types and "bar" in place_types):
+            category = "bar"
+            original_type = "bar"
+        elif step_def and step_def.type == "bar" and category == "restaurant":
+            # 검색 의도가 "bar"이고 결과가 restaurant인 경우 bar로 보정
+            category = "bar"
+            original_type = "bar"
+        
         # 카테고리별 기본 소비 시간 계산 (5분 단위로 반올림, 범위 내에서)
         base_duration = category_base_durations.get(category, 60)
         base_duration = adjust_duration_with_range(category, base_duration, category_min_durations, category_max_durations)
         total_base_activity_minutes += base_duration
-        
-        # 원본 타입 정보 저장 (bar 타입 식별용)
-        # 요리주점 판단: Google Places API의 types 우선, 검색 의도(step_def.type)를 fallback으로 사용
-        # 1. types에 "bar"가 포함되어 있으면 요리주점 (가장 정확)
-        # 2. types에 없지만 검색 의도가 "bar"이고 category가 "restaurant"면 요리주점으로 판단
-        original_type = None
-        
-        if place_types and "bar" in place_types:
-            # Google Places API의 types에 "bar"가 포함되어 있으면 요리주점
-            original_type = "bar"
-        elif step_def and step_def.type == "bar" and category == "restaurant":
-            # 검색 의도가 "bar"이고 결과가 restaurant인 경우 요리주점으로 판단
-            # (Google Places API가 bar 타입을 반환하지 않았지만, 검색 의도를 신뢰)
-            original_type = "bar"
         
         auto_candidates.append(
             {
@@ -1023,6 +1117,7 @@ async def build_and_save_courses_for_meeting(
                 "lat": p.lat,
                 "lng": p.lng,
                 "category": category,
+                "effective_category": category,
                 "duration": adjust_duration_with_range(category, base_duration, category_min_durations, category_max_durations),  # 기본 시간 (범위 내 5분 단위)
                 "original_type": original_type,  # bar 타입 식별용
             }
@@ -1046,7 +1141,12 @@ async def build_and_save_courses_for_meeting(
             max_additional_places = min(additional_places_needed, 3)  # 최대 3개까지만 추가
             
             # 추가 steps 생성
-            used_categories = {c["category"] for c in auto_candidates}
+            # bar(요리주점)은 restaurant 카테고리로 매핑되지만,
+            # "식당(바 제외)" 카운트/상한에는 포함하지 않도록 별도로 취급
+            used_categories: set[str] = set()
+            for c in auto_candidates:
+                cat = c.get("category", "")
+                used_categories.add(cat)  # bar는 이미 category="bar"로 저장됨
             purposes = _normalize_list_field(context.meeting.purpose)
             vibes = _normalize_list_field(context.meeting.vibe)
             fav_activities = [p.fav_activity for p in context.participants if p.fav_activity]
@@ -1063,9 +1163,16 @@ async def build_and_save_courses_for_meeting(
             has_rest_pref = any("휴식" in fav for fav in fav_activities)
             
             # 추가 장소 생성 및 검색
-            # 현재 restaurant 개수 확인 (최대 2개까지만 허용)
-            restaurant_count = sum(1 for c in auto_candidates if c["category"] == "restaurant")
-            max_restaurants = 2  # 코스당 최대 restaurant 2개
+            # 현재 "식당(바 제외)" 방문 횟수 확인 (must_visit 포함)
+            nonbar_restaurant_count = (
+                sum(
+                    1
+                    for c in auto_candidates
+                    if c.get("category") == "restaurant"  # bar는 이미 category="bar"로 저장되므로 자동 제외
+                )
+                + must_visit_nonbar_restaurant_count
+            )
+            max_nonbar_restaurants = max_nonbar_restaurants_total
             
             additional_steps = []
             for _ in range(max_additional_places):
@@ -1082,17 +1189,16 @@ async def build_and_save_courses_for_meeting(
                         query = "카페"
                     additional_steps.append(StepInput(query=query, type="cafe"))
                     used_categories.add("cafe")
-                elif "bar" not in used_categories and (is_drink_focused or has_drink_pref) and restaurant_count < max_restaurants:
+                elif "bar" not in used_categories and (is_drink_focused or has_drink_pref):
                     query = "술집"  # 요리주점 포함
                     additional_steps.append(StepInput(query=query, type="bar"))
-                    used_categories.add("restaurant")  # bar는 restaurant로 매핑됨
-                    restaurant_count += 1
-                elif "restaurant" not in used_categories and restaurant_count < max_restaurants:
-                    # restaurant가 아직 없고 최대 개수 미만일 때만 추가
+                    used_categories.add("bar")
+                elif "restaurant" not in used_categories and nonbar_restaurant_count < max_nonbar_restaurants:
+                    # "식당(바 제외)" 상한 내에서만 추가
                     query = "가성비 좋은 맛집"
                     additional_steps.append(StepInput(query=query, type="restaurant"))
                     used_categories.add("restaurant")
-                    restaurant_count += 1
+                    nonbar_restaurant_count += 1
                 else:
                     # 기본: 카페
                     additional_steps.append(StepInput(query="카페", type="cafe"))
@@ -1120,6 +1226,7 @@ async def build_and_save_courses_for_meeting(
                         
                         # 카테고리 결정
                         if place_types:
+                            # map_google_types_to_category는 bar를 우선 반환하므로, bar 타입은 자동으로 "bar"로 매핑됨
                             mapped_category = map_google_types_to_category(place_types)
                             if mapped_category:
                                 category = mapped_category
@@ -1128,19 +1235,18 @@ async def build_and_save_courses_for_meeting(
                         else:
                             category = _category_for_step(add_step, len(auto_candidates))
                         
-                        add_duration = category_base_durations.get(category, 60)
-                        add_duration = adjust_duration_with_range(category, add_duration, category_min_durations, category_max_durations)
-                        
-                        # 원본 타입 정보 저장 (bar 타입 식별용)
-                        # 추가 장소도 Google Places API types 우선, 검색 의도(step.type)를 fallback으로 사용
+                        # bar 타입은 category를 "bar"로 저장 (프론트에서 restaurant로 보이지 않도록)
                         add_original_type = None
-                        
-                        if place_types and "bar" in place_types:
-                            # Google Places API의 types에 "bar"가 포함되어 있으면 요리주점
+                        if category == "bar" or (place_types and "bar" in place_types):
+                            category = "bar"
                             add_original_type = "bar"
                         elif add_step.type == "bar" and category == "restaurant":
-                            # 검색 의도가 "bar"이고 결과가 restaurant인 경우 요리주점으로 판단
+                            # 검색 의도가 "bar"이고 결과가 restaurant인 경우 bar로 보정
+                            category = "bar"
                             add_original_type = "bar"
+                        
+                        add_duration = category_base_durations.get(category, 60)
+                        add_duration = adjust_duration_with_range(category, add_duration, category_min_durations, category_max_durations)
                         
                         auto_candidates.append({
                             "name": add_place.name,
@@ -1149,6 +1255,7 @@ async def build_and_save_courses_for_meeting(
                             "lat": add_place.lat,
                             "lng": add_place.lng,
                             "category": category,
+                            "effective_category": category,
                             "duration": add_duration,
                             "original_type": add_original_type,  # bar 타입 식별용
                         })
@@ -1161,20 +1268,20 @@ async def build_and_save_courses_for_meeting(
             # bar 타입이 아닌 restaurant만 필터링
             restaurants = [
                 c for c in auto_candidates 
-                if c["category"] == "restaurant" and c.get("original_type") != "bar"
+                if c["category"] == "restaurant"  # bar는 이미 category="bar"로 저장되므로 자동 제외
             ]
-            # bar 타입인 restaurant와 non-restaurant를 함께 non_restaurants로 취급
+            # bar와 non-restaurant를 함께 non_restaurants로 취급
             non_restaurants = [
                 c for c in auto_candidates 
-                if c["category"] != "restaurant" or c.get("original_type") == "bar"
+                if c["category"] != "restaurant"
             ]
             
             # restaurant가 2개 이상이고, non-restaurant가 충분하면 재배치
             if len(restaurants) >= 2 and len(non_restaurants) >= len(restaurants) - 1:
-                # 현재 restaurant들의 위치 확인 (bar 타입 제외)
+                # 현재 restaurant들의 위치 확인 (bar는 이미 category="bar"로 저장되므로 자동 제외)
                 restaurant_positions = [
                     i for i, c in enumerate(auto_candidates) 
-                    if c["category"] == "restaurant" and c.get("original_type") != "bar"
+                    if c["category"] == "restaurant"
                 ]
                 
                 # 연속된 restaurant가 있는지 확인
@@ -1313,13 +1420,20 @@ async def build_and_save_courses_for_meeting(
         # UI에서 티 나도록 [필수] prefix
         label = f"[필수] {mv.name}"
 
-        # must_visit 장소의 기본 duration 설정 (범위 내에서 5분 단위)
-        must_visit_base_duration = category_base_durations.get("must_visit", 60)
+        # must_visit의 실제 카테고리를 추정한 경우, 그 카테고리 기준으로 duration 설정
+        meta = must_visit_meta.get(int(mv.id)) if mv.id is not None else None
+        effective_category = (meta or {}).get("effective_category")
+        original_type = (meta or {}).get("original_type")
+        save_category = effective_category or "must_visit"
+        # 디버깅: must_visit 카테고리 추정값 확인
+        print(f"[COURSE] must_visit inferred | id={mv.id} name={mv.name!r} -> {save_category!r}", flush=True)
+
+        base_dur = category_base_durations.get(save_category, category_base_durations.get("must_visit", 60))
         must_visit_duration = adjust_duration_with_range(
-            "must_visit",
-            must_visit_base_duration,
+            save_category,
+            base_dur,
             category_min_durations,
-            category_max_durations
+            category_max_durations,
         )
         
         must_visit_candidates.append(
@@ -1329,7 +1443,11 @@ async def build_and_save_courses_for_meeting(
                 "address": mv.address or "",
                 "lat": mv.latitude,
                 "lng": mv.longitude,
-                "category": "must_visit",
+                # must_visit도 실제 카테고리를 저장 (프론트에 식당/쇼핑 등으로 보이게)
+                "category": save_category,
+                # 내부 제약 계산용(호환): effective_category에도 동일 값 유지
+                "effective_category": effective_category,
+                "original_type": original_type,
                 "duration": must_visit_duration,
             }
         )
