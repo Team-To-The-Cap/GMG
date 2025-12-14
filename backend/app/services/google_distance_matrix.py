@@ -419,7 +419,7 @@ def get_travel_time_single(
     }
 
 
-def compute_minimax_travel_times(
+async def compute_minimax_travel_times(
     participants: List[Dict[str, Any]],
     candidates: List[Dict[str, float]],
 ) -> Optional[Dict[str, Any]]:
@@ -441,16 +441,27 @@ def compute_minimax_travel_times(
         "max_times": [float, ...],   # 각 후보별 참가자 최대 소요시간(sec)
         "best_index": int,           # minimax 기준 최적 후보 인덱스
     }
+
+    이동수단별 API 사용:
+    - 대중교통: Google API (Routes/Directions API)
+    - 자동차: Naver API (Directions API)
     """
     if not participants or not candidates:
         return None
+
+    # Naver API import (자동차용)
+    try:
+        from ..services.naver_directions import get_travel_time as get_travel_time_naver
+    except ImportError:
+        get_travel_time_naver = None
+        log.warning("[GDM] Naver Directions API import failed, will use Google API for all modes")
 
     # 후보별 최대 소요시간 초기화
     n_candidates = len(candidates)
     max_times: List[float] = [0.0 for _ in range(n_candidates)]
 
     used_any = False
-    # Routes API로 각 (참가자, 후보) 쌍을 계산 (top_k가 작으므로 OK)
+    # 각 (참가자, 후보) 쌍을 계산 (top_k가 작으므로 OK)
     for j, c in enumerate(candidates):
         clat = c.get("lat")
         clng = c.get("lng")
@@ -467,18 +478,56 @@ def compute_minimax_travel_times(
                 continue
 
             transportation = p.get("transportation", "").strip().lower()
-            mode = _transportation_to_google_mode(transportation)
             
-            # 도보는 지원하지 않음 (_transportation_to_google_mode에서 에러 발생)
-            # 대중교통과 자동차만 처리
-            # 자동차/대중교통은 Google API 사용
-            r = get_travel_time_single(
-                start_lat=float(plat),
-                start_lng=float(plng),
-                goal_lat=float(clat),
-                goal_lng=float(clng),
-                mode=mode,
-            )
+            # 이동수단별로 다른 API 사용
+            if transportation in {"대중교통", "지하철", "버스", "subway", "train", "transit", "public", "t"}:
+                # 대중교통: Google API 사용
+                mode = _transportation_to_google_mode(transportation)
+                r = get_travel_time_single(
+                    start_lat=float(plat),
+                    start_lng=float(plng),
+                    goal_lat=float(clat),
+                    goal_lng=float(clng),
+                    mode=mode,
+                )
+            elif transportation in {"자동차", "차", "car", "drive", "driving", "d"}:
+                # 자동차: Naver API 사용
+                if get_travel_time_naver:
+                    r = await get_travel_time_naver(
+                        start_lat=float(plat),
+                        start_lng=float(plng),
+                        goal_lat=float(clat),
+                        goal_lng=float(clng),
+                        mode="driving",
+                    )
+                    # Naver API 응답 형식을 Google API와 동일하게 변환
+                    if r and r.get("success"):
+                        r = {
+                            "duration_seconds": r.get("duration_seconds"),
+                            "distance_meters": r.get("distance_meters"),
+                            "success": True,
+                        }
+                else:
+                    # Naver API 사용 불가 시 Google API로 fallback
+                    log.warning("[GDM] Naver API unavailable, falling back to Google API for driving")
+                    mode = _transportation_to_google_mode(transportation)
+                    r = get_travel_time_single(
+                        start_lat=float(plat),
+                        start_lng=float(plng),
+                        goal_lat=float(clat),
+                        goal_lng=float(clng),
+                        mode=mode,
+                    )
+            else:
+                # 기본값: Google API 사용 (기존 동작 유지)
+                mode = _transportation_to_google_mode(transportation)
+                r = get_travel_time_single(
+                    start_lat=float(plat),
+                    start_lng=float(plng),
+                    goal_lat=float(clat),
+                    goal_lng=float(clng),
+                    mode=mode,
+                )
             
             if not r or not r.get("success"):
                 ok_any = False

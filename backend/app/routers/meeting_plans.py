@@ -258,7 +258,7 @@ def get_common_available_dates_for_meeting(meeting: models.Meeting) -> List[date
     "/{meeting_id}/plans/calculate",
     response_model=schemas.MeetingPlanResponse,
 )
-def create_auto_plan_for_meeting(
+async def create_auto_plan_for_meeting(
     meeting_id: int,
     db: Session = Depends(get_db),
 ):
@@ -457,21 +457,28 @@ def create_auto_plan_for_meeting(
                 uniq.append(c)
             center_candidates = uniq
 
-            # 3-3. Google Distance Matrix로 공평한 center 재선택 (하이브리드)
+            # 3-3. Google Distance Matrix (대중교통) / Naver API (자동차)로 공평한 center 재선택 (하이브리드)
             best_center_lat = raw_adjusted_lat
             best_center_lon = raw_adjusted_lon
             best_index = 0
 
             if participant_for_matrix and center_candidates:
-                if not GOOGLE_MAPS_API_KEY:
+                # 대중교통 사용자가 있으면 Google API 필요, 자동차만 있으면 Naver API 사용 가능
+                has_transit_participants = any(
+                    p.get("transportation", "").strip().lower() in 
+                    {"대중교통", "지하철", "버스", "subway", "train", "transit", "public", "t"}
+                    for p in participant_for_matrix
+                )
+                
+                if has_transit_participants and not GOOGLE_MAPS_API_KEY:
                     raise HTTPException(
                         status_code=503,
                         detail=(
-                            "공평한 만남장소(minimax)를 계산하려면 Google Distance Matrix가 필요합니다. "
-                            "서버에 GOOGLE_MAPS_API_KEY를 설정해주세요."
+                            "공평한 만남장소(minimax)를 계산하려면 Google Maps API가 필요합니다. "
+                            "대중교통 사용자가 있을 경우 서버에 GOOGLE_MAPS_API_KEY를 설정해주세요."
                         ),
                     )
-                dm_result = compute_minimax_travel_times(
+                dm_result = await compute_minimax_travel_times(
                     participants=participant_for_matrix,
                     candidates=center_candidates,
                 )
