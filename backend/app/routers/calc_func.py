@@ -482,8 +482,80 @@ def find_road_center_node_multi_mode(
     print(f"[DEBUG] 필터링 후 최종 후보군: {len(candidates)}개")
     
     sorted_candidates = sorted(candidates, key=calculate_score)
-    top_nodes = sorted_candidates[:top_k]
-    best_node = top_nodes[0]
+    
+    # 거리 기반 다양성 확보: 최소 거리(2km) 이상 떨어진 후보만 선택
+    MIN_DISTANCE_M = 2000  # 2km
+    top_nodes = []
+    
+    for candidate_node in sorted_candidates:
+        if len(top_nodes) >= top_k:
+            break
+        
+        candidate_lat = G.nodes[candidate_node]["y"]
+        candidate_lon = G.nodes[candidate_node]["x"]
+        
+        # 이미 선택된 후보들과의 거리 확인
+        is_far_enough = True
+        for selected_node in top_nodes:
+            selected_lat = G.nodes[selected_node]["y"]
+            selected_lon = G.nodes[selected_node]["x"]
+            
+            # Haversine 거리 계산
+            dist_m = haversine_distance_m(
+                candidate_lat, candidate_lon,
+                selected_lat, selected_lon
+            )
+            
+            if dist_m < MIN_DISTANCE_M:
+                is_far_enough = False
+                break
+        
+        if is_far_enough:
+            top_nodes.append(candidate_node)
+            print(f"[DEBUG] 후보 추가: 노드 {candidate_node} (점수: {calculate_score(candidate_node):.2f})")
+    
+    # 최소 거리 제약으로 후보가 부족하면 점수 순으로 추가 (거리 제약 완화)
+    if len(top_nodes) < top_k:
+        print(f"[DEBUG] 거리 제약으로 후보 부족 ({len(top_nodes)}/{top_k}), 거리 제약 완화하여 추가 선택")
+        MIN_DISTANCE_M_RELAXED = 1000  # 1km로 완화
+        
+        for candidate_node in sorted_candidates:
+            if len(top_nodes) >= top_k:
+                break
+            
+            if candidate_node in top_nodes:
+                continue
+            
+            candidate_lat = G.nodes[candidate_node]["y"]
+            candidate_lon = G.nodes[candidate_node]["x"]
+            
+            is_far_enough = True
+            for selected_node in top_nodes:
+                selected_lat = G.nodes[selected_node]["y"]
+                selected_lon = G.nodes[selected_node]["x"]
+                
+                dist_m = haversine_distance_m(
+                    candidate_lat, candidate_lon,
+                    selected_lat, selected_lon
+                )
+                
+                if dist_m < MIN_DISTANCE_M_RELAXED:
+                    is_far_enough = False
+                    break
+            
+            if is_far_enough:
+                top_nodes.append(candidate_node)
+                print(f"[DEBUG] 후보 추가 (완화): 노드 {candidate_node} (점수: {calculate_score(candidate_node):.2f})")
+    
+    # 여전히 부족하면 점수 순으로 그냥 추가
+    if len(top_nodes) < top_k:
+        for candidate_node in sorted_candidates:
+            if len(top_nodes) >= top_k:
+                break
+            if candidate_node not in top_nodes:
+                top_nodes.append(candidate_node)
+    
+    best_node = top_nodes[0] if top_nodes else sorted_candidates[0]
 
     # 상세 로그: 모든 후보군 정보 출력
     print("\n" + "=" * 80)

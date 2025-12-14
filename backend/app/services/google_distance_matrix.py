@@ -581,12 +581,109 @@ async def compute_minimax_travel_times(
     if not used_any:
         return None
 
-    # 5) minimax 기준: 가중치 적용된 시간(weighted_max_times)이 최소인 j 선택
+    # 5) minimax 기준으로 정렬 (가중치 적용된 시간 기준)
     # 대중교통 사용자가 더 짧은 시간으로 평가받도록 가중치 반영
-    best_index = min(range(n_candidates), key=lambda idx: weighted_max_times[idx])
+    sorted_indices = sorted(range(n_candidates), key=lambda idx: weighted_max_times[idx])
+    
+    # 거리 기반 다양성 확보: 최소 거리(2km) 이상 떨어진 후보만 선택
+    import math
+    MIN_DISTANCE_M = 2000  # 2km
+    
+    def haversine_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+        """두 지점 간 직선거리(미터) 계산"""
+        R = 6371000  # 지구 반지름 (m)
+        phi1 = math.radians(lat1)
+        phi2 = math.radians(lat2)
+        dphi = math.radians(lat2 - lat1)
+        dlambda = math.radians(lon2 - lon1)
+        a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+        return R * c
+    
+    # 거리 제약을 고려한 최적 후보 선택
+    selected_indices = []
+    for idx in sorted_indices:
+        if len(selected_indices) >= 3:  # 최대 3개까지만
+            break
+        
+        candidate = candidates[idx]
+        cand_lat = candidate.get("lat")
+        cand_lng = candidate.get("lng")
+        
+        if cand_lat is None or cand_lng is None:
+            continue
+        
+        # 이미 선택된 후보들과의 거리 확인
+        is_far_enough = True
+        for selected_idx in selected_indices:
+            selected = candidates[selected_idx]
+            sel_lat = selected.get("lat")
+            sel_lng = selected.get("lng")
+            
+            if sel_lat is None or sel_lng is None:
+                continue
+            
+            dist_m = haversine_distance_m(cand_lat, cand_lng, sel_lat, sel_lng)
+            
+            if dist_m < MIN_DISTANCE_M:
+                is_far_enough = False
+                break
+        
+        if is_far_enough:
+            selected_indices.append(idx)
+    
+    # 거리 제약으로 후보가 부족하면 거리 제약 완화 (1km)
+    if len(selected_indices) < 3:
+        MIN_DISTANCE_M_RELAXED = 1000  # 1km로 완화
+        
+        for idx in sorted_indices:
+            if len(selected_indices) >= 3:
+                break
+            
+            if idx in selected_indices:
+                continue
+            
+            candidate = candidates[idx]
+            cand_lat = candidate.get("lat")
+            cand_lng = candidate.get("lng")
+            
+            if cand_lat is None or cand_lng is None:
+                continue
+            
+            is_far_enough = True
+            for selected_idx in selected_indices:
+                selected = candidates[selected_idx]
+                sel_lat = selected.get("lat")
+                sel_lng = selected.get("lng")
+                
+                if sel_lat is None or sel_lng is None:
+                    continue
+                
+                dist_m = haversine_distance_m(cand_lat, cand_lng, sel_lat, sel_lng)
+                
+                if dist_m < MIN_DISTANCE_M_RELAXED:
+                    is_far_enough = False
+                    break
+            
+            if is_far_enough:
+                selected_indices.append(idx)
+    
+    # 여전히 부족하면 점수 순으로 추가
+    if len(selected_indices) == 0:
+        selected_indices = [sorted_indices[0]] if sorted_indices else []
+    elif len(selected_indices) < 3:
+        for idx in sorted_indices:
+            if len(selected_indices) >= 3:
+                break
+            if idx not in selected_indices:
+                selected_indices.append(idx)
+    
+    # 최적 후보는 점수가 가장 좋은 것 (거리 제약을 통과한 것 중에서)
+    best_index = selected_indices[0] if selected_indices else sorted_indices[0]
 
     return {
         "max_times": max_times,  # 원본 시간 (참고용)
         "weighted_max_times": weighted_max_times,  # 가중치 적용된 시간
         "best_index": best_index,
+        "selected_indices": selected_indices[:3],  # 거리 제약을 통과한 상위 3개 후보
     }
