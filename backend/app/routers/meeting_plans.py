@@ -409,12 +409,8 @@ async def create_auto_plan_for_meeting(
     addr: str = ""
 
     candidates: list[dict] = []  # MeetingPlace로 저장할 후보들
-    print(
-        f"[DEBUG] Starting plan calculation for meeting_id={meeting_id}, total_participants={len(meeting.participants)}, with_coordinates={len(coords)}"
-    )
 
     if coords:
-        print(f"[DEBUG] Found {len(coords)} participant coordinates")
         
         # coords와 modes 개수 검증
         if len(coords) != len(modes):
@@ -441,11 +437,8 @@ async def create_auto_plan_for_meeting(
                 return_paths=True,
                 top_k=top_k_value,
             )
-            print(f"[DEBUG] center_result: {center_result}")
         except (RuntimeError, ValueError, Exception) as e:
             # 그래프 범위 밖이거나 경로를 찾을 수 없는 경우 지리적 중심점 사용
-            print(f"[WARNING] Graph-based calculation failed: {e}")
-            print("[WARNING] Falling back to geographic center calculation")
 
             # 단순 지리적 중심점 계산 (위도/경도의 평균)
             center_lat = sum(lat for _, lat in coords) / len(coords)
@@ -597,16 +590,12 @@ async def create_auto_plan_for_meeting(
             center_lat_val = center_lat
             center_lon_val = center_lon
             addr_val = addr
-            print(
-                f"[DEBUG] Successfully calculated {len(candidates)} candidates from graph"
-            )
     else:
         # 출발 좌표가 하나도 없으면 장소/후보 없음
         addr_val = ""
         center_lat_val = None
         center_lon_val = None
         candidates = []
-        print("[DEBUG] No coordinates found, candidates will be empty")
 
     # 4. MeetingPlan 생성 or 업데이트
     db_plan = (
@@ -662,13 +651,7 @@ async def create_auto_plan_for_meeting(
     db.commit()
 
     # 새로 계산된 meeting_point 장소들 저장
-    print(
-        f"[DEBUG] Before saving: candidates count={len(candidates)}, candidates={candidates}"
-    )
     if candidates:
-        print(
-            f"[DEBUG] Saving {len(candidates)} candidates for meeting_id={meeting_id}"
-        )
         new_places: list[models.MeetingPlace] = []
         for c in candidates:
             db_place = models.MeetingPlace(
@@ -687,31 +670,6 @@ async def create_auto_plan_for_meeting(
         db.commit()
         for p in new_places:
             db.refresh(p)
-        print(f"[DEBUG] Saved {len(new_places)} meeting places")
-        print(
-            f"[DEBUG] Saved places details: {[(p.name, p.category, p.latitude, p.longitude) for p in new_places]}"
-        )
-
-        # 저장 확인: 실제로 DB에 저장되었는지 확인
-        saved_count = (
-            db.query(models.MeetingPlace)
-            .filter(
-                models.MeetingPlace.meeting_id == meeting_id,
-                models.MeetingPlace.category == "meeting_point",
-            )
-            .count()
-        )
-        print(
-            f"[DEBUG] Verification: Found {saved_count} meeting_point places in DB after save"
-        )
-    else:
-        print(f"[WARNING] No candidates to save! candidates={candidates}")
-        print(f"[WARNING] This means either:")
-        print(f"[WARNING]   1. coords was empty (no participants with coordinates)")
-        print(
-            f"[WARNING]   2. Graph calculation failed AND fallback didn't create candidates"
-        )
-        print(f"[WARNING]   3. else block (normal calculation) didn't execute")
 
     # 7. available_dates까지 포함해서 MeetingPlan 다시 로딩해서 반환
     plan_full = (

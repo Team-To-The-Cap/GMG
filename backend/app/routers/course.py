@@ -288,12 +288,6 @@ def plan_courses_internal(
 
     for idx, step in enumerate(req.steps):
         # ✅ 서비스 레벨 fetch_nearby_places 사용
-        print(
-            f"[COURSE] Step {idx}: Searching with keyword='{step.query}', type='{step.type}', "
-            f"location=({req.center_lat:.6f}, {req.center_lng:.6f}), radius={req.radius}",
-            flush=True
-        )
-        
         places_raw = fetch_nearby_places(
             lat=req.center_lat,
             lng=req.center_lng,
@@ -302,28 +296,14 @@ def plan_courses_internal(
             type=step.type,
         )
 
-        print(
-            f"[COURSE] Step {idx}: Raw results count = {len(places_raw)}",
-            flush=True
-        )
-
         # 평점/개수 필터 (필요하면 여기서 min_rating, sorting 등 추가)
         filtered = places_raw[: req.per_step_limit]
         step_candidates = to_candidates(filtered, step_index=idx)
-
-        print(
-            f"[COURSE] Step {idx}: Valid candidates (with lat/lng) count = {len(step_candidates)}",
-            flush=True
-        )
 
         # 검색 결과가 없으면 더 단순한 검색어로 fallback 시도
         if not step_candidates:
             # keyword가 있으면 keyword 없이 type만으로 재시도
             if step.query:
-                print(
-                    f"[COURSE] Step {idx}: No results with keyword='{step.query}', trying without keyword (type='{step.type}' only)",
-                    flush=True
-                )
                 places_raw_fallback = fetch_nearby_places(
                     lat=req.center_lat,
                     lng=req.center_lng,
@@ -333,12 +313,6 @@ def plan_courses_internal(
                 )
                 filtered_fallback = places_raw_fallback[: req.per_step_limit]
                 step_candidates = to_candidates(filtered_fallback, step_index=idx)
-                
-                if step_candidates:
-                    print(
-                        f"[COURSE] Step {idx}: Fallback successful! Found {len(step_candidates)} candidates with type='{step.type}' only",
-                        flush=True
-                    )
             
             # 여전히 결과가 없으면 에러
             if not step_candidates:
@@ -352,7 +326,6 @@ def plan_courses_internal(
                     f"2) No places match the search criteria in the area, "
                     f"3) API key issues. Check server logs for [GGL] messages for details."
                 )
-                print(f"[COURSE] ERROR: {error_detail}", flush=True)
                 raise HTTPException(
                     status_code=404,
                     detail=error_detail,
@@ -385,24 +358,6 @@ def plan_courses_internal(
     best_courses.sort(key=lambda x: x.score, reverse=True)
     top_k = best_courses[:5]
     
-    # 상위 코스들의 상세 점수 로깅
-    if top_k:
-        print(
-            f"[COURSE] Top 5 courses scores: {[f'{c.score:.2f}' for c in top_k]}",
-            flush=True
-        )
-        # 최고 점수 코스의 카테고리 분포 로깅
-        best_course = top_k[0]
-        if best_course.places:
-            categories = []
-            for place in best_course.places:
-                if 0 <= place.step_index < len(req.steps):
-                    category = _map_place_type_to_category(req.steps[place.step_index].type)
-                    categories.append(category)
-            print(
-                f"[COURSE] Best course categories: {categories}",
-                flush=True
-            )
 
     return CourseResponse(courses=top_k)
 

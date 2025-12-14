@@ -222,10 +222,6 @@ def find_road_center_node_multi_mode(
     top_k: int = 3,
 ) -> Dict[str, Any]:
 
-    print("\n" + "=" * 50)
-    print(f"[DEBUG] 입력 좌표 개수: {len(coords_lonlat)}")
-    print(f"[DEBUG] 입력 모드(raw): {modes}")
-
     if not coords_lonlat:
         raise ValueError("coords_lonlat is empty")
 
@@ -242,15 +238,6 @@ def find_road_center_node_multi_mode(
     sources = snap_points_to_nodes(G, coords_lonlat)
     k = len(sources)
 
-    # [DEBUG] 스냅된 노드와 참가자 정보 매칭 확인
-    print("-" * 30)
-    for i, (s, mode) in enumerate(zip(sources, modes)):
-        node_data = G.nodes[s]
-        speed = mode_to_speed_kph(mode)
-        print(f"[참가자 {i}] Mode: {mode:<6} | Speed: {speed} km/h")
-        print(f"   ㄴ 입력 좌표: {coords_lonlat[i]}")
-        print(f"   ㄴ 매칭 노드: {s} (Lon: {node_data['x']}, Lat: {node_data['y']})")
-    print("-" * 30)
 
     counts: Dict[int, int] = {}
     node_stats: Dict[int, Dict[str, float]] = {}
@@ -347,8 +334,6 @@ def find_road_center_node_multi_mode(
     candidates = [v for v, c in counts.items() if c == k]
     if not candidates:
         candidates = [v for v, c in counts.items() if c == max_reach]
-    
-    print(f"[DEBUG] 초기 후보군: {len(candidates)}개 (모든 참가자가 도달 가능한 노드)")
     
     # 대중교통 사용자가 있으면 후보군을 더 많이 확장 (더 넓은 범위 탐색)
     if has_transit_user and len(candidates) < top_k * 2:
@@ -477,9 +462,6 @@ def find_road_center_node_multi_mode(
         
         if filtered_candidates:
             candidates = filtered_candidates
-            print(f"[DEBUG] 대중교통 시간 필터링: {len(candidates)}개 후보 (90분 이하)")
-    
-    print(f"[DEBUG] 필터링 후 최종 후보군: {len(candidates)}개")
     
     sorted_candidates = sorted(candidates, key=calculate_score)
     
@@ -512,11 +494,9 @@ def find_road_center_node_multi_mode(
         
         if is_far_enough:
             top_nodes.append(candidate_node)
-            print(f"[DEBUG] 후보 추가: 노드 {candidate_node} (점수: {calculate_score(candidate_node):.2f})")
     
     # 최소 거리 제약으로 후보가 부족하면 점수 순으로 추가 (거리 제약 완화)
     if len(top_nodes) < top_k:
-        print(f"[DEBUG] 거리 제약으로 후보 부족 ({len(top_nodes)}/{top_k}), 거리 제약 완화하여 추가 선택")
         MIN_DISTANCE_M_RELAXED = 1000  # 1km로 완화
         
         for candidate_node in sorted_candidates:
@@ -545,7 +525,6 @@ def find_road_center_node_multi_mode(
             
             if is_far_enough:
                 top_nodes.append(candidate_node)
-                print(f"[DEBUG] 후보 추가 (완화): 노드 {candidate_node} (점수: {calculate_score(candidate_node):.2f})")
     
     # 여전히 부족하면 점수 순으로 그냥 추가
     if len(top_nodes) < top_k:
@@ -556,50 +535,6 @@ def find_road_center_node_multi_mode(
                 top_nodes.append(candidate_node)
     
     best_node = top_nodes[0] if top_nodes else sorted_candidates[0]
-
-    # 상세 로그: 모든 후보군 정보 출력
-    print("\n" + "=" * 80)
-    print(f"[CANDIDATE DETAILS] 후보군 상세 정보 (총 {len(sorted_candidates)}개 후보 중 상위 {len(top_nodes)}개)")
-    print("=" * 80)
-    
-    for rank, node_id in enumerate(sorted_candidates[:top_k], 1):
-        node_lat = G.nodes[node_id]["y"]
-        node_lon = G.nodes[node_id]["x"]
-        score = calculate_score(node_id)
-        max_time = node_stats[node_id]["max"]
-        min_time = node_stats[node_id]["min"]
-        
-        print(f"\n[후보 #{rank}] 노드 ID: {node_id}")
-        print(f"  위치: 위도 {node_lat:.6f}, 경도 {node_lon:.6f}")
-        print(f"  점수: {score:.2f}")
-        print(f"  최소 시간: {min_time/60:.1f}분 ({min_time:.0f}초)")
-        print(f"  최대 시간: {max_time/60:.1f}분 ({max_time:.0f}초)")
-        print(f"  참가자별 시간:")
-        
-        # 각 참가자별 시간 출력
-        for idx, (coord, mode) in enumerate(zip(coords_lonlat, modes)):
-            d_m = dist_matrix.get(idx, {}).get(node_id)
-            if d_m is not None:
-                speed_kph = mode_to_speed_kph(mode)
-                t_sec = (d_m / 1000.0) / max(speed_kph, 0.1) * 3600.0
-                # 대중교통은 환승 시간 추가
-                if speed_kph >= 20.0 and speed_kph < 50.0:
-                    t_sec += TRANSIT_TRANSFER_TIME
-                
-                participant_coord = f"({coord[0]:.6f}, {coord[1]:.6f})"
-                print(f"    - 참가자 {idx+1} [{mode}]: {t_sec/60:.1f}분 ({t_sec:.0f}초) | 출발지: {participant_coord}")
-            else:
-                print(f"    - 참가자 {idx+1} [{mode}]: 도달 불가")
-        
-        if rank == 1:
-            print(f"  ⭐ 최종 선택됨!")
-    
-    print("\n" + "=" * 80)
-    print(f"[FINAL SELECTION] 최종 선정 노드: {best_node}")
-    print(f"  위치: 위도 {G.nodes[best_node]['y']:.6f}, 경도 {G.nodes[best_node]['x']:.6f}")
-    print(f"  점수: {calculate_score(best_node):.2f}")
-    print(f"  최대 시간: {node_stats[best_node]['max']/60:.1f}분 ({node_stats[best_node]['max']:.0f}초)")
-    print("=" * 80 + "\n")
 
     # 결과 구성 (기존 코드와 동일)
     worst_cost = node_stats[best_node]["max"]
@@ -671,12 +606,6 @@ def find_road_center_node_multi_mode(
                     }
                 )
         res["per_person"] = per
-    print("[DEBUG][CENTER]", "best_node =", best_node)
-    for row in res.get("per_person", []):
-        print(
-            f"  - idx={row['index']}, mode={row['transportation']}, "
-            f"dist={row['distance_m']:.1f}m, time={row['travel_time_s']/60:.1f}min"
-        )
     return res
 
 
@@ -1109,7 +1038,6 @@ def find_road_center_node(
         dists = nx.single_source_dijkstra_path_length(G, s, weight=weight)
         dist_dicts[s] = dists
 
-        print(f"[DEBUG] from source {s}: reached {len(dists)} nodes")
 
         for v, d in dists.items():
             counts[v] = counts.get(v, 0) + 1
@@ -1125,8 +1053,6 @@ def find_road_center_node(
         v for v, c in counts.items() if c == max_reach
     ]
 
-    print("[DEBUG] max_reach =", max_reach)
-    print("[DEBUG] #candidates =", len(candidates))
 
     # max_costs 기준으로 오름차순 정렬해서 상위 top_k 개 선택
     sorted_candidates = sorted(
@@ -1141,22 +1067,6 @@ def find_road_center_node(
     worst_cost = max_costs.get(best, float("inf"))
 
     center_node = best
-    center_lat = G.nodes[center_node]["y"]
-    center_lon = G.nodes[center_node]["x"]
-    print(f"[DEBUG] center node={center_node}, lat={center_lat}, lon={center_lon}")
-
-    # 각 source에서 center까지 거리/시간 디버그 출력
-    for i, s in enumerate(sources):
-        d = dist_dicts.get(s, {}).get(center_node)
-        if d is None:
-            print(
-                f"[DEBUG] dist from source[{i}] node {s} → center {center_node}: UNREACHABLE"
-            )
-        else:
-            print(
-                f"[DEBUG] dist from source[{i}] node {s} → center {center_node}: {d} ({weight})"
-            )
-
     # 대표 center 정보
     center_lon = float(G.nodes[center_node]["x"])
     center_lat = float(G.nodes[center_node]["y"])

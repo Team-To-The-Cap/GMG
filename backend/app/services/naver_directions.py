@@ -263,17 +263,7 @@ async def get_driving_direction(
         )
         return None
 
-    # 자격 증명 값 상세 검증
-    log.warning(
-        "[NAVER Directions] [DRIVING API] Credential details: "
-        "key_id=%r (len=%d, repr=%s) | key=%r (len=%d, repr=%s)",
-        client_id_clean,
-        len(client_id_clean),
-        repr(client_id_clean),
-        client_secret_clean,
-        len(client_secret_clean),
-        repr(client_secret_clean),
-    )
+    # 자격 증명 값 상세 검증 (디버깅용 로그 제거)
 
     # 숨겨진 공백이나 특수문자 확인
     if (
@@ -309,31 +299,8 @@ async def get_driving_direction(
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            log.warning(
-                "[NAVER Directions] [DRIVING API] Request: URL=%s | params=%s | "
-                "header_KEY_ID=%s (len=%d) | header_KEY=%s (len=%d)",
-                NAVER_DRIVING_URL,
-                params,
-                (
-                    headers.get("X-NCP-APIGW-API-KEY-ID", "MISSING")[:15] + "..."
-                    if len(headers.get("X-NCP-APIGW-API-KEY-ID", "")) > 15
-                    else headers.get("X-NCP-APIGW-API-KEY-ID", "MISSING")
-                ),
-                len(headers.get("X-NCP-APIGW-API-KEY-ID", "")),
-                (
-                    headers.get("X-NCP-APIGW-API-KEY", "MISSING")[:15] + "..."
-                    if len(headers.get("X-NCP-APIGW-API-KEY", "")) > 15
-                    else headers.get("X-NCP-APIGW-API-KEY", "MISSING")
-                ),
-                len(headers.get("X-NCP-APIGW-API-KEY", "")),
-            )
             response = await client.get(
                 NAVER_DRIVING_URL, headers=headers, params=params
-            )
-            log.warning(
-                "[NAVER Directions] [DRIVING API] Response: status=%s | content_type=%s",
-                response.status_code,
-                response.headers.get("content-type"),
             )
 
             # 401 에러도 응답 본문을 확인하기 위해 raise_for_status 전에 처리
@@ -381,27 +348,14 @@ async def get_driving_direction(
 
             response.raise_for_status()
 
-            log.warning(
-                "[NAVER Directions] [DRIVING API] Response data: code=%s, message=%s, has_route=%s, route_keys=%s",
-                data.get("code"),
-                data.get("message"),
-                "route" in data,
-                list(data.get("route", {}).keys()) if data.get("route") else None,
-            )
-
             if data.get("code") != 0:
                 log.error(
-                    "[NAVER Directions] [DRIVING API] ✗ API error: code=%s, message=%s | full_response=%s",
+                    "[NAVER Directions] [DRIVING API] ✗ API error: code=%s, message=%s",
                     data.get("code"),
                     data.get("message"),
-                    str(data)[:500],
                 )
                 return None
 
-            log.warning(
-                "[NAVER Directions] [DRIVING API] ✓ SUCCESS | route_keys=%s",
-                list(data.get("route", {}).keys()) if data.get("route") else None,
-            )
             return data
 
     except httpx.HTTPStatusError as e:
@@ -598,12 +552,6 @@ def extract_travel_time_from_driving_response(
             # 네이버 Directions API는 duration을 밀리초(ms) 단위로 반환
             # 초 단위로 변환 (1000으로 나누기)
             duration_seconds = int(duration_ms / 1000)
-            log.info(
-                "[NAVER Directions] Driving duration extracted: %d ms -> %d seconds (%.1f minutes)",
-                duration_ms,
-                duration_seconds,
-                duration_seconds / 60.0,
-            )
             return duration_seconds
 
         return None
@@ -641,12 +589,6 @@ def extract_travel_time_from_walking_response(data: Dict[str, Any]) -> Optional[
             # 네이버 Directions API는 duration을 밀리초(ms) 단위로 반환
             # 초 단위로 변환 (1000으로 나누기)
             duration_seconds = int(duration_ms / 1000)
-            log.info(
-                "[NAVER Directions] Walking duration extracted: %d ms -> %d seconds (%.1f minutes)",
-                duration_ms,
-                duration_seconds,
-                duration_seconds / 60.0,
-            )
             return duration_seconds
 
         return None
@@ -747,51 +689,23 @@ async def get_travel_time(
         } 또는 None
     """
     if mode == "driving":
-        log.info(
-            "[TRAVEL_TIME] driving mode | start=(%.6f,%.6f) goal=(%.6f,%.6f)",
-            start_lat,
-            start_lng,
-            goal_lat,
-            goal_lng,
-        )
-
         # 자동차: Naver Directions API만 사용
-        log.info("[TRAVEL_TIME] [DRIVING] Step 1: Calling Naver Directions API...")
         data = await get_driving_direction(
             start_lat, start_lng, goal_lat, goal_lng, option=driving_option
         )
         if not data:
             # Naver API 실패 시 계산 실패 반환
-            log.error(
-                "[TRAVEL_TIME] [DRIVING] ✗ Step 1 FAILED: Naver Directions API returned None - calculation failed"
-            )
             return _fail_unavailable("driving")
 
-        log.info(
-            "[TRAVEL_TIME] [DRIVING] ✓ Step 1 SUCCESS: Naver Directions API returned data | "
-            "route_keys=%s, option=%s",
-            list(data.get("route", {}).keys()) if data.get("route") else None,
-            driving_option,
-        )
-
-        log.info("[TRAVEL_TIME] [DRIVING] Step 2: Extracting duration from response...")
         duration = extract_travel_time_from_driving_response(
             data, option=driving_option
         )
         if duration is None:
             # 경로는 찾았지만 duration 추출 실패 시 계산 실패 반환
             log.error(
-                "[TRAVEL_TIME] [DRIVING] ✗ Step 2 FAILED: Failed to extract duration from response | "
-                "data_keys=%s, option=%s",
-                list(data.keys()) if isinstance(data, dict) else None,
-                driving_option,
+                "[TRAVEL_TIME] [DRIVING] ✗ Failed to extract duration from response"
             )
             return _fail_unavailable("driving")
-
-        log.info(
-            "[TRAVEL_TIME] [DRIVING] ✓ Step 2 SUCCESS: Duration extracted | duration=%ds",
-            duration,
-        )
 
         # 거리 정보 추출 (선택적)
         distance = None
@@ -817,41 +731,22 @@ async def get_travel_time(
         }
 
     elif mode == "walking":
-        log.info(
-            "[TRAVEL_TIME] walking mode | start=(%.6f,%.6f) goal=(%.6f,%.6f)",
-            start_lat,
-            start_lng,
-            goal_lat,
-            goal_lng,
-        )
-
         # 도보: Naver Directions API 사용
-        log.info("[TRAVEL_TIME] [WALKING] Step 1: Calling Naver Directions API (walking)...")
         data = await get_walking_direction(
             start_lat, start_lng, goal_lat, goal_lng
         )
         if not data:
             log.error(
-                "[TRAVEL_TIME] [WALKING] ✗ Step 1 FAILED: Naver Directions API returned None - calculation failed"
+                "[TRAVEL_TIME] [WALKING] ✗ Naver Directions API returned None"
             )
             return _fail_unavailable("walking")
 
-        log.info(
-            "[TRAVEL_TIME] [WALKING] ✓ Step 1 SUCCESS: Naver Directions API returned data"
-        )
-
-        log.info("[TRAVEL_TIME] [WALKING] Step 2: Extracting duration from response...")
         duration = extract_travel_time_from_walking_response(data)
         if duration is None:
             log.error(
-                "[TRAVEL_TIME] [WALKING] ✗ Step 2 FAILED: Failed to extract duration from response"
+                "[TRAVEL_TIME] [WALKING] ✗ Failed to extract duration from response"
             )
             return _fail_unavailable("walking")
-
-        log.info(
-            "[TRAVEL_TIME] [WALKING] ✓ Step 2 SUCCESS: Duration extracted | duration=%ds",
-            duration,
-        )
 
         # 거리 정보 추출 (선택적)
         distance = None
@@ -884,9 +779,6 @@ async def get_travel_time(
 
         # 대중교통: Google transit만 사용
         if _gdm_single is not None:
-            log.info(
-                "[TRAVEL_TIME] [TRANSIT] Step 1: Calling Google Distance Matrix API..."
-            )
             g = _gdm_single(
                 start_lat=start_lat,
                 start_lng=start_lng,
@@ -895,21 +787,7 @@ async def get_travel_time(
                 mode="transit",
             )
 
-            log.info(
-                "[TRAVEL_TIME] [TRANSIT] Google API response: result=%s, success=%s, source=%s",
-                "None" if g is None else "dict",
-                g.get("success") if g else None,
-                g.get("source") if g else None,
-            )
-
             if g and g.get("success"):
-                log.info(
-                    "[TRAVEL_TIME] [TRANSIT] ✓ Step 1 SUCCESS: Google Distance Matrix | "
-                    "duration=%ds, distance=%sm, source=%s",
-                    g.get("duration_seconds"),
-                    g.get("distance_meters"),
-                    g.get("source", "unknown"),
-                )
                 return {
                     "duration_seconds": int(g["duration_seconds"]),
                     "distance_meters": g.get("distance_meters"),
@@ -920,21 +798,13 @@ async def get_travel_time(
                 }
             else:
                 log.error(
-                    "[TRAVEL_TIME] [TRANSIT] ✗ Step 1 FAILED: Google Distance Matrix | "
-                    "result=%s, success=%s, error=%s",
-                    "None" if g is None else "dict",
-                    g.get("success") if g else None,
-                    g.get("error") if g else None,
+                    "[TRAVEL_TIME] [TRANSIT] ✗ Google Distance Matrix failed"
                 )
         else:
             log.error(
-                "[TRAVEL_TIME] [TRANSIT] ✗ Google Distance Matrix not available (_gdm_single is None)"
+                "[TRAVEL_TIME] [TRANSIT] ✗ Google Distance Matrix not available"
             )
 
-        # Google API 실패 시 계산 실패 반환
-        log.error(
-            "[TRAVEL_TIME] [TRANSIT] ✗ FINAL FAILED: Google API failed for transit - calculation failed"
-        )
         return _fail_unavailable("transit")
 
     else:

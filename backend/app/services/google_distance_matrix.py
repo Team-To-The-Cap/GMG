@@ -324,12 +324,6 @@ def get_travel_time_single(
     단일 출발지→도착지에 대한 이동 시간/거리 반환.
     - driving: departure_time=now가 적용되므로 duration_in_traffic 우선 사용 가능
     """
-    log.warning(
-        "[GDM] [TRANSIT API] get_travel_time_single | mode=%s | start=(%.6f,%.6f) goal=(%.6f,%.6f)",
-        mode, start_lat, start_lng, goal_lat, goal_lng
-    )
-    
-    log.warning("[GDM] [TRANSIT API] Step 1: Trying Google Routes API (v2) for mode=%s...", mode)
     data = _call_routes_compute_routes(
         start_lat=start_lat,
         start_lng=start_lng,
@@ -339,11 +333,6 @@ def get_travel_time_single(
     )
     if not data:
         # Routes API가 None을 반환하면 Directions API로 fallback
-        log.error(
-            "[GDM] [TRANSIT API] ✗ Step 1 FAILED: Routes API returned None for mode=%s, trying Directions API (legacy)",
-            mode
-        )
-        log.warning("[GDM] [TRANSIT API] Step 2: Trying Google Directions API (legacy) for mode=%s...", mode)
         result = _call_google_directions_api(
             start_lat=start_lat,
             start_lng=start_lng,
@@ -351,16 +340,6 @@ def get_travel_time_single(
             goal_lng=goal_lng,
             mode=mode,
         )
-        if result:
-            log.warning(
-                "[GDM] [TRANSIT API] ✓ Step 2 SUCCESS: Directions API | mode=%s | duration=%ds | source=%s",
-                mode, result.get("duration_seconds"), result.get("source", "unknown")
-            )
-        else:
-            log.error(
-                "[GDM] [TRANSIT API] ✗ Step 2 FAILED: Directions API also failed | mode=%s",
-                mode
-            )
         return result
 
     routes = data.get("routes") or []
@@ -368,10 +347,6 @@ def get_travel_time_single(
     
     # routes가 없거나 geocodingResults만 있는 경우 Directions API로 fallback
     if not isinstance(first, dict) or not routes:
-        log.warning(
-            "[GDM] ✗ Routes API returned no routes (only geocodingResults?), trying Directions API"
-        )
-        log.debug("[GDM] Step 2: Trying Google Directions API (legacy)...")
         result = _call_google_directions_api(
             start_lat=start_lat,
             start_lng=start_lng,
@@ -379,17 +354,11 @@ def get_travel_time_single(
             goal_lng=goal_lng,
             mode=mode,
         )
-        if result:
-            log.info("[GDM] ✓ Directions API success | duration=%ds", result.get("duration_seconds"))
-        else:
-            log.warning("[GDM] ✗ Directions API also failed")
         return result
 
     distance_m = first.get("distanceMeters")
     duration_s = _parse_duration_seconds(first.get("duration"))
     if duration_s is None:
-        log.warning("[GDM] ✗ Failed to parse duration from Routes API, trying Directions API")
-        log.debug("[GDM] Step 2: Trying Google Directions API (legacy)...")
         result = _call_google_directions_api(
             start_lat=start_lat,
             start_lng=start_lng,
@@ -397,16 +366,7 @@ def get_travel_time_single(
             goal_lng=goal_lng,
             mode=mode,
         )
-        if result:
-            log.info("[GDM] ✓ Directions API success | duration=%ds", result.get("duration_seconds"))
-        else:
-            log.warning("[GDM] ✗ Directions API also failed")
         return result
-    
-    log.warning(
-        "[GDM] [TRANSIT API] ✓ Step 1 SUCCESS: Routes API | duration=%ds, distance=%sm, source=google_routes_api",
-        duration_s, distance_m
-    )
 
     return {
         "duration_seconds": int(duration_s),
