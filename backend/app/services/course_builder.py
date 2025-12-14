@@ -123,13 +123,13 @@ def _parse_subcategories(participants: List[models.Participant]) -> Dict[str, Li
 def _max_nonbar_restaurant_visits_by_duration(meeting_duration_minutes: int) -> int:
     """
     총 코스 시간(meeting_duration) 기준으로 '식당(바 제외)' 방문 횟수 상한을 반환.
-    - 7시간(420분) 초과: 2회
-    - 3시간(180분) 초과: 1회
-    - 그 이하면: 0회
+    - 6시간(360분) 초과: 2회
+    - 6시간(360분) 이하: 1회
+    - 3시간(180분) 이하: 0회 (너무 짧으면 식당 제외)
     """
-    if meeting_duration_minutes > 420:
+    if meeting_duration_minutes > 360:  # 6시간 초과
         return 2
-    if meeting_duration_minutes > 180:
+    if meeting_duration_minutes > 180:  # 3시간 초과, 6시간 이하
         return 1
     return 0
 
@@ -753,12 +753,18 @@ def optimize_course_order_with_constraints(
     def _cat(p: dict) -> str:
         # must_visit은 effective_category가 있으면 그걸 우선 사용 (실제 카테고리)
         return (p.get("effective_category") or p.get("category") or "").strip()
+    
+    def _is_restaurant(p: dict) -> bool:
+        """restaurant인지 확인 (effective_category 또는 category 확인)"""
+        category = p.get("category", "")
+        effective_category = p.get("effective_category", "")
+        return category == "restaurant" or effective_category == "restaurant"
 
     # restaurant와 non-restaurant 분리 (bar 제외)
     # bar는 이제 category="bar"로 저장되므로, category=="restaurant"만 체크해도 됨
     restaurants = [
         p for p in places 
-        if _cat(p) == "restaurant"
+        if _is_restaurant(p)
     ]
     non_restaurants = [
         p for p in places 
@@ -870,9 +876,15 @@ def optimize_course_order_with_constraints(
     
     # restaurant 간격 제약 확인 및 조정
     if len(restaurants) >= 2:
+        def _is_restaurant_in_place(p: dict) -> bool:
+            """restaurant인지 확인 (effective_category 또는 category 확인)"""
+            category = p.get("category", "")
+            effective_category = p.get("effective_category", "")
+            return category == "restaurant" or effective_category == "restaurant"
+        
         rest_indices = [
             i for i, p in enumerate(result) 
-            if p.get("category") == "restaurant"  # bar는 이미 category="bar"로 저장되므로 자동 제외
+            if _is_restaurant_in_place(p)
         ]
         
         # 간격이 부족한 restaurant 쌍 찾기
@@ -1050,8 +1062,8 @@ async def build_and_save_courses_for_meeting(
             pass
 
         must_visit_meta[int(mv.id)] = {
-            "effective_category": inferred_category,
-            "original_type": inferred_original_type,
+            "effective_category": inferred_category,  # 추정된 카테고리 (restaurant, cafe 등)
+            "original_type": inferred_original_type,  # bar 타입 식별용
         }
 
         if inferred_category == "restaurant" and inferred_original_type != "bar":
@@ -1535,11 +1547,32 @@ async def build_and_save_courses_for_meeting(
         meta = must_visit_meta.get(int(mv.id)) if mv.id is not None else None
         effective_category = (meta or {}).get("effective_category")
         original_type = (meta or {}).get("original_type")
-        save_category = effective_category or "must_visit"
+        
+        # effective_category가 없으면 이름 기반으로 추정 시도
+        if not effective_category:
+            name_lower = mv.name.lower()
+            # 이름에 포함된 키워드로 카테고리 추정
+            if any(keyword in name_lower for keyword in ["스시", "초밥", "회", "일식", "맛집", "식당", "레스토랑", "restaurant", "sushi"]):
+                effective_category = "restaurant"
+            elif any(keyword in name_lower for keyword in ["카페", "커피", "cafe", "coffee"]):
+                effective_category = "cafe"
+            elif any(keyword in name_lower for keyword in ["쇼핑", "몰", "마트", "백화점", "shopping", "mall"]):
+                effective_category = "shopping"
+            elif any(keyword in name_lower for keyword in ["술집", "바", "펜", "bar", "pub"]):
+                effective_category = "bar"
+            elif any(keyword in name_lower for keyword in ["공원", "전시", "박물관", "미술관", "culture", "museum"]):
+                effective_category = "culture"
+            else:
+                # 추정 실패 시 기본값을 restaurant로 설정 (대부분의 must_visit이 식당이므로)
+                effective_category = "restaurant"
+        
+        # category는 항상 effective_category로 저장 (must_visit이 아닌 실제 카테고리)
+        save_category = effective_category
+        
         # 디버깅: must_visit 카테고리 추정값 확인
         print(f"[COURSE] must_visit inferred | id={mv.id} name={mv.name!r} -> {save_category!r}", flush=True)
 
-        base_dur = category_base_durations.get(save_category, category_base_durations.get("must_visit", 60))
+        base_dur = category_base_durations.get(save_category, category_base_durations.get("restaurant", 60))
         must_visit_duration = adjust_duration_with_range(
             save_category,
             base_dur,
@@ -1554,7 +1587,7 @@ async def build_and_save_courses_for_meeting(
                 "address": mv.address or "",
                 "lat": mv.latitude,
                 "lng": mv.longitude,
-                # must_visit도 실제 카테고리를 저장 (프론트에 식당/쇼핑 등으로 보이게)
+                # category는 항상 추정된 카테고리로 저장 (must_visit이 아님)
                 "category": save_category,
                 # 내부 제약 계산용(호환): effective_category에도 동일 값 유지
                 "effective_category": effective_category,
@@ -1564,9 +1597,71 @@ async def build_and_save_courses_for_meeting(
         )
 
     # 5) 최종 MeetingPlace 후보 순서 구성
+    #    - must_visit 장소와 겹치는 카테고리는 auto_candidates에서 제거
     #    - must_visit 장소를 적절한 위치에 배치 (첫/마지막이 아닌 중간 부분)
     #    - restaurant 간격 제약(5시간)을 만족하면서 이동시간 최소화
-    all_candidates = must_visit_candidates + auto_candidates
+    
+    # must_visit의 추정 카테고리 목록 (must_visit이 이미 해당 카테고리를 담당)
+    # category를 직접 사용 (이제 category가 항상 추정된 카테고리로 저장됨)
+    must_visit_categories = set()
+    for mv_cand in must_visit_candidates:
+        mv_category = mv_cand.get("category")
+        if mv_category:  # category는 항상 추정된 카테고리이므로 그대로 사용
+            must_visit_categories.add(mv_category)
+    
+    # auto_candidates에서 must_visit과 같은 카테고리 제거 (중복 방지)
+    filtered_auto_candidates = []
+    for auto_cand in auto_candidates:
+        auto_category = auto_cand.get("category")
+        if auto_category not in must_visit_categories:
+            filtered_auto_candidates.append(auto_cand)
+        else:
+            print(
+                f"[COURSE] Removing duplicate category '{auto_category}' from auto_candidates "
+                f"(already covered by must_visit: {auto_cand.get('name')})",
+                flush=True,
+            )
+    
+    all_candidates = must_visit_candidates + filtered_auto_candidates
+    
+    # 최종 restaurant 개수 검증 및 제한 (must_visit의 effective_category도 고려)
+    def _count_restaurants(candidates: list[dict]) -> int:
+        """restaurant 카테고리 개수 카운트 (must_visit의 effective_category도 고려)"""
+        count = 0
+        for cand in candidates:
+            # category가 "restaurant"이거나, effective_category가 "restaurant"인 경우
+            category = cand.get("category", "")
+            effective_category = cand.get("effective_category", "")
+            if category == "restaurant" or effective_category == "restaurant":
+                count += 1
+        return count
+    
+    total_restaurant_count = _count_restaurants(all_candidates)
+    
+    # restaurant 제한 초과 시 auto_candidates에서 제거
+    if total_restaurant_count > max_nonbar_restaurants_total:
+        excess_count = total_restaurant_count - max_nonbar_restaurants_total
+        removed_count = 0
+        
+        # auto_candidates에서 restaurant 제거 (must_visit은 보존)
+        new_filtered_auto_candidates = []
+        for auto_cand in filtered_auto_candidates:
+            if removed_count >= excess_count:
+                new_filtered_auto_candidates.append(auto_cand)
+            else:
+                category = auto_cand.get("category", "")
+                if category == "restaurant":
+                    removed_count += 1
+                    print(
+                        f"[COURSE] Removing excess restaurant '{auto_cand.get('name')}' "
+                        f"(limit: {max_nonbar_restaurants_total}, current: {total_restaurant_count})",
+                        flush=True,
+                    )
+                else:
+                    new_filtered_auto_candidates.append(auto_cand)
+        
+        filtered_auto_candidates = new_filtered_auto_candidates
+        all_candidates = must_visit_candidates + filtered_auto_candidates
     
     # 코스 순서 최적화 (이동시간 최소화 + restaurant 간격 제약)
     final_candidates = optimize_course_order_with_constraints(
