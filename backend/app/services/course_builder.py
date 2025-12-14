@@ -250,13 +250,28 @@ def build_steps_from_meeting(
     )
     nonbar_restaurant_steps_added = 0
 
-    fav_activities = [
-        p.fav_activity for p in participants
-        if p.fav_activity
-    ]
+    # fav_activity를 파싱: "맛집,쇼핑" 같은 경우를 분리
+    fav_activities: List[str] = []
+    for p in participants:
+        if p.fav_activity:
+            # 쉼표로 구분된 여러 선호 활동을 분리
+            activities = [a.strip() for a in p.fav_activity.split(",") if a.strip()]
+            fav_activities.extend(activities)
     
     # 서브 카테고리 파싱
     subcategories = _parse_subcategories(participants)
+    
+    # 서브 카테고리 추출 (1코스에서도 사용하기 위해 미리 정의)
+    cafe_subcats = subcategories.get("카페", [])
+    drink_subcats = subcategories.get("술자리", [])
+    rest_subcats = subcategories.get("휴식", [])
+    shopping_subcats = subcategories.get("쇼핑", [])
+    
+    # fav_activities를 카테고리별로 분류
+    cafe_favs = [f for f in fav_activities if "카페" in f.lower()]
+    shopping_favs = [f for f in fav_activities if any(k in f.lower() for k in ["쇼핑", "백화점", "마켓"])]
+    rest_favs = [f for f in fav_activities if "휴식" in f.lower()]
+    activity_favs = [f for f in fav_activities if any(k in f.lower() for k in ["액티비티", "활동", "체험", "보드게임", "방탈출", "노래방", "pc방"])]
 
     steps: List[StepInput] = []
     
@@ -299,11 +314,26 @@ def build_steps_from_meeting(
     is_mood = any(v in vibes for v in ["mood", "분위기", "분위기 좋은"])
 
     # ---------- 1코스: 가볍게 / 활동 ----------
-    wants_activity = is_activity_focused or len(fav_activities) > 0
-
-    if wants_activity:
-        query, place_type = _pick_activity_query(fav_activities, subcategories)
+    # fav_activity를 카테고리별로 확인하여 우선순위 결정
+    # 휴식 선호는 3코스에서 처리하고, 1코스는 다른 액티비티나 맛집/카페/쇼핑 우선
+    non_rest_favs = [f for f in fav_activities if "휴식" not in f.lower()]
+    wants_activity = is_activity_focused or (len(activity_favs) > 0 and len(rest_favs) == 0)
+    
+    # 1코스 우선순위: 활동(휴식 제외) > 카페 > 맛집 > 쇼핑
+    if wants_activity and len(activity_favs) > 0:
+        # 휴식 제외한 액티비티 선호가 있으면 1코스에 포함
+        query, place_type = _pick_activity_query(activity_favs, subcategories)
         steps.append(StepInput(query=query, type=place_type))
+    elif len(cafe_favs) > 0:
+        # 카페 선호가 있으면 1코스에 카페 포함
+        if cafe_subcats:
+            if any(k in cafe_subcats for k in ["디저트"]):
+                query = "디저트"
+            else:
+                query = "카페"
+        else:
+            query = "카페"
+        steps.append(StepInput(query=query, type="cafe"))
     elif is_meeting_focused:
         # 회의/미팅이면 조용한 카페부터
         steps.append(
@@ -435,25 +465,67 @@ def build_steps_from_meeting(
         # 이미 사용된 type 확인 (카테고리 중복 방지)
         used_types = {step.type for step in steps}
         
-        # 서브 카테고리에서 카페/술자리/휴식 관련 추출
-        cafe_subcats = subcategories.get("카페", [])
-        drink_subcats = subcategories.get("술자리", [])
-        rest_subcats = subcategories.get("휴식", [])
+        # 서브 카테고리 텍스트 변환 (이미 위에서 추출한 subcategories 사용)
         cafe_subcat_text = " ".join(cafe_subcats).lower() if cafe_subcats else ""
         drink_subcat_text = " ".join(drink_subcats).lower() if drink_subcats else ""
         rest_subcat_text = " ".join(rest_subcats).lower() if rest_subcats else ""
+        shopping_subcat_text = " ".join(shopping_subcats).lower() if shopping_subcats else ""
         
         noisy = any(v in vibes for v in ["noisy-fun", "party"])
         calm = any(v in vibes for v in ["calm"])
         mood = any(v in vibes for v in ["mood"])
         
-        # 참가자 선호도 확인
-        has_cafe_pref = any("카페" in fav for fav in fav_activities) or cafe_subcats
+        # 참가자 선호도 확인 (카테고리별로 분류된 fav_activities 사용)
+        has_cafe_pref = len(cafe_favs) > 0 or cafe_subcats
         has_drink_pref = any("술" in fav or "bar" in fav.lower() for fav in fav_activities) or drink_subcats
-        has_rest_pref = any("휴식" in fav for fav in fav_activities) or rest_subcats
+        has_rest_pref = len(rest_favs) > 0 or rest_subcats
+        has_shopping_pref = len(shopping_favs) > 0
+        
+        # 이미 사용된 activity type 확인 (spa, tourist_attraction 등 activity 관련 type)
+        has_activity_type = any(t in used_types for t in ["spa", "tourist_attraction", "amusement_park", "movie_theater", "museum"])
 
-        # 휴식 선호가 있고 아직 사용되지 않았으면 휴식 우선
-        if has_rest_pref and "spa" not in used_types and "beauty_salon" not in used_types:
+        # 3코스 우선순위: 쇼핑 > 카페 > 휴식 > 술자리 (activity 중복 방지)
+        # 쇼핑 선호가 있고 shopping이 이미 사용되지 않았으면
+        if has_shopping_pref and "shopping_mall" not in used_types:
+            if shopping_favs:
+                # 서브카테고리 우선 확인 (shopping_subcats는 이미 위에서 정의됨)
+                if any(k in shopping_subcat_text for k in ["백화점"]):
+                    query = "백화점"
+                elif any(k in shopping_subcat_text for k in ["마켓", "시장"]):
+                    query = "시장"
+                else:
+                    query = "쇼핑몰"
+            else:
+                query = "쇼핑몰"
+            steps.append(StepInput(query=query, type="shopping_mall"))
+        # 카페 선호가 있고 cafe가 이미 사용되지 않았으면
+        elif has_cafe_pref and "cafe" not in used_types:
+            # 서브 카테고리 우선 확인
+            if cafe_subcats:
+                if any(k in cafe_subcat_text for k in ["브런치"]):
+                    query = "브런치"
+                elif any(k in cafe_subcat_text for k in ["디저트"]):
+                    query = "디저트"
+                elif any(k in cafe_subcat_text for k in ["빵집"]):
+                    query = "베이커리"
+                elif any(k in cafe_subcat_text for k in ["스터디"]):
+                    query = "스터디 카페"
+                elif any(k in cafe_subcat_text for k in ["애견"]):
+                    query = "애견카페"
+                else:
+                    query = "카페"
+            else:
+                # 카페 방향 (기존 로직)
+                if is_calm or is_meeting_focused:
+                    query = "조용한 카페"
+                elif is_mood:
+                    query = "분위기 좋은 디저트 카페"
+                else:
+                    query = "수다 떨기 좋은 카페"
+            
+            steps.append(StepInput(query=query, type="cafe"))
+        # 휴식 선호가 있고 아직 activity type이 사용되지 않았으면
+        elif has_rest_pref and not has_activity_type:
             if rest_subcats:
                 if any(k in rest_subcat_text for k in ["마사지", "스파"]):
                     query = "마사지"
@@ -494,8 +566,6 @@ def build_steps_from_meeting(
                     query = "주점"
             
             steps.append(StepInput(query=query, type="bar"))
-        # 카페 선호가 있고 cafe가 이미 사용되지 않았으면
-        elif has_cafe_pref and "cafe" not in used_types:
             # 서브 카테고리 우선 확인
             if cafe_subcats:
                 if any(k in cafe_subcat_text for k in ["브런치"]):
@@ -1064,7 +1134,27 @@ async def build_and_save_courses_for_meeting(
     auto_candidates: list[dict] = []
     total_base_activity_minutes = 0
     
+    # 중복 장소 제거: place_id 또는 (lat, lng) 기준으로 중복 체크
+    seen_place_ids: set[str] = set()
+    seen_coords: set[tuple[float, float]] = set()
+    
     for idx, p in enumerate(best_course.places):
+        # place_id로 중복 체크
+        place_id = getattr(p, "place_id", None)
+        if place_id and place_id in seen_place_ids:
+            print(f"[COURSE] Skipping duplicate place (place_id): {p.name} ({place_id})", flush=True)
+            continue
+        
+        # 좌표로 중복 체크 (place_id가 없는 경우)
+        coord_key = (round(p.lat, 6), round(p.lng, 6))  # 소수점 6자리까지 반올림하여 비교
+        if coord_key in seen_coords:
+            print(f"[COURSE] Skipping duplicate place (coordinates): {p.name} ({p.lat}, {p.lng})", flush=True)
+            continue
+        
+        # 중복이 아니면 추가
+        if place_id:
+            seen_place_ids.add(place_id)
+        seen_coords.add(coord_key)
         step_idx = getattr(p, "step_index", idx)
         step_def: Optional[StepInput] = (
             steps[step_idx] if 0 <= step_idx < len(steps) else None
@@ -1218,10 +1308,31 @@ async def build_and_save_courses_for_meeting(
                     participant_fav_activities=participant_fav_activities,
                 )
                 
-                # 추가 장소들을 기존 코스에 추가
+                # 추가 장소들을 기존 코스에 추가 (중복 체크 포함)
                 for step_idx, add_step in enumerate(additional_steps):
                     if step_idx < len(additional_response.courses[0].places):
                         add_place = additional_response.courses[0].places[step_idx]
+                        
+                        # 중복 체크: place_id 또는 좌표 기준
+                        add_place_id = getattr(add_place, "place_id", None)
+                        add_coord_key = (round(add_place.lat, 6), round(add_place.lng, 6))
+                        
+                        # 이미 추가된 장소인지 확인
+                        is_duplicate = False
+                        if add_place_id and add_place_id in seen_place_ids:
+                            is_duplicate = True
+                        elif add_coord_key in seen_coords:
+                            is_duplicate = True
+                        
+                        if is_duplicate:
+                            print(f"[COURSE] Skipping duplicate additional place: {add_place.name}", flush=True)
+                            continue
+                        
+                        # 중복이 아니면 추가
+                        if add_place_id:
+                            seen_place_ids.add(add_place_id)
+                        seen_coords.add(add_coord_key)
+                        
                         place_types = getattr(add_place, "types", [])
                         
                         # 카테고리 결정
